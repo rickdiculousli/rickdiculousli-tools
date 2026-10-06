@@ -38,9 +38,12 @@
 `plugins/visual-audit/skills/audit-report/scripts` on `sys.path` and provides:
 
 - `minimal_report(**overrides) -> dict` — `{"version": 1, "title": "T", "goal": "G", "outcome": "pass", "modules": []}` updated with overrides.
-- `render_html(report: dict) -> str` — `audit_report.render_report(report, rendered_at="2026-01-01T00:00:00Z")` (available from Task 3).
+- `render_html(report: dict) -> str` — `audit_report.render_report(report, rendered_at="2026-01-01T00:00:00Z")` (available from Task 3). Import `audit_report` lazily inside the function so Tasks 1–2 do not depend on it.
+- `details_open(html: str, element_id: str) -> bool | None` — parses with `html.parser`; returns whether the first `<details>` inside the element with that id is open, or `None` if it has none. Used for every open/closed assertion.
 
-All test files import it as `from visual_audit_support import minimal_report, render_html`.
+All test files import it as `from visual_audit_support import ...`. Always run tests through `discover -s tests` (which puts `tests/` on `sys.path`); `python3 -m unittest tests.<module>` cannot import the support module. Package and script names (`audit_report`, `render_report`) must not collide with existing modules on that path.
+
+**Python 3.10:** the local interpreter is newer. Use `datetime.timezone.utc` (not `datetime.UTC`) and no 3.11+ syntax or APIs; Task 9 runs the suite under 3.10 via `uv`.
 
 ---
 
@@ -55,7 +58,7 @@ All test files import it as `from visual_audit_support import minimal_report, re
 
 **Interfaces:**
 - Produces: `schema.ReportError(Exception)` with attribute `errors: list[str]`.
-- Produces: `schema.validate(data: object) -> list[str]` — every error, as `"<path>: <message>"`, with path like `modules[2].runs[0].exit`; top-level errors use path `$`.
+- Produces: `schema.validate(data: object) -> list[str]` — every error, as `"<path>: <message>"`. Paths are unprefixed (`version`, `blockers`, `modules[2].runs[0].exit`); only errors about the root value itself (not an object) use `$`.
 - Produces: `schema.normalize(data: dict) -> dict` — deep copy with defaults applied (`source: "asserted"`, step `status: "ok"`, missing optional lists as `[]`). Call only on valid data.
 - Produces: `schema.load(data: object) -> dict` — `validate` then `normalize`; raises `ReportError` if any errors.
 
@@ -71,15 +74,15 @@ def test_collects_multiple_errors_with_paths(self):
     data = minimal_report(version=2, outcome="done")
     data["modules"] = [{"type": "runs", "runs": [{"command": "x", "exit": "0"}]}]
     errors = schema.validate(data)
-    self.assertIn("$.version", " ".join(errors))
-    self.assertIn("$.outcome", " ".join(errors))
+    self.assertTrue(any(e.startswith("version:") for e in errors))
+    self.assertTrue(any(e.startswith("outcome:") for e in errors))
     self.assertTrue(any(e.startswith("modules[0].runs[0].exit:") for e in errors))
 ```
 
 Further tests (each: build a report, assert the named path is in the errors):
 `test_top_level_must_be_object` (a list → `$`), `test_unknown_top_level_key`,
 `test_unknown_module_type` (`modules[0].type`), `test_unknown_item_key`,
-`test_blockers_required_unless_pass` (`partial` without blockers → `$.blockers`; with `[]` also error),
+`test_blockers_required_unless_pass` (`partial` without blockers → `blockers`; with `[]` also error),
 `test_observed_requires_evidence` (`modules[0].runs[0].evidence`),
 `test_verified_claim_must_be_observed` (`modules[0].claims[0].source`),
 `test_refs_must_resolve` (claim ref `{"runs": [3]}` with 1 run → `modules[0].claims[0].refs.runs[0]`; file ref to unknown path errors too),
@@ -87,20 +90,21 @@ Further tests (each: build a report, assert the named path is in the errors):
 `test_duplicate_file_paths_rejected` (same path in two `files` modules → error naming the second),
 `test_duplicate_flow_node_ids_rejected`,
 `test_renamed_requires_from`, `test_resolved_only_on_failures` (`resolved` on an `ok` step and on a run with exit 0 without `expect_fail` → errors),
-`test_figure_requires_alt_and_matching_data` (`kind: tree` without `tree` → error),
+`test_figure_requires_alt_and_matching_data` (`kind: tree` without `tree` → error; `kind: bar` that also carries `tree` → unknown-key error),
+`test_resolved_on_expected_failure_rejected` (`expect_fail` run with exit ≠ 0 plus `resolved` → error; an expected failure needs no resolution),
 `test_negative_counts_rejected` (`added: -1`),
 `test_load_applies_defaults` (asserts `source == "asserted"` and step `status == "ok"` after `load`, and `ReportError.errors` on invalid input).
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_schema -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_schema.py' -v`
 Expected: FAIL / ERROR — `ModuleNotFoundError: No module named 'audit_report'`.
 
 - [ ] **Step 4: Implement `schema.py`** — a table of allowed keys and types per item kind drives one recursive checker. Ref numbering is 1-based across the whole report in document order (all timeline steps concatenated; likewise runs). Flow cycle detection: depth-first search with an on-stack set. `__init__.py` is empty in this task.
 
 - [ ] **Step 5: Run tests to verify they pass**
 
-Run: `python3 -m unittest tests.test_visual_audit_schema -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_schema.py' -v`
 Expected: all PASS.
 
 - [ ] **Step 6: Commit**
@@ -118,7 +122,7 @@ git commit -m "feat(visual-audit): validate report schema"
 
 **Interfaces:**
 - Consumes: `schema.load`.
-- Produces: `derive.derive(report: dict) -> Derived`, which also annotates items in place on the normalized report: every step, run, and claim gets `"n"` (1-based global number) and `"anchor"` (`step-N`, `run-N`, `claim-N`); files get `"anchor"` `file-<slug>`; runs get `"failure"` in `{"unresolved", "resolved", "expected", "ok"}`; steps get `"failure"` in `{"unresolved", "resolved", "ok"}` (`fail`/`warn` count as failure; `retry` does not).
+- Produces: `derive.derive(report: dict) -> Derived`, which also annotates items in place on the normalized report: every step, run, and claim gets `"n"` (1-based global number) and `"anchor"` (`step-N`, `run-N`, `claim-N`); files get `"anchor"` `file-<slug>`; runs get `"failure"` in `{"unresolved", "resolved", "expected", "ok"}`; steps get `"failure"` in `{"unresolved", "resolved", "ok"}` (`fail`/`warn` count as failure; `retry` does not) and, when they have a `phase`, `"phase_anchor"` (`phase-<slug>`, de-duplicated across the whole report so the same phase name in two timeline modules gets `phase-x` and `phase-x-2`). Every module gets `"anchor"` `module-N` (1-based).
 - Produces dataclasses:
 
 ```python
@@ -163,18 +167,18 @@ def test_run_failure_classes(self):
     self.assertEqual(d.runs, {"unresolved": 2, "resolved": 1, "expected": 1})
 ```
 
-Further tests: `test_step_failures_and_retry`, `test_contradiction_when_pass_has_unresolved_or_refuted_or_unverified` (three items → three contradictions; none for `partial`), `test_asserted_count_excludes_read_search_think`, `test_all_asserted_flag`, `test_missing_modules_are_none` (`files`, `commands`, `lines_added` are `None` with `modules: []`; an empty `files` list gives `0`), `test_attention_order_and_anchors` (unresolved runs, unresolved steps, refuted, unverified, deleted files, truncated evidence over 2,000 chars — in that order, each with its anchor), `test_cited_by_back_references`, `test_global_numbering_across_modules` (two timeline modules → steps 1..N continuous), `test_slug`.
+Further tests: `test_step_failures_and_retry`, `test_contradiction_when_pass_has_unresolved_or_refuted_or_unverified` (three items → three contradictions; none for `partial`), `test_asserted_count_excludes_read_search_think`, `test_all_asserted_flag`, `test_missing_modules_are_none` (`files`, `commands`, `lines_added` are `None` with `modules: []`; an empty `files` list gives `0`), `test_attention_order_and_anchors` (unresolved runs, unresolved steps, refuted, unverified, deleted files, truncated evidence over 2,000 chars — in that order, each with its anchor), `test_cited_by_back_references`, `test_global_numbering_across_modules` (two timeline modules → steps 1..N continuous), `test_phase_and_module_anchors` (same phase name in two timeline modules → `phase-build` and `phase-build-2`; modules `module-1`…), `test_slug`.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_derive -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_derive.py' -v`
 Expected: ERROR — `cannot import name 'derive'`.
 
 - [ ] **Step 3: Implement `derive.py`** to satisfy the interface above. Countable items for `asserted`: runs, claims, files, and steps of kind `edit`, `run`, or `other`. Duplicate file slugs get `-2`, `-3` suffixes in document order.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python3 -m unittest tests.test_visual_audit_derive -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_derive.py' -v`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -197,9 +201,9 @@ git commit -m "feat(visual-audit): derive failures, contradictions, and attentio
 **Interfaces:**
 - Consumes: `schema.load`, `derive.derive`.
 - Produces: `audit_report.render_report(data: object, rendered_at: str) -> str` — full HTML; raises `schema.ReportError`.
-- Produces: `modules.render_module(module: dict, derived: Derived) -> str` — dispatch on `module["type"]`; this task returns `<section class="module" data-type="…">` with the escaped title only. Later tasks fill each type.
+- Produces: `modules.render_module(module: dict, derived: Derived) -> str` — dispatch on `module["type"]`; this task returns `<section class="module" id="module-N" data-type="…">` with the escaped title only. Later tasks fill each type. The attention list (Task 4) is `<section id="attention">`.
 - Produces: `page.render_page(report: dict, derived: Derived, rendered_at: str) -> str` — fills `page.html` (`$title`, `$css`, `$js`, `$band`, `$attention`, `$modules`, `$rendered_at`) via `string.Template.substitute`; CSS and JS are read from `templates/` and inlined. `$band` and `$attention` are empty strings until Task 4.
-- Produces: `render_report.main(argv: list[str] | None = None) -> int` — `render_report.py REPORT.json [-o OUT.html]`. Output defaults to `REPORT.json` with `.html` suffix. Creates `.gitignore` containing `*\n` in the HTML's parent directory when that directory is named `.audit` and the file is absent. `rendered_at` is the current UTC time in ISO 8601 seconds.
+- Produces: `render_report.main(argv: list[str] | None = None) -> int` — `render_report.py REPORT.json [-o OUT.html]`. Output defaults to `REPORT.json` with `.html` suffix. Before validating, ensures `.gitignore` containing `*\n` exists in the JSON's parent and in the HTML's parent whenever either directory is named `.audit` (so even a rejected first report stays out of `git status`). "Writes nothing" on failure means no HTML. `rendered_at` is `datetime.now(timezone.utc)` in ISO 8601 seconds.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -212,18 +216,18 @@ def test_renders_and_writes_gitignore(self):
     self.assertEqual((audit / ".gitignore").read_text(), "*\n")
 ```
 
-Further tests: `test_output_override` (`-o` path written, default not), `test_invalid_report_exits_1_and_writes_nothing` (stderr lists each error path), `test_bad_json_bom_and_array_exit_1` (invalid JSON, BOM-prefixed file, top-level array: exit 1, readable stderr, no HTML), `test_unwritable_output_exits_1`, `test_title_is_escaped` (`<script>alert(1)</script>` title appears as `&lt;script&gt;` and no raw `<script>alert`), `test_unicode_round_trip` (title `"監査 ✅"` present in UTF-8 file), `test_deterministic` (`render_html` twice → identical), `test_self_contained` (no `http://` or `https://` and no `<link` or `src="http` in output; CSS and JS inlined).
+Further tests: `test_output_override` (`-o` path written, default not), `test_invalid_report_exits_1_and_writes_nothing` (stderr lists each error path; no HTML; `.audit/.gitignore` still created), `test_bad_json_bom_and_array_exit_1` (invalid JSON, BOM-prefixed file, top-level array: exit 1, readable stderr, no HTML), `test_unwritable_output_exits_1`, `test_title_is_escaped` (`<script>alert(1)</script>` title appears as `&lt;script&gt;` and no raw `<script>alert`), `test_unicode_round_trip` (title `"監査 ✅"` present in UTF-8 file), `test_deterministic` (`render_html` twice → identical), `test_self_contained` (no `<link`, `@import`, and no `src=`, `href=`, or `url(` whose value starts with `http`; CSS and JS inlined; agent text such as `curl https://x` is allowed).
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_cli -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_cli.py' -v`
 Expected: ERROR — import failure for `render_report`.
 
 - [ ] **Step 3: Implement** `page.py`, `modules.py` stub, `__init__.render_report`, `render_report.py` (it inserts its own directory on `sys.path` so `python3 <skill-dir>/scripts/render_report.py` works from any cwd), and the placeholder templates. Read the JSON with `encoding="utf-8-sig"` so a BOM is accepted. Write output only after rendering succeeds.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python3 -m unittest tests.test_visual_audit_cli -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_cli.py' -v`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -243,7 +247,7 @@ git commit -m "feat(visual-audit): render page and write self-ignoring output"
 **Interfaces:**
 - Consumes: `Derived`, `AttentionItem`.
 - Produces: `page.render_band(report: dict, derived: Derived, rendered_at: str) -> str` and `page.render_attention(derived: Derived) -> str`.
-- Produces: `figures.run_strip(steps: list[dict]) -> str` — one `<svg class="run-strip">` plus a `<p class="sr-only">` text summary; returns `""` for no steps.
+- Produces: `figures.run_strip(steps: list[dict]) -> str` — one `<svg class="run-strip">` plus a `<p class="sr-only">` text summary; returns `""` for no steps. Each mark (or bucket) is `<g class="strip-mark mark-{class}">` containing the status shape (circle ok/resolved, square fail, triangle warn/retry); only unresolved fail/warn marks are wrapped in `<a href="#step-N">`, all others carry `aria-hidden="true"`. Tests count `class="strip-mark`.
 - Produces markup contracts used by CSS and JS (Task 8): status marks are `<span class="mark mark-{ok|fail|warn|expected|asserted}" aria-hidden="true">` followed by a visually hidden text label; counts are `<a class="count" href="#…">`; band root `<header class="band band-{outcome}">`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -255,18 +259,18 @@ def test_contradiction_shown_for_contradicted_pass(self):
     self.assertIn("contradicted by 1 item", html)
 ```
 
-Further tests: `test_blockers_and_next_steps_rendered_for_partial`, `test_not_reported_counts_with_empty_modules` (`modules: []` → "not reported" for files and commands, and "Nothing needs attention"), `test_failure_counts_split` (text "2 failed runs" and "1 resolved" and "1 expected"), `test_all_asserted_banner`, `test_context_header_and_rendered_at`, `test_attention_links_to_anchors` (each item's `href="#run-1"` etc.), `test_strip_marks_and_summary` (5 steps → 5 marks; summary text "5 steps: 1 failed (step 3)"), `test_strip_buckets_above_120` (300 steps → at most 120 marks, worst status kept), `test_strip_only_failures_focusable` (`<a` only around fail/warn marks; others `aria-hidden="true"`), `test_no_strip_without_timeline`.
+Further tests: `test_blockers_and_next_steps_rendered_for_partial`, `test_not_reported_counts_with_empty_modules` (`modules: []` → "not reported" for files and commands, and "Nothing needs attention"), `test_failure_counts_split` (text "2 failed runs" and "1 resolved" and "1 expected"; failure counts link to `#attention`, files and commands counts link to their `#module-N`), `test_all_asserted_banner`, `test_context_header_and_rendered_at`, `test_attention_links_to_anchors` (each item's `href="#run-1"` etc.), `test_strip_marks_and_summary` (5 steps → 5 marks; summary text "5 steps: 1 failed (step 3)"), `test_strip_buckets_above_120` (300 steps → at most 120 marks, worst status kept), `test_strip_only_failures_focusable` (`<a` only around fail/warn marks; others `aria-hidden="true"`), `test_resolved_fail_step_is_not_a_failure_mark` (one resolved fail step → `mark-ok`, not linked, summary "0 failed"), `test_no_strip_without_timeline`.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_band -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_band.py' -v`
 Expected: FAIL — strings absent.
 
-- [ ] **Step 3: Implement** band, attention list, and strip. Bucketing: `size = ceil(len(steps) / 120)`; worst status order `fail > warn > retry > ok`; a bucket links to its worst step's anchor. Mark minimum width 3px in the SVG viewBox units; the SVG scales to width 100%.
+- [ ] **Step 3: Implement** band, attention list, and strip. Rank by derived state, not raw status: unresolved fail > unresolved warn > retry > ok/resolved. Bucketing: `size = ceil(len(steps) / 120)`; a bucket takes its worst rank and links to its worst step's anchor. Mark minimum width 3px in the SVG viewBox units; the SVG scales to width 100%.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python3 -m unittest tests.test_visual_audit_band -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_band.py' -v`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -295,22 +299,22 @@ def test_failed_step_details_open_and_ok_closed(self):
         {"type": "timeline", "steps": [
             {"kind": "run", "label": "tests", "status": "fail", "detail": "boom"},
             {"kind": "run", "label": "tests again", "detail": "fine"}]}]))
-    self.assertRegex(html, r'id="step-1"[^>]*>.*?<details open', flags=re.S)
-    self.assertNotRegex(html, r'id="step-2"[^>]*>.*?<details open.*?id="', flags=re.S)
+    self.assertTrue(details_open(html, "step-1"))
+    self.assertFalse(details_open(html, "step-2"))
 ```
 
-Further tests: `test_read_runs_collapse_within_phase` (14 consecutive ok reads → "read × 14"; a fail breaks the run), `test_phase_with_failure_open_others_closed`, `test_asserted_items_have_class`, `test_files_grouped_with_directory_totals`, `test_deletions_and_renames_first`, `test_large_directory_collapsed` (13 files → closed `<details>`), `test_log_scaled_bars` (a 4,000-line file's bar width is less than 10× a 40-line file's), `test_generated_and_binary_flags`, `test_hunk_caps_and_markers` (60-line hunk → "showing 40 of 60 lines"; 12 hunks → "2 more hunks not shown"), `test_hunk_markup_is_escaped` (hunk containing `</details><script>` appears escaped), `test_evidence_truncation_marker`.
+Further tests: `test_read_runs_collapse_within_phase` (14 consecutive ok reads → "read × 14" and every `id="step-N"` still present inside the group; 2 consecutive reads are not collapsed; a fail breaks the run; collapsing also applies to steps without a phase), `test_directory_with_deletion_starts_open` (13 files including a deletion → open), `test_phase_with_failure_open_others_closed`, `test_asserted_items_have_class`, `test_files_grouped_with_directory_totals`, `test_deletions_and_renames_first`, `test_large_directory_collapsed` (13 files → closed `<details>`), `test_log_scaled_bars` (a 4,000-line file's bar width is less than 10× a 40-line file's), `test_generated_and_binary_flags`, `test_hunk_caps_and_markers` (60-line hunk → "showing 40 of 60 lines"; 12 hunks → "2 more hunks not shown"), `test_hunk_markup_is_escaped` (hunk containing `</details><script>` appears escaped), `test_evidence_truncation_marker`.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_modules -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_modules.py' -v`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement** both renderers. Bar width: `log1p(n) / log1p(max_n) * 100%`, added and removed drawn as two adjacent spans. Steps with no phase belong to an implicit unnamed phase rendered without a `<details>` wrapper. Named phases get `id="phase-<slug>"` (using `derive.slug`, suffixed `-2`… on collisions) and a summary line of status counts.
+- [ ] **Step 3: Implement** both renderers. Bars scale per files module: each file's total width is `log1p(added + removed) / log1p(max_total) * 100%`, split between an added span and a removed span in proportion to their counts. Collapse runs of 3 or more consecutive ok steps of the same kind, in named and unnamed phases alike. Steps with no phase render without a `<details>` wrapper. Named phases use `id` = the step's `phase_anchor` from `derive` and show a summary line of status counts. A directory over 12 files starts closed unless it contains a deletion or a file cited by a claim.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python3 -m unittest tests.test_visual_audit_modules -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_modules.py' -v`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -334,14 +338,14 @@ git commit -m "feat(visual-audit): timeline and file change modules"
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_modules -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_modules.py' -v`
 Expected: the new tests FAIL.
 
 - [ ] **Step 3: Implement** both renderers and back-chips; wire back-chips into timeline and files rows.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python3 -m unittest tests.test_visual_audit_modules -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_modules.py' -v`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -362,18 +366,18 @@ git commit -m "feat(visual-audit): runs and claims modules with cross-links"
 - Produces: `figures.render_figure(module: dict) -> str` returning `<figure>` with the SVG or `<img>`, a `<figcaption>` from `title`, and (for built-in kinds) a `<div class="sr-only">` list or table of the data.
 - Produces: `figures.layer_flow(nodes: list[dict], edges: list[dict]) -> list[list[str]]` — node ids per layer, longest-path layering, input order within a layer.
 
-- [ ] **Step 1: Write the failing tests:** `test_bar_figure_has_bars_and_hidden_table`, `test_tree_figure_renders_nested_labels_with_status_marks`, `test_flow_layering` (`a→b, a→c, b→d, c→d` → `[["a"], ["b", "c"], ["d"]]`; a skip edge `a→d` keeps `d` in layer 2), `test_flow_figure_has_edges_and_labels`, `test_custom_svg_round_trips_as_data_uri` (base64-decoding the `src` returns the exact input bytes, the raw `<svg` is not inlined, and `alt` is set), `test_figure_labels_escaped`.
+- [ ] **Step 1: Write the failing tests:** `test_bar_figure_has_bars_and_hidden_table`, `test_tree_figure_renders_nested_labels_with_status_marks`, `test_flow_layering` (`a→b, a→c, b→d, c→d` → `[["a"], ["b", "c"], ["d"]]`; a skip edge `a→d` keeps `d` in layer 2), `test_flow_figure_has_edges_and_labels`, `test_custom_svg_round_trips_as_data_uri` (base64-decoding the `src` returns the exact input bytes, the raw `<svg` is not inlined, and `alt` is set), `test_custom_svg_requires_xmlns` (in `test_visual_audit_schema.py`: custom `svg` lacking `xmlns="http://www.w3.org/2000/svg"` is a validation error, because browsers will not draw it from a data URI), `test_figure_labels_escaped`.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_figures -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_figures.py' -v`
 Expected: FAIL.
 
 - [ ] **Step 3: Implement** the three layouts with fixed geometry constants (row height, layer spacing) so output is deterministic; flow edges are straight lines or simple elbows, no crossing minimisation.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `python3 -m unittest tests.test_visual_audit_figures -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_figures.py' -v`
 Expected: all PASS.
 
 - [ ] **Step 5: Commit**
@@ -398,17 +402,26 @@ git commit -m "feat(visual-audit): bar, tree, flow, and custom figures"
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_visual_audit_cli -v`
+Run: `python3 -m unittest discover -s tests -p 'test_visual_audit_cli.py' -v`
 Expected: the new tests FAIL.
 
-- [ ] **Step 3: Write the CSS and JS.** Before editing, invoke the `impeccable:impeccable` skill for Operate-mode work and follow its craft floor. Implement the spec's "Page design" section exactly: status colour roles and shapes, dashed asserted outline, neutral two-layer surface, system sans and monospace, fixed rem scale ~1.2, light and dark, mobile rules below 40rem, print rules, visible focus, WCAG AA contrast. `report.js`: insert filter buttons (all, attention, asserted) that toggle a class on `<main>`; on `hashchange` and load, open every `<details>` ancestor of the target and scroll to it.
+- [ ] **Step 3: Write the CSS and JS.** Before editing, invoke the `impeccable:impeccable` skill for Operate-mode work and follow its craft floor. Implement the spec's "Page design" section exactly: status colour roles and shapes, dashed asserted outline, neutral two-layer surface, system sans and monospace, fixed rem scale ~1.2, light and dark, mobile rules below 40rem, print rules, visible focus, WCAG AA contrast. `report.js`: build filter buttons (all, attention, asserted) with `document.createElement` (so the literal `<button` never appears in the page) that toggle a class on `<main>`; on `hashchange` and load, open every `<details>` ancestor of the target and scroll to it.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `python3 -m unittest discover -s tests -v`
 Expected: all PASS.
 
-- [ ] **Step 5: Visual verification.** Render the example, large, and all-pass reports into `/tmp/visual-audit/`, serve with `python3 -m http.server` from that directory, and inspect each in a browser in light and dark at 1280px and 390px wide, with JS on and off. Run `"<impeccable-dir>/scripts/impeccable" detect --json /tmp/visual-audit/example-report.html` and an Impeccable critique of the example page. Fix every P0/P1 finding in one batch, re-render, check once more, and stop.
+- [ ] **Step 5: Visual verification.** Render the three reports:
+
+```sh
+mkdir -p /tmp/visual-audit
+cp plugins/visual-audit/skills/audit-report/reference/example-report.json /tmp/visual-audit/example.json
+python3 -c "import json,sys; sys.path.insert(0,'tests'); import visual_audit_fixtures as f; json.dump(f.large_report(), open('/tmp/visual-audit/large.json','w')); json.dump(f.all_pass_report(), open('/tmp/visual-audit/all-pass.json','w'))"
+for r in example large all-pass; do python3 plugins/visual-audit/skills/audit-report/scripts/render_report.py /tmp/visual-audit/$r.json; done
+```
+
+Serve with `python3 -m http.server --directory /tmp/visual-audit` in the background and inspect each page in a browser in light and dark at 1280px and 390px wide, with JS on and off. Run the Impeccable detector (`<base dir printed by the impeccable skill>/scripts/impeccable detect --json /tmp/visual-audit/example.html`) and an Impeccable critique of the example page. Fix every P0/P1 finding in one batch, re-render, check once more, and stop.
 
 - [ ] **Step 6: Commit**
 
@@ -429,18 +442,19 @@ git commit -m "feat(visual-audit): flight-recorder styling, interaction, and exa
 - Modify: `README.md`, `docs/verification.md`
 
 **Interfaces:**
-- Produces: `verify_lifecycle.compare_tree(source: Path, installed: Path) -> list[str]` — relative paths that are missing or differ, ignoring generated host directories (`.claude-plugin`, `.codex-plugin`) and `__pycache__`; `verify_host` fails if non-empty and records per-file SHA-256 for every `SKILL.md` as before.
+- Produces: `verify_lifecycle.compare_tree(expected: list[str], source: Path, installed: Path) -> list[str]` — `expected` is the plugin's tracked files relative to the plugin directory (from `git ls-files -z -- plugins/<name>` in `verify_host`), excluding `.claude-plugin/` and `.codex-plugin/`. Returns sorted messages `missing: <path>`, `changed: <path>`, and `extra: <path>` (installed files not in `expected`, ignoring host directories, `__pycache__/`, and `.DS_Store`). `verify_host` fails if non-empty and records per-file SHA-256 for every `SKILL.md` as before.
+- Modifies: stage names `both_plugins_discovered`, `both_plugins_installed_and_enabled`, `both_plugins_uninstalled` become `all_plugins_*`.
 
-- [ ] **Step 1: Write the failing tests** in `tests/test_verify_lifecycle.py`: `test_compare_tree_detects_missing_and_changed_files` (temp trees: identical → `[]`; a missing script and a changed template are both reported), `test_compare_tree_ignores_host_dirs_and_pycache`.
+- [ ] **Step 1: Write the failing tests** in `tests/test_verify_lifecycle.py`: `test_compare_tree_reports_missing_changed_and_extra` (temp trees: identical → `[]`; a missing script, a changed template, and an extra installed file are each reported), `test_compare_tree_ignores_host_dirs_pycache_and_ds_store`. Also change the existing fake `plugin list` response to build `available` from `load_catalog(ROOT)` so a third catalog plugin does not break the existing tests.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `python3 -m unittest tests.test_verify_lifecycle -v`
+Run: `python3 -m unittest discover -s tests -p 'test_verify_lifecycle.py' -v`
 Expected: ERROR — `cannot import name 'compare_tree'`.
 
 - [ ] **Step 3: Implement `compare_tree`** and use it in `verify_host` in place of the `SKILL.md`-only comparison.
 
-- [ ] **Step 4: Write `SKILL.md`** with frontmatter `name: audit-report` and a description limited to explicit requests ("Use only when the user explicitly asks for an audit report or invokes audit-report…"). Body: the seven-step procedure from the spec's "Skill behaviour" section, the provenance rules, the command `python3 <skill-dir>/scripts/render_report.py <json>`, and a pointer to `reference/schema.md`. Write `reference/schema.md` with every field from the spec's "Report JSON" section and one minimal example per module type. Keep the skill body under 120 lines.
+- [ ] **Step 4: Write `SKILL.md`** with frontmatter `name: audit-report` and a description limited to explicit requests ("Use only when the user explicitly asks for an audit report or invokes audit-report…"). Body: the seven-step procedure from the spec's "Skill behaviour" section, the provenance rules, the command `python3 <skill-dir>/scripts/render_report.py <json>` with `<skill-dir>` explained as "the directory containing this SKILL.md" (both hosts show the skill's path when loading it), and a pointer to `reference/schema.md`. Write `reference/schema.md` with every field from the spec's "Report JSON" section and one minimal example per module type; the custom figure example must include `xmlns="http://www.w3.org/2000/svg"`. Keep the skill body under 120 lines.
 
 - [ ] **Step 5: Regenerate and verify packaging**
 
@@ -449,9 +463,11 @@ Run:
 python3 scripts/sync_marketplaces.py
 python3 scripts/sync_marketplaces.py --check
 python3 -m unittest discover -s tests -v
+uv run --no-project --python 3.10 python -m unittest discover -s tests
+find plugins -name __pycache__ -prune -exec rm -rf {} +
 python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
 ```
-Expected: "Generated metadata is current."; all tests PASS; `codex: PASS` and `claude: PASS`, with all three plugins discovered, installed, and byte-compared.
+Expected: "Generated metadata is current."; all tests PASS on the local interpreter and on 3.10; `codex: PASS` and `claude: PASS`, with all three plugins discovered, installed, and byte-compared.
 
 - [ ] **Step 6: Update docs.** README: add `visual-audit` to the plugin descriptions and install commands, how to invoke it, and where reports go. `docs/verification.md`: record the new run's CLI versions, the three plugins, whole-tree comparison, and skill hashes from the report. State that model-driven use was not tested unless it was.
 

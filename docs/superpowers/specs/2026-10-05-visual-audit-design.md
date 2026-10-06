@@ -198,9 +198,12 @@ and refuted claims; closed otherwise. Phases containing an unresolved failure
 start open; others start closed with a status summary.
 
 **Anchors:** the renderer emits `#step-N`, `#run-N`, `#claim-N`, `#file-<slug>`,
-and `#phase-<slug>`. Without JS, links into a collapsed group target the group.
-With JS, following any anchor opens every enclosing `<details>` and scrolls to
-the item. Claim `refs` render as link chips to their targets, and targets show a
+and `#phase-<slug>`, plus `#module-N` and `#attention`. With JS, following any
+anchor opens every enclosing `<details>` and scrolls to the item. Without JS,
+disclosure defaults keep every attention target and failing run-strip target
+visible (failures, refuted claims, and directories containing deletions or cited
+files start open); ref chips into other closed groups rely on the browser's own
+behaviour. Claim `refs` render as link chips to their targets, and targets show a
 back-chip to the claims that cite them.
 
 **Modules**
