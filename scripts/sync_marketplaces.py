@@ -68,7 +68,7 @@ def load_catalog(root: Path) -> tuple[dict, list[tuple[Path, dict]]]:
 def render_outputs(root: Path) -> dict[Path, str]:
     catalog, plugins = load_catalog(root)
     claude = {key: catalog[key] for key in ("name", "owner", "description") if key in catalog}
-    codex = {key: catalog[key] for key in ("name",) }
+    codex = {"name": catalog["name"]}
     claude["plugins"] = []
     codex["plugins"] = []
     outputs = {}
