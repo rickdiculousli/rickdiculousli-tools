@@ -6,6 +6,7 @@ from math import log1p
 import posixpath
 
 from .derive import EVIDENCE_LIMIT
+from .figures import render_figure
 from .markup import mark, plural
 
 HUNK_LINES = 40
@@ -280,13 +281,13 @@ def render_claims(module: dict, derived) -> str:
 
 # Dispatch ------------------------------------------------------------------
 
-def _placeholder(module: dict, derived) -> str:
-    return _section(module, module["type"].capitalize(), "")
+def render_figure_module(module: dict, derived) -> str:
+    return _section(module, "Figure", render_figure(module))
 
 
 RENDERERS = {"timeline": render_timeline, "files": render_files, "runs": render_runs,
-             "claims": render_claims}
+             "claims": render_claims, "figure": render_figure_module}
 
 
 def render_module(module: dict, derived) -> str:
-    return RENDERERS.get(module["type"], _placeholder)(module, derived)
+    return RENDERERS[module["type"]](module, derived)
