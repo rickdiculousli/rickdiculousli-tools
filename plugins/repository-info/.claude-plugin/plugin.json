@@ -1,0 +1,12 @@
+{
+  "name": "repository-info",
+  "version": "0.1.0",
+  "description": "Example plugin explaining the shared personal plugin repository layout.",
+  "author": {
+    "name": "Rick Li"
+  },
+  "keywords": [
+    "example",
+    "repository"
+  ]
+}

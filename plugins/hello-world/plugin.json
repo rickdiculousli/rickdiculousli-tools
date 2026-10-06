@@ -1,0 +1,8 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "hello-world",
+  "version": "0.1.0",
+  "description": "Example plugin with a greeting skill for verifying installation.",
+  "author": { "name": "Rick Li" },
+  "keywords": ["example", "greeting"]
+}

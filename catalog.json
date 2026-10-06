@@ -1,0 +1,9 @@
+{
+  "name": "rickdiculousli-plugins",
+  "owner": { "name": "Rick Li" },
+  "description": "Rick Li's personal, portable agent plugins.",
+  "plugins": [
+    "plugins/hello-world",
+    "plugins/repository-info"
+  ]
+}
