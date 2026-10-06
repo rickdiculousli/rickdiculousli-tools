@@ -121,8 +121,27 @@ class BandTests(unittest.TestCase):
         self.assertNotIn("<a ", marks)
         self.assertIn("1 step: 0 failed", html)
 
+    def test_strip_links_are_named_and_reachable(self):
+        html = render_html(minimal_report(outcome="partial", blockers=["b"], modules=[timeline("ok", "fail")]))
+        marks = strip(html)
+        self.assertNotIn('role="img"', marks)
+        self.assertIn('role="group"', marks)
+        self.assertIn('aria-label="Step 2: failed"', marks)
+        self.assertIn('class="strip-hit"', marks)
+
+    def test_legend_explains_marks(self):
+        html = render_html(minimal_report())
+        legend = re.search(r'<details class="legend">.*?</details>', html, flags=re.S).group(0)
+        for text in ("failed", "warning", "expected failure", "agent-asserted"):
+            self.assertIn(text, legend)
+
+    def test_all_asserted_flag_on_main(self):
+        html = render_html(minimal_report(modules=[{"type": "runs", "runs": [{"command": "a", "exit": 0}]}]))
+        self.assertIn('<main id="report" data-all-asserted>', html)
+        self.assertIn('<main id="report">', render_html(minimal_report()))
+
     def test_no_strip_without_timeline(self):
-        self.assertNotIn("run-strip", render_html(minimal_report()))
+        self.assertNotIn("<svg class=\"run-strip\"", render_html(minimal_report()))
 
 
 if __name__ == "__main__":

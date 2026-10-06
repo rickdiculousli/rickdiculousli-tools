@@ -7,7 +7,9 @@ from math import ceil
 from .markup import plural
 
 STRIP_LIMIT = 120
-STRIP_PITCH = 6
+STRIP_WIDTH = 720  # Preferred total width; marks grow up to STRIP_MAX_PITCH for short sessions.
+STRIP_MIN_PITCH = 6
+STRIP_MAX_PITCH = 16
 STRIP_HEIGHT = 16
 LISTED_FAILURES = 10
 
@@ -21,13 +23,24 @@ def _rank(step: dict) -> int:
 MARK_CLASS = {3: "fail", 2: "warn", 1: "retry", 0: "ok"}
 
 
-def _shape(rank: int, x: float) -> str:
-    cx, cy = x + STRIP_PITCH / 2, STRIP_HEIGHT / 2
+def _shape(rank: int, x: float, pitch: float) -> str:
+    size = min(pitch - 1, 10)
+    half = size / 2
+    cx, cy = round(x + pitch / 2, 2), STRIP_HEIGHT / 2
     if rank == 3:
-        return f'<rect x="{x + 0.5}" y="{cy - 2.5}" width="5" height="5"/>'
+        return f'<rect x="{cx - half:g}" y="{cy - half:g}" width="{size:g}" height="{size:g}"/>'
     if rank in (1, 2):
-        return f'<path d="M{cx} {cy - 3}L{cx + 3} {cy + 2.5}L{cx - 3} {cy + 2.5}Z"/>'
-    return f'<circle cx="{cx}" cy="{cy}" r="2.5"/>'
+        return f'<path d="M{cx:g} {cy - half:g}L{cx + half:g} {cy + half:g}L{cx - half:g} {cy + half:g}Z"/>'
+    return f'<circle cx="{cx:g}" cy="{cy:g}" r="{half * 0.8:g}"/>'
+
+
+LEGEND = ('<details class="legend"><summary>Key</summary><ul>'
+          '<li><span class="mark mark-ok" aria-hidden="true"></span>ok, passed, verified, or resolved</li>'
+          '<li><span class="mark mark-fail" aria-hidden="true"></span>failed or refuted</li>'
+          '<li><span class="mark mark-warn" aria-hidden="true"></span>warning or retried</li>'
+          '<li><span class="mark mark-expected" aria-hidden="true"></span>expected failure</li>'
+          '<li><span class="legend-asserted">dashed outline</span>agent-asserted, not backed by observed evidence</li>'
+          '</ul></details>')
 
 
 def run_strip(steps: list[dict]) -> str:
@@ -36,18 +49,23 @@ def run_strip(steps: list[dict]) -> str:
         return ""
     size = ceil(len(steps) / STRIP_LIMIT)
     buckets = [steps[i:i + size] for i in range(0, len(steps), size)]
+    pitch = round(max(STRIP_MIN_PITCH, min(STRIP_MAX_PITCH, STRIP_WIDTH / len(buckets))), 2)
     marks = []
     for index, bucket in enumerate(buckets):
         worst = max(bucket, key=_rank)
         rank = _rank(worst)
-        shape = _shape(rank, index * STRIP_PITCH)
-        title = worst["label"] if size == 1 else f"steps {bucket[0]['n']}–{bucket[-1]['n']}"
+        shape = _shape(rank, index * pitch, pitch)
+        span = f"Step {bucket[0]['n']}" if size == 1 else f"Steps {bucket[0]['n']}–{bucket[-1]['n']}"
         group = f'<g class="strip-mark mark-{MARK_CLASS[rank]}"'
         if rank >= 2:
-            marks.append(f'<a href="#{worst["anchor"]}">{group}><title>{escape(title)}</title>{shape}</g></a>')
+            label = f"{span}: {'failed' if rank == 3 else 'warning'}"
+            hit = (f'<rect class="strip-hit" x="{index * pitch + pitch / 2 - 6:g}" y="0" '
+                   f'width="12" height="{STRIP_HEIGHT}"/>')
+            marks.append(f'<a href="#{worst["anchor"]}" aria-label="{escape(label)}">{hit}{group}>'
+                         f'<title>{escape(label)}: {escape(worst["label"])}</title>{shape}</g></a>')
         else:
             marks.append(f'{group} aria-hidden="true">{shape}</g>')
-    width = len(buckets) * STRIP_PITCH
+    width = round(len(buckets) * pitch, 2)
     failed = [s["n"] for s in steps if _rank(s) == 3]
     warned = [s["n"] for s in steps if _rank(s) == 2]
     summary = f"{plural(len(steps), 'step')}: {len(failed)} failed"
@@ -56,10 +74,10 @@ def run_strip(steps: list[dict]) -> str:
         summary += f" ({'step' if len(failed) == 1 else 'steps'} {listed})"
     if warned:
         summary += f", {plural(len(warned), 'warning')}"
-    return (f'<div class="strip"><svg class="run-strip" viewBox="0 0 {width} {STRIP_HEIGHT}" '
-            f'width="100%" height="{STRIP_HEIGHT}" preserveAspectRatio="xMinYMid meet" '
-            f'aria-labelledby="strip-summary" role="img">{"".join(marks)}</svg>'
-            f'<p class="strip-summary" id="strip-summary">{escape(summary)}</p></div>')
+    return (f'<div class="strip"><svg class="run-strip" viewBox="0 0 {width:g} {STRIP_HEIGHT}" '
+            f'width="{width:g}" height="{STRIP_HEIGHT}" preserveAspectRatio="xMinYMid meet" '
+            f'aria-labelledby="strip-summary" role="group">{"".join(marks)}</svg>'
+            f'<p class="strip-summary" id="strip-summary">{escape(summary)}</p>{LEGEND}</div>')
 
 
 # Figure module -------------------------------------------------------------
@@ -164,7 +182,7 @@ def _flow(module: dict) -> tuple[str, str]:
         middle = x1 + LAYER_GAP / 2
         label = ""
         if "label" in edge:
-            label = (f'<text class="flow-edge-label" x="{middle + 4}" y="{(y1 + y2) / 2 - 4}">'
+            label = (f'<text class="flow-edge-label" x="{x1 + 6}" y="{y1 - 6}">'
                      f'{escape(_short(edge["label"], 14))}</text>')
         parts.append(f'<path class="flow-edge" d="M{x1} {y1}H{middle}V{y2}H{x2 - 6}" '
                      f'marker-end="url(#{arrow})"/>{label}')

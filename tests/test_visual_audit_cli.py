@@ -8,6 +8,9 @@ import unittest
 
 from visual_audit_support import minimal_report, render_html
 from render_report import main
+from visual_audit_fixtures import all_pass_report, large_report
+from visual_audit_support import SKILL
+from audit_report import schema
 
 
 class CliTests(unittest.TestCase):
@@ -109,6 +112,43 @@ class CliTests(unittest.TestCase):
         self.assertIsNone(re.search(r"""(?:src|href)\s*=\s*["']?https?:|url\(\s*["']?https?:""", html))
         self.assertIn("<style>", html)
         self.assertIn("<script>", html)
+
+
+class ExampleTests(unittest.TestCase):
+    def test_example_report_is_valid_and_renders(self):
+        data = json.loads((SKILL / "reference/example-report.json").read_text(encoding="utf-8"))
+        self.assertEqual(schema.validate(data), [])
+        modules = data["modules"]
+        self.assertEqual({m["type"] for m in modules}, {"timeline", "files", "runs", "claims", "figure"})
+        self.assertEqual({m["kind"] for m in modules if m["type"] == "figure"}, {"bar", "tree", "flow", "custom"})
+        runs = [r for m in modules if m["type"] == "runs" for r in m["runs"]]
+        self.assertTrue(any(r.get("expect_fail") for r in runs))
+        self.assertTrue(any(r.get("resolved") for r in runs))
+        claims = [c for m in modules if m["type"] == "claims" for c in m["claims"]]
+        self.assertTrue(any(c["status"] == "refuted" for c in claims))
+        self.assertTrue(any("refs" in c for c in claims))
+        steps = [s for m in modules if m["type"] == "timeline" for s in m["steps"]]
+        self.assertTrue(all("phase" in s for s in steps))
+        html = render_html(data)
+        self.assertIn("contradicted by", html)
+        self.assertIn("showing 40 of", html)
+
+    def test_large_and_all_pass_reports_render(self):
+        large = render_html(large_report())
+        self.assertIn("300 steps: 3 failed (steps 42, 89, 204)", large)
+        self.assertIn("Nothing needs attention", render_html(all_pass_report()))
+        self.assertNotIn("contradicted", render_html(all_pass_report()))
+
+    def test_print_and_dark_styles_present(self):
+        html = render_html(minimal_report())
+        self.assertIn("@media print", html)
+        self.assertIn("prefers-color-scheme: dark", html)
+
+    def test_js_adds_filters_only_at_runtime(self):
+        html = render_html(minimal_report())
+        self.assertNotIn("<button", html)
+        self.assertIn("createElement", html)
+        self.assertIn("hashchange", html)
 
 
 if __name__ == "__main__":

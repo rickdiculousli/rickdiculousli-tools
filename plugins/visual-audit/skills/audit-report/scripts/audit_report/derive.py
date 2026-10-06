@@ -9,7 +9,7 @@ COUNTED_STEP_KINDS = ("edit", "run", "other")
 
 @dataclass
 class AttentionItem:
-    kind: str  # "run", "step", "refuted", "unverified", "deleted", "truncated"
+    kind: str  # "run", "step", "warning", "refuted", "unverified", "deleted", "truncated"
     label: str
     anchor: str
 
@@ -114,7 +114,8 @@ def derive(report: dict) -> Derived:
     )
 
     failed_runs = [AttentionItem("run", r["command"], r["anchor"]) for r in runs if r["failure"] == "unresolved"]
-    failed_steps = [AttentionItem("step", s["label"], s["anchor"]) for s in all_steps if s["failure"] == "unresolved"]
+    failed_steps = [AttentionItem("step" if s["status"] == "fail" else "warning", s["label"], s["anchor"])
+                    for s in all_steps if s["failure"] == "unresolved"]
     refuted = [AttentionItem("refuted", c["claim"], c["anchor"]) for c in claims if c["status"] == "refuted"]
     unverified = [AttentionItem("unverified", c["claim"], c["anchor"]) for c in claims if c["status"] == "unverified"]
     deleted = [AttentionItem("deleted", f["path"], f["anchor"]) for f in files if f["change"] == "deleted"]

@@ -96,23 +96,27 @@ def _collapsible(step: dict) -> bool:
 
 def _steps(steps: list[dict], derived) -> str:
     rows = []
-    for (kind, quiet), run in groupby(steps, key=lambda s: (s["kind"], _collapsible(s))):
+    for quiet, run in groupby(steps, key=_collapsible):
         run = list(run)
         inner = "".join(_step(s, derived) for s in run)
         if quiet and len(run) >= COLLAPSE_MIN:
+            kinds = {s["kind"] for s in run}
+            label = f"{run[0]['kind']} × {len(run)}" if len(kinds) == 1 else f"{len(run)} ok steps"
             rows.append(f'<li class="step-group" data-status="ok"><details><summary>{mark("ok")}'
-                        f'<span class="step-kind">{kind}</span> {kind} × {len(run)}</summary>'
-                        f'<ol class="steps">{inner}</ol></details></li>')
+                        f'{label}</summary><ol class="steps">{inner}</ol></details></li>')
         else:
             rows.append(inner)
     return f'<ol class="steps">{"".join(rows)}</ol>'
 
 
 def _phase_summary(steps: list[dict]) -> str:
-    failed = sum(1 for s in steps if s["failure"] == "unresolved")
+    failed = sum(1 for s in steps if s["failure"] == "unresolved" and s["status"] == "fail")
+    warned = sum(1 for s in steps if s["failure"] == "unresolved" and s["status"] == "warn")
     parts = [plural(len(steps), "step")]
     if failed:
         parts.append(f"{failed} failed")
+    if warned:
+        parts.append(plural(warned, "warning"))
     return " · ".join(parts)
 
 
@@ -124,8 +128,9 @@ def render_timeline(module: dict, derived) -> str:
         if anchor is None:
             parts.append(_steps(group, derived))
             continue
-        failing = any(s["failure"] == "unresolved" for s in group)
-        status = "fail" if failing else "ok"
+        unresolved = [s["status"] for s in group if s["failure"] == "unresolved"]
+        failing = bool(unresolved)
+        status = "fail" if "fail" in unresolved else "warn" if unresolved else "ok"
         id_attr = "" if anchor in seen else f' id="{anchor}"'
         seen.add(anchor)
         parts.append(f'<details class="phase"{id_attr}{_open(failing)}><summary>{mark(status)}'

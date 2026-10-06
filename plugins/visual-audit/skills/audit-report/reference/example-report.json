@@ -1,0 +1,453 @@
+{
+  "version": 1,
+  "title": "Add visual-audit report plugin",
+  "goal": "Render agent-written session reports as a visual HTML audit page",
+  "outcome": "pass",
+  "context": {
+    "repo": "rickdiculousli-plugin-repository",
+    "branch": "visual-audit-plugin",
+    "base_commit": "f090fdd",
+    "head_commit": "e1a6669",
+    "session_id": "188c7677",
+    "host": "claude-code 2.1.290",
+    "started": "2026-10-05T19:02:00-07:00",
+    "ended": "2026-10-05T21:40:00-07:00"
+  },
+  "modules": [
+    {
+      "type": "timeline",
+      "title": "What the agent did",
+      "steps": [
+        {
+          "kind": "read",
+          "label": "Read the approved spec",
+          "phase": "Explore"
+        },
+        {
+          "kind": "read",
+          "label": "Read scripts/sync_marketplaces.py",
+          "phase": "Explore"
+        },
+        {
+          "kind": "read",
+          "label": "Read scripts/verify_lifecycle.py",
+          "phase": "Explore"
+        },
+        {
+          "kind": "read",
+          "label": "Read existing tests",
+          "phase": "Explore"
+        },
+        {
+          "kind": "search",
+          "label": "Search for sys.path handling in tests",
+          "phase": "Explore"
+        },
+        {
+          "kind": "think",
+          "label": "Decide module boundaries",
+          "phase": "Explore"
+        },
+        {
+          "kind": "edit",
+          "label": "Write schema tests",
+          "phase": "Schema"
+        },
+        {
+          "kind": "run",
+          "label": "Run schema tests (expected red)",
+          "phase": "Schema",
+          "source": "observed",
+          "evidence": "ImportError: cannot import name 'schema' from 'audit_report'"
+        },
+        {
+          "kind": "edit",
+          "label": "Implement schema.py",
+          "phase": "Schema"
+        },
+        {
+          "kind": "run",
+          "label": "Run schema tests",
+          "phase": "Schema",
+          "status": "fail",
+          "resolved": true,
+          "detail": "unicode slug assertion failed",
+          "source": "observed",
+          "evidence": "AssertionError: 'item' != '監査'"
+        },
+        {
+          "kind": "edit",
+          "label": "Keep Unicode word characters in slugs",
+          "phase": "Schema"
+        },
+        {
+          "kind": "run",
+          "label": "Run schema tests",
+          "phase": "Schema",
+          "source": "observed",
+          "evidence": "Ran 27 tests in 0.000s\nOK"
+        },
+        {
+          "kind": "edit",
+          "label": "Write page and CLI",
+          "phase": "Render"
+        },
+        {
+          "kind": "run",
+          "label": "Render the example report",
+          "phase": "Render",
+          "status": "retry",
+          "detail": "first attempt pointed at the wrong directory"
+        },
+        {
+          "kind": "edit",
+          "label": "Write flight-recorder stylesheet",
+          "phase": "Render"
+        },
+        {
+          "kind": "run",
+          "label": "Lifecycle verification on both hosts",
+          "phase": "Verify",
+          "status": "warn",
+          "detail": "Codex took 41 s, close to the 45 s per-command timeout"
+        }
+      ]
+    },
+    {
+      "type": "claims",
+      "title": "Claims",
+      "claims": [
+        {
+          "claim": "All unit tests pass",
+          "status": "verified",
+          "source": "observed",
+          "evidence": "Ran 111 tests in 0.039s\nOK",
+          "refs": {
+            "runs": [
+              2
+            ]
+          }
+        },
+        {
+          "claim": "The page stays readable with JavaScript disabled",
+          "status": "unverified",
+          "refs": {
+            "files": [
+              "plugins/visual-audit/skills/audit-report/templates/report.js"
+            ]
+          }
+        },
+        {
+          "claim": "Lifecycle verification runs well under its timeout",
+          "status": "refuted",
+          "source": "observed",
+          "evidence": "codex plugin add visual-audit@rickdiculousli-plugins: 41.2 s (limit 45 s)",
+          "refs": {
+            "steps": [
+              16
+            ],
+            "runs": [
+              4
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "runs",
+      "title": "Commands and tests",
+      "runs": [
+        {
+          "command": "python3 -m unittest discover -s tests -p 'test_visual_audit_schema.py'",
+          "exit": 1,
+          "expect_fail": true,
+          "duration_ms": 120,
+          "source": "observed",
+          "evidence": "ImportError: cannot import name 'schema'",
+          "excerpt": "ImportError: Failed to import test module: test_visual_audit_schema\nImportError: cannot import name 'schema' from 'audit_report'"
+        },
+        {
+          "command": "python3 -m unittest discover -s tests",
+          "exit": 0,
+          "duration_ms": 390,
+          "source": "observed",
+          "evidence": "Ran 111 tests\nOK",
+          "suites": [
+            {
+              "name": "schema",
+              "passed": 27,
+              "failed": 0,
+              "skipped": 0
+            },
+            {
+              "name": "modules",
+              "passed": 25,
+              "failed": 0,
+              "skipped": 0
+            },
+            {
+              "name": "lifecycle",
+              "passed": 6,
+              "failed": 0,
+              "skipped": 1
+            }
+          ]
+        },
+        {
+          "command": "python3 render_report.py .audit/example.json",
+          "exit": 2,
+          "resolved": true,
+          "duration_ms": 80,
+          "excerpt": "can't open file 'render_report.py': [Errno 2] No such file or directory"
+        },
+        {
+          "command": "python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json",
+          "exit": 0,
+          "duration_ms": 98400,
+          "source": "observed",
+          "evidence": "codex: PASS\nclaude: PASS",
+          "excerpt": "Verifying codex marketplace and plugin lifecycle…\ncodex: PASS (codex-cli 0.160.1)\nVerifying claude marketplace and plugin lifecycle…\nclaude: PASS (2.1.290 (Claude Code))"
+        },
+        {
+          "command": "python3 scripts/sync_marketplaces.py --check",
+          "exit": 0,
+          "duration_ms": 60
+        }
+      ]
+    },
+    {
+      "type": "files",
+      "title": "Files changed",
+      "files": [
+        {
+          "path": "plugins/visual-audit/plugin.json",
+          "change": "added",
+          "added": 8,
+          "removed": 0
+        },
+        {
+          "path": "plugins/visual-audit/skills/audit-report/scripts/audit_report/schema.py",
+          "change": "added",
+          "added": 372,
+          "removed": 0,
+          "source": "observed",
+          "evidence": "git diff --numstat: 372 0",
+          "hunks": [
+            "@@ -0,0 +1,48 @@\n+    check_0(report)\n+    check_1(report)\n+    check_2(report)\n+    check_3(report)\n+    check_4(report)\n+    check_5(report)\n+    check_6(report)\n+    check_7(report)\n+    check_8(report)\n+    check_9(report)\n+    check_10(report)\n+    check_11(report)\n+    check_12(report)\n+    check_13(report)\n+    check_14(report)\n+    check_15(report)\n+    check_16(report)\n+    check_17(report)\n+    check_18(report)\n+    check_19(report)\n+    check_20(report)\n+    check_21(report)\n+    check_22(report)\n+    check_23(report)\n+    check_24(report)\n+    check_25(report)\n+    check_26(report)\n+    check_27(report)\n+    check_28(report)\n+    check_29(report)\n+    check_30(report)\n+    check_31(report)\n+    check_32(report)\n+    check_33(report)\n+    check_34(report)\n+    check_35(report)\n+    check_36(report)\n+    check_37(report)\n+    check_38(report)\n+    check_39(report)\n+    check_40(report)\n+    check_41(report)\n+    check_42(report)\n+    check_43(report)\n+    check_44(report)\n+    check_45(report)\n+    check_46(report)\n+    check_47(report)"
+          ]
+        },
+        {
+          "path": "plugins/visual-audit/skills/audit-report/scripts/audit_report/derive.py",
+          "change": "added",
+          "added": 150,
+          "removed": 0
+        },
+        {
+          "path": "plugins/visual-audit/skills/audit-report/scripts/audit_report/modules.py",
+          "change": "added",
+          "added": 290,
+          "removed": 0
+        },
+        {
+          "path": "plugins/visual-audit/skills/audit-report/scripts/audit_report/figures.py",
+          "change": "added",
+          "added": 230,
+          "removed": 0
+        },
+        {
+          "path": "plugins/visual-audit/skills/audit-report/templates/report.css",
+          "change": "added",
+          "added": 420,
+          "removed": 0
+        },
+        {
+          "path": "plugins/visual-audit/skills/audit-report/templates/report.js",
+          "change": "added",
+          "added": 60,
+          "removed": 0
+        },
+        {
+          "path": "scripts/verify_lifecycle.py",
+          "change": "modified",
+          "added": 38,
+          "removed": 11,
+          "hunks": [
+            "@@ -131,12 +131,9 @@ def verify_host(host, root, profile):\n-            skills = []\n-            for source in sorted((root / path / \"skills\").glob(\"*/SKILL.md\")):\n+            problems = compare_tree(tracked, root / path, cached)\n+            require(not problems, f\"Installed files differ for {identity}: {problems}\")"
+          ]
+        },
+        {
+          "path": "scripts/old_render.py",
+          "change": "deleted",
+          "added": 0,
+          "removed": 64
+        },
+        {
+          "path": "docs/verification.md",
+          "change": "modified",
+          "added": 21,
+          "removed": 9
+        },
+        {
+          "path": "catalog.json",
+          "change": "modified",
+          "added": 2,
+          "removed": 1
+        },
+        {
+          "path": "plugins/visual-audit/skills/audit-report/reference/logo.png",
+          "change": "added",
+          "added": 0,
+          "removed": 0,
+          "binary": true
+        },
+        {
+          "path": "uv.lock",
+          "change": "modified",
+          "added": 4012,
+          "removed": 3880,
+          "generated": true
+        }
+      ]
+    },
+    {
+      "type": "figure",
+      "kind": "flow",
+      "title": "Rendering pipeline",
+      "alt": "Report JSON flows through schema, derive, then modules and figures into the page",
+      "flow": {
+        "nodes": [
+          {
+            "id": "json",
+            "label": "report.json"
+          },
+          {
+            "id": "schema",
+            "label": "schema.load"
+          },
+          {
+            "id": "derive",
+            "label": "derive"
+          },
+          {
+            "id": "modules",
+            "label": "modules"
+          },
+          {
+            "id": "figures",
+            "label": "figures"
+          },
+          {
+            "id": "page",
+            "label": "page.html",
+            "status": "ok"
+          }
+        ],
+        "edges": [
+          {
+            "from": "json",
+            "to": "schema",
+            "label": "validate"
+          },
+          {
+            "from": "schema",
+            "to": "derive"
+          },
+          {
+            "from": "derive",
+            "to": "modules"
+          },
+          {
+            "from": "derive",
+            "to": "figures"
+          },
+          {
+            "from": "modules",
+            "to": "page"
+          },
+          {
+            "from": "figures",
+            "to": "page"
+          }
+        ]
+      }
+    },
+    {
+      "type": "figure",
+      "kind": "bar",
+      "title": "Time per phase (minutes)",
+      "alt": "Minutes spent in each phase",
+      "bars": [
+        {
+          "label": "Explore",
+          "value": 12
+        },
+        {
+          "label": "Schema",
+          "value": 31
+        },
+        {
+          "label": "Render",
+          "value": 64
+        },
+        {
+          "label": "Verify",
+          "value": 18,
+          "status": "warn"
+        }
+      ]
+    },
+    {
+      "type": "figure",
+      "kind": "tree",
+      "title": "Plugin layout",
+      "alt": "Directory tree of the visual-audit plugin",
+      "tree": {
+        "label": "plugins/visual-audit",
+        "children": [
+          {
+            "label": "plugin.json"
+          },
+          {
+            "label": "skills/audit-report",
+            "children": [
+              {
+                "label": "SKILL.md"
+              },
+              {
+                "label": "reference/"
+              },
+              {
+                "label": "scripts/audit_report",
+                "children": [
+                  {
+                    "label": "schema.py"
+                  },
+                  {
+                    "label": "derive.py"
+                  },
+                  {
+                    "label": "modules.py"
+                  },
+                  {
+                    "label": "figures.py"
+                  }
+                ]
+              },
+              {
+                "label": "templates/",
+                "status": "warn"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "figure",
+      "kind": "custom",
+      "title": "Test growth",
+      "alt": "Test count rising from 12 to 111 across tasks",
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 120\" width=\"320\" height=\"120\"><polyline fill=\"none\" stroke=\"#3b7d5a\" stroke-width=\"2.5\" points=\"10,110 50,92 90,78 130,66 170,50 210,38 250,24 300,12\"/><text x=\"10\" y=\"104\" font-family=\"sans-serif\" font-size=\"11\" fill=\"#666\">12</text><text x=\"282\" y=\"28\" font-family=\"sans-serif\" font-size=\"11\" fill=\"#666\">111</text></svg>"
+    }
+  ]
+}

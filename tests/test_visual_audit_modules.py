@@ -56,6 +56,13 @@ class TimelineTests(unittest.TestCase):
             step(), step(), step("edit"), step(), step("read", "fail"), step(), step()]})
         self.assertNotIn("×", html)
 
+    def test_mixed_ok_runs_collapse(self):
+        html = partial({"type": "timeline", "steps": [
+            step("read"), step("edit"), step("search"), step("run", "fail"), step("read"), step("think")]})
+        self.assertIn("3 ok steps", html)
+        self.assertNotIn("2 ok steps", html)
+        self.assertTrue(all(f'id="step-{n}"' in html for n in range(1, 7)))
+
     def test_collapse_applies_without_phase(self):
         html = partial({"type": "timeline", "steps": [step("search") for _ in range(3)]})
         self.assertIn("search × 3", html)
