@@ -29,6 +29,7 @@ class Derived:
     attention: list[AttentionItem] = field(default_factory=list)
     cited_by: dict[str, list[str]] = field(default_factory=dict)
     all_steps: list[dict] = field(default_factory=list)
+    ids: "IdRegistry" = field(default_factory=lambda: IdRegistry())
 
 
 def slug(text: str) -> str:
@@ -36,7 +37,9 @@ def slug(text: str) -> str:
     return value or "item"
 
 
-class _Anchors:
+class IdRegistry:
+    """Hands out page-unique slug ids such as phase-build-2."""
+
     def __init__(self):
         self.used: set[str] = set()
 
@@ -58,7 +61,7 @@ def run_failure(run: dict) -> str:
 
 def derive(report: dict) -> Derived:
     """Annotate report items in place and compute the page's derived state."""
-    anchors = _Anchors()
+    anchors = IdRegistry()
     all_steps, runs, claims, files = [], [], [], []
     types = set()
     for index, module in enumerate(report["modules"], 1):
@@ -107,6 +110,7 @@ def derive(report: dict) -> Derived:
         lines_removed=sum(f["removed"] for f in files) if "files" in types else None,
         commands=len(runs) if "runs" in types else None,
         all_steps=all_steps,
+        ids=anchors,
     )
 
     failed_runs = [AttentionItem("run", r["command"], r["anchor"]) for r in runs if r["failure"] == "unresolved"]
@@ -118,6 +122,9 @@ def derive(report: dict) -> Derived:
                  for item in all_steps + runs + claims + files
                  if len(item.get("evidence", "")) > EVIDENCE_LIMIT]
     derived.attention = failed_runs + failed_steps + refuted + unverified + deleted + truncated
+    attention_anchors = {item.anchor for item in derived.attention}
+    for item in all_steps + runs + claims + files:
+        item["attention"] = item["anchor"] in attention_anchors
     if report["outcome"] == "pass":
         derived.contradictions = failed_runs + failed_steps + refuted + unverified
 
