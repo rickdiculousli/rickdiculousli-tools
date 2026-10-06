@@ -133,7 +133,8 @@ def derive(report: dict) -> Derived:
     for claim in claims:
         refs = claim.get("refs", {})
         targets = [by_number[key][n - 1]["anchor"] for key in ("steps", "runs") for n in refs.get(key, [])]
-        targets += [by_path[path]["anchor"] for path in refs.get("files", [])]
+        claim["file_refs"] = [(path, by_path[path]["anchor"]) for path in refs.get("files", [])]
+        targets += [anchor for _, anchor in claim["file_refs"]]
         for target in dict.fromkeys(targets):
             derived.cited_by.setdefault(target, []).append(claim["anchor"])
     return derived

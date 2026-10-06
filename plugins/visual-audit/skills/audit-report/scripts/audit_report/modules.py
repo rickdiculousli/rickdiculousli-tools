@@ -208,13 +208,84 @@ def render_files(module: dict, derived) -> str:
     return _section(module, "Files changed", "".join(groups))
 
 
+# Runs ----------------------------------------------------------------------
+
+EXCERPT_LINES = 60
+RUN_STATUS = {"unresolved": "fail", "resolved": "resolved", "expected": "expected", "ok": "ok"}
+RUN_TEXT = {"unresolved": "unresolved", "resolved": "resolved", "expected": "expected failure"}
+
+
+def _suite(suite: dict) -> str:
+    counts = " · ".join(f"{suite[key]} {key}" for key in ("passed", "failed", "skipped"))
+    segments = "".join(f'<span class="seg-{key}" style="flex-grow:{suite[key]}"></span>'
+                       for key in ("passed", "failed", "skipped") if suite[key])
+    return (f'<li class="suite"><span class="suite-name">{escape(suite["name"])}</span>'
+            f'<span class="suite-bar" aria-hidden="true">{segments}</span>'
+            f'<span class="suite-counts">{counts}</span></li>')
+
+
+def _run(run: dict, derived) -> str:
+    status = RUN_STATUS[run["failure"]]
+    failing = run["failure"] == "unresolved"
+    badge = f"exit {run['exit']}" + (f" · {RUN_TEXT[run['failure']]}" if run["failure"] in RUN_TEXT else "")
+    duration = (f'<span class="duration">{run["duration_ms"] / 1000:.1f} s</span>'
+                if "duration_ms" in run else "")
+    suites = "".join(_suite(suite) for suite in run.get("suites", []))
+    suites = f'<ul class="suites">{suites}</ul>' if suites else ""
+    excerpt = ""
+    if "excerpt" in run:
+        text, marker = cap_lines(run["excerpt"], EXCERPT_LINES)
+        excerpt = (f'<details class="excerpt"{_open(failing)}><summary>Output</summary>'
+                   f'<pre>{escape(text)}</pre>{_marker(marker)}</details>')
+    return (f'<li {item_attrs(run, status, "run")}>{mark(status)}'
+            f'<code class="command">{escape(run["command"])}</code>'
+            f'<span class="exit exit-{status}">{badge}</span>{duration}'
+            f'{backref_chips(run["anchor"], derived)}'
+            f'{suites}'
+            f'{excerpt}{evidence_block(run, failing)}</li>')
+
+
+def render_runs(module: dict, derived) -> str:
+    rows = "".join(_run(run, derived) for run in module["runs"])
+    return _section(module, "Commands and tests", f'<ul class="runs">{rows}</ul>')
+
+
+# Claims --------------------------------------------------------------------
+
+CLAIM_ORDER = {"refuted": 0, "unverified": 1, "verified": 2}
+CLAIM_STATUS = {"refuted": "fail", "unverified": "asserted", "verified": "ok"}
+
+
+def _ref_chips(claim: dict) -> str:
+    refs = claim.get("refs", {})
+    chips = [f'<a class="chip" href="#step-{n}">step {n}</a>' for n in refs.get("steps", [])]
+    chips += [f'<a class="chip" href="#run-{n}">run {n}</a>' for n in refs.get("runs", [])]
+    chips += [f'<a class="chip" href="#{anchor}">{escape(path)}</a>'
+              for path, anchor in claim.get("file_refs", [])]
+    return f'<span class="chips refs">proof {"".join(chips)}</span>' if chips else ""
+
+
+def _claim(claim: dict) -> str:
+    status = CLAIM_STATUS[claim["status"]]
+    return (f'<li {item_attrs(claim, status, "claim")} data-claim="{claim["status"]}">'
+            f'{mark(status, claim["status"])}<span class="claim-text">{escape(claim["claim"])}</span>'
+            f'<span class="claim-status">{claim["status"]}</span>{_ref_chips(claim)}'
+            f'{evidence_block(claim, claim["status"] == "refuted")}</li>')
+
+
+def render_claims(module: dict, derived) -> str:
+    claims = sorted(module["claims"], key=lambda c: CLAIM_ORDER[c["status"]])
+    return _section(module, "Claims", f'<ul class="claims">{"".join(_claim(c) for c in claims)}</ul>')
+
+
 # Dispatch ------------------------------------------------------------------
 
 def _placeholder(module: dict, derived) -> str:
     return _section(module, module["type"].capitalize(), "")
 
 
-RENDERERS = {"timeline": render_timeline, "files": render_files}
+RENDERERS = {"timeline": render_timeline, "files": render_files, "runs": render_runs,
+             "claims": render_claims}
 
 
 def render_module(module: dict, derived) -> str:

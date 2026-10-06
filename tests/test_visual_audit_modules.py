@@ -136,5 +136,67 @@ class FilesTests(unittest.TestCase):
         self.assertEqual(cap_lines("a\nb\nc", 2), ("a\nb", "showing 2 of 3 lines"))
 
 
+class RunsTests(unittest.TestCase):
+    def test_run_failure_classes_rendered(self):
+        html = partial({"type": "runs", "runs": [
+            {"command": "a", "exit": 1}, {"command": "b", "exit": 1, "expect_fail": True},
+            {"command": "c", "exit": 2, "resolved": True}, {"command": "d", "exit": 0}]})
+        self.assertIn("exit 1 · unresolved", html)
+        self.assertIn("exit 1 · expected failure", html)
+        self.assertIn("exit 2 · resolved", html)
+        self.assertIn('data-status="fail"', element(html, "run-1"))
+        self.assertIn('data-status="expected"', element(html, "run-2"))
+        self.assertIn('data-status="ok"', element(html, "run-4"))
+
+    def test_failed_run_excerpt_open(self):
+        html = partial({"type": "runs", "runs": [
+            {"command": "a", "exit": 1, "excerpt": "boom"}, {"command": "b", "exit": 0, "excerpt": "fine"}]})
+        self.assertTrue(details_open(html, "run-1"))
+        self.assertFalse(details_open(html, "run-2"))
+
+    def test_excerpt_capped_at_60_lines(self):
+        excerpt = "\n".join(f"out {i}" for i in range(75))
+        html = partial({"type": "runs", "runs": [{"command": "a", "exit": 0, "excerpt": excerpt}]})
+        self.assertIn("showing 60 of 75 lines", html)
+        self.assertNotIn("out 60", html)
+
+    def test_suite_bar_counts_and_duration(self):
+        html = partial({"type": "runs", "runs": [{"command": "a", "exit": 1, "duration_ms": 1530, "suites": [
+            {"name": "unit", "passed": 12, "failed": 1, "skipped": 2}]}]})
+        self.assertIn("12 passed · 1 failed · 2 skipped", html)
+        self.assertIn("1.5 s", html)
+        self.assertIn('class="suite-bar"', html)
+
+
+class ClaimsTests(unittest.TestCase):
+    def claims(self):
+        return [{"claim": "verified one", "status": "verified", "source": "observed", "evidence": "ok"},
+                {"claim": "unverified one", "status": "unverified"},
+                {"claim": "refuted one", "status": "refuted", "evidence": "nope"}]
+
+    def test_claims_sorted_refuted_unverified_verified(self):
+        html = partial({"type": "claims", "claims": self.claims()})
+        order = [html.index(f'id="claim-{n}"') for n in (3, 2, 1)]
+        self.assertEqual(order, sorted(order))
+
+    def test_refuted_claim_open(self):
+        html = partial({"type": "claims", "claims": self.claims()})
+        self.assertTrue(details_open(html, "claim-3"))
+        self.assertFalse(details_open(html, "claim-1"))
+
+    def test_ref_chips_and_back_chips(self):
+        html = partial(
+            {"type": "timeline", "steps": [step("run")]},
+            {"type": "runs", "runs": [{"command": "a", "exit": 0}, {"command": "b", "exit": 0}]},
+            {"type": "files", "files": [file("a.py")]},
+            {"type": "claims", "claims": [{"claim": "c", "status": "unverified",
+                                           "refs": {"runs": [2], "steps": [1], "files": ["a.py"]}}]})
+        claim = re.search(r'<li id="claim-1".*?</li>', html, flags=re.S).group(0)
+        for target in ("run-2", "step-1", "file-a-py"):
+            self.assertIn(f'href="#{target}"', claim)
+            row = re.search(rf'<li id="{target}".*?</li>', html, flags=re.S).group(0)
+            self.assertIn('href="#claim-1"', row)
+
+
 if __name__ == "__main__":
     unittest.main()
