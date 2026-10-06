@@ -1,7 +1,7 @@
 # Native lifecycle verification
 
-Verified on October 5, 2026 (America/Los_Angeles; report timestamp
-2026-10-06T03:59:31Z), using the real locally installed CLIs, with a fresh temporary
+Last verified on October 6, 2026 (report timestamp 2026-10-06T15:01:41Z, after the
+final review fixes), using the real locally installed CLIs, with a fresh temporary
 configuration profile for each host.
 
 | Check | Codex 0.160.1 | Claude Code 2.1.290 |
@@ -32,7 +32,7 @@ templates, and references are included. Both hosts installed identical skill con
 
 ## Visual audit renderer
 
-The renderer's unit tests passed on Python 3.14.7 and 3.10.22 (via
+The renderer's 128 unit tests passed on Python 3.14.7 and 3.10.22 (via
 `uv run --no-project --python 3.10`). Example, 300-step, and all-pass reports were
 rendered and inspected in the T3 Code preview browser at 1280 px and 390 px wide, in light
 and dark schemes, including filter buttons and anchor navigation into collapsed
