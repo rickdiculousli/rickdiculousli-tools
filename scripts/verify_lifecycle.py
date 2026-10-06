@@ -30,6 +30,39 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
+HOST_DIRECTORIES = (".claude-plugin", ".codex-plugin")
+IGNORED_NAMES = ("__pycache__", ".DS_Store")
+
+
+def tracked_files(root: Path, plugin: Path) -> list[str]:
+    """Committed plugin files relative to the plugin directory, excluding generated host manifests."""
+    listed = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", plugin.as_posix()],
+                            text=True, capture_output=True, check=True).stdout
+    files = [Path(name).relative_to(plugin).as_posix() for name in listed.split("\0") if name]
+    return sorted(name for name in files if name.split("/")[0] not in HOST_DIRECTORIES)
+
+
+def compare_tree(expected: list[str], source: Path, installed: Path) -> list[str]:
+    """Report expected files missing or changed in the installed copy, and unexpected extra files."""
+    problems = []
+    for name in expected:
+        copied = installed / name
+        if not copied.is_file():
+            problems.append(f"missing: {name}")
+        elif copied.read_bytes() != (source / name).read_bytes():
+            problems.append(f"changed: {name}")
+    wanted = set(expected)
+    for path in installed.rglob("*"):
+        relative = path.relative_to(installed)
+        if not path.is_file() or relative.parts[0] in HOST_DIRECTORIES:
+            continue
+        if any(part in IGNORED_NAMES for part in relative.parts):
+            continue
+        if relative.as_posix() not in wanted:
+            problems.append(f"extra: {relative.as_posix()}")
+    return sorted(problems)
+
+
 def plugin_id(item: dict) -> str:
     return item.get("pluginId", item.get("id", ""))
 
@@ -120,7 +153,7 @@ def verify_host(host: str, root: Path, profile: Path) -> dict:
         available = plugins("discovery")
         discovered = {plugin_id(item) for item in available["available"]}
         require(expected_ids <= discovered, f"Missing discoverable plugins: {sorted(expected_ids - discovered)}")
-        result["stages"].append("both_plugins_discovered")
+        result["stages"].append("all_plugins_discovered")
 
         inspections = []
         for path, manifest in entries:
@@ -136,26 +169,24 @@ def verify_host(host: str, root: Path, profile: Path) -> dict:
             require(cached.is_relative_to(profile), f"Installed {identity} outside isolated profile: {cached}")
             cached_manifest = json.loads((cached / "plugin.json").read_text(encoding="utf-8"))
             require(cached_manifest == manifest, f"Installed portable manifest differs for {identity}")
-            skills = []
-            for source in sorted((root / path / "skills").glob("*/SKILL.md")):
-                copied = cached / source.relative_to(root / path)
-                require(copied.is_file() and copied.read_bytes() == source.read_bytes(),
-                        f"Installed skill missing or changed for {identity}: {source.parent.name}")
-                skills.append({"name": source.parent.name, "sha256": hashlib.sha256(copied.read_bytes()).hexdigest()})
+            problems = compare_tree(tracked_files(root, path), root / path, cached)
+            require(not problems, f"Installed files differ from source for {identity}: {', '.join(problems)}")
+            skills = [{"name": source.parent.name, "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}
+                      for source in sorted((root / path / "skills").glob("*/SKILL.md"))]
             if host == "claude":
                 inventory = command("skill_inventory", "plugin", "details", manifest["name"])
                 require(all(skill["name"] in inventory for skill in skills) and "Skills" in inventory,
                         f"Native skill inventory missing for {identity}")
             inspections.append({"pluginId": identity, "skills": skills, "installedPath": str(cached)})
         result["plugins"] = inspections
-        result["stages"].extend(["both_plugins_installed_and_enabled", "installed_skill_content_verified"])
+        result["stages"].extend(["all_plugins_installed_and_enabled", "installed_files_verified"])
 
         for identity in sorted(expected_ids):
             remove_plugin("uninstall", identity)
             state = plugins("uninstalled_state")
             require(identity not in {plugin_id(item) for item in state["installed"]},
                     f"Plugin {identity} remains installed in {host}")
-        result["stages"].append("both_plugins_uninstalled")
+        result["stages"].append("all_plugins_uninstalled")
 
         command("marketplace_removal", "plugin", "marketplace", "remove", marketplace)
         require(marketplace not in {item["name"] for item in marketplaces("removed_state")},

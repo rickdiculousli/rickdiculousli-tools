@@ -5,7 +5,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.verify_lifecycle import verify_host
+from scripts.sync_marketplaces import load_catalog
+from scripts.verify_lifecycle import compare_tree, verify_host
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,9 +36,9 @@ class LifecycleTests(unittest.TestCase):
             output = {"marketplaces": [{"name": MARKETPLACE, "root": str(ROOT)}] if self.registered else []}
         elif flags[:2] == ["plugin", "list"]:
             output = {"installed": self.installed, "available": [
-                {"pluginId": PLUGIN_ID, "name": "hello-world", "installed": False, "enabled": False},
-                {"pluginId": "repository-info@" + MARKETPLACE, "name": "repository-info", "installed": False, "enabled": False},
-            ]}
+                {"pluginId": f"{manifest['name']}@{MARKETPLACE}", "name": manifest["name"],
+                 "installed": False, "enabled": False}
+                for _, manifest in load_catalog(ROOT)[1]]}
         elif flags[:2] == ["plugin", "add"]:
             output = {"pluginId": flags[2], "installedPath": str(self.profile / "plugins/cache" / flags[2])}
         elif flags[:3] == ["plugin", "marketplace", "remove"]:
@@ -101,6 +102,40 @@ class LifecycleTests(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertIn("empty", result["error"])
         command.assert_not_called()
+
+
+
+class CompareTreeTests(unittest.TestCase):
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.source = Path(temp.name) / "source"
+        self.installed = Path(temp.name) / "installed"
+        for root in (self.source, self.installed):
+            for relative, content in (("plugin.json", "{}"), ("skills/a/SKILL.md", "skill"),
+                                      ("skills/a/scripts/run.py", "print()"), ("skills/a/templates/t.css", "a{}")):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content)
+        self.expected = ["plugin.json", "skills/a/SKILL.md", "skills/a/scripts/run.py", "skills/a/templates/t.css"]
+
+    def test_identical_trees(self):
+        self.assertEqual(compare_tree(self.expected, self.source, self.installed), [])
+
+    def test_compare_tree_reports_missing_changed_and_extra(self):
+        (self.installed / "skills/a/scripts/run.py").unlink()
+        (self.installed / "skills/a/templates/t.css").write_text("changed")
+        (self.installed / "skills/a/stray.txt").write_text("x")
+        self.assertEqual(compare_tree(self.expected, self.source, self.installed), [
+            "changed: skills/a/templates/t.css", "extra: skills/a/stray.txt", "missing: skills/a/scripts/run.py"])
+
+    def test_compare_tree_ignores_host_dirs_pycache_and_ds_store(self):
+        for relative in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
+                         "skills/a/scripts/__pycache__/run.cpython-314.pyc", ".DS_Store"):
+            path = self.installed / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("x")
+        self.assertEqual(compare_tree(self.expected, self.source, self.installed), [])
 
 
 if __name__ == "__main__":

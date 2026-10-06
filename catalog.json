@@ -4,6 +4,7 @@
   "description": "Rick Li's personal, portable agent plugins.",
   "plugins": [
     "plugins/hello-world",
-    "plugins/repository-info"
+    "plugins/repository-info",
+    "plugins/visual-audit"
   ]
 }
