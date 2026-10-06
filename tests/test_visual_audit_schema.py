@@ -156,6 +156,12 @@ class SchemaTests(unittest.TestCase):
             {"path": "a", "change": "added", "added": -1, "removed": 0}]}])
         self.assertErrorAt(data, "modules[0].files[0].added")
 
+    def test_non_finite_numbers_rejected(self):
+        for value in (float("nan"), float("inf")):
+            data = minimal_report(modules=[{"type": "figure", "kind": "bar", "alt": "x",
+                                            "bars": [{"label": "a", "value": value}]}])
+            self.assertErrorAt(data, "modules[0].bars[0].value")
+
     def test_booleans_are_not_integers(self):
         data = minimal_report(modules=[{"type": "runs", "runs": [{"command": "x", "exit": True}]}])
         self.assertErrorAt(data, "modules[0].runs[0].exit")

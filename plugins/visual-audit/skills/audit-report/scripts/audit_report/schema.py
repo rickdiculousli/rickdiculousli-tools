@@ -1,6 +1,7 @@
 """Validate and normalize agent-written audit report JSON."""
 
 import copy
+import math
 
 OUTCOMES = ("pass", "partial", "blocked")
 SOURCES = ("observed", "asserted")
@@ -39,7 +40,7 @@ def _integer(value, path, errors, minimum=None):
 
 
 def _number(value, path, errors):
-    if not isinstance(value, (int, float)) or isinstance(value, bool) or value < 0:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
         errors.append(f"{path}: expected a non-negative number, got {value!r}"[:200])
         return False
     return True

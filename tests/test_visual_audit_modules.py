@@ -88,6 +88,18 @@ class TimelineTests(unittest.TestCase):
         self.assertNotIn("x" * 2001, html)
 
 
+class AttentionVisibilityTests(unittest.TestCase):
+    def test_phase_with_truncated_evidence_starts_open(self):
+        html = partial({"type": "timeline", "steps": [step(phase="P", evidence="x" * 2001)]})
+        self.assertTrue(details_open(html, "phase-p"))
+
+    def test_attention_steps_are_not_collapsed(self):
+        html = partial({"type": "timeline", "steps": [step(), step(evidence="x" * 2001), step(), step(), step()]})
+        self.assertNotIn("read × 5", html)
+        self.assertIn("read × 3", html)
+        self.assertNotRegex(html, r'class="step-group".*?id="step-2"')
+
+
 class FilesTests(unittest.TestCase):
     def test_files_grouped_with_directory_totals(self):
         html = partial({"type": "files", "files": [
@@ -138,6 +150,10 @@ class FilesTests(unittest.TestCase):
         self.assertIn("&lt;/details&gt;&lt;script&gt;", html)
         self.assertNotIn("<script>x()", html)
 
+    def test_zero_line_files_have_empty_bars(self):
+        html = partial({"type": "files", "files": [file("a.py", added=0, removed=0)]})
+        self.assertEqual(bar_width(html, "file-a-py"), 0.0)
+
     def test_cap_lines(self):
         self.assertEqual(cap_lines("a\nb", 5), ("a\nb", None))
         self.assertEqual(cap_lines("a\nb\nc", 2), ("a\nb", "showing 2 of 3 lines"))
@@ -154,6 +170,10 @@ class RunsTests(unittest.TestCase):
         self.assertIn('data-status="fail"', element(html, "run-1"))
         self.assertIn('data-status="expected"', element(html, "run-2"))
         self.assertIn('data-status="ok"', element(html, "run-4"))
+
+    def test_expected_failure_that_passed_is_labelled(self):
+        html = partial({"type": "runs", "runs": [{"command": "a", "exit": 0, "expect_fail": True}]})
+        self.assertIn("exit 0 · expected failure passed", html)
 
     def test_failed_run_excerpt_open(self):
         html = partial({"type": "runs", "runs": [

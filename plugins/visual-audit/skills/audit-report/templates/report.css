@@ -293,9 +293,9 @@ details[open] > summary::before { transform: rotate(45deg); }
 
 /* Filters (applied by report.js) */
 main[data-filter="attention"] .module:not(:has([data-attention])),
-main[data-filter="attention"] .module li:not([data-attention]):not(:has([data-attention])),
+main[data-filter="attention"] .module :is(.step, .step-group, .file, .run, .claim):not([data-attention]):not(:has([data-attention])),
 main[data-filter="asserted"] .module:not(:has([data-source="asserted"])),
-main[data-filter="asserted"] .module li:not([data-source="asserted"]):not(:has([data-source="asserted"])),
+main[data-filter="asserted"] .module :is(.step, .step-group, .file, .run, .claim):not([data-source="asserted"]):not(:has([data-source="asserted"])),
 main[data-filter="asserted"] .directory:not(:has([data-source="asserted"])) { display: none; }
 main[data-filter="attention"] .directory:not(:has([data-attention])),
 main[data-filter="attention"] .phase:not(:has([data-attention])) { display: none; }

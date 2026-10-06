@@ -12,7 +12,12 @@
 
   var lastTarget = null;
   function reveal() {
-    var id = decodeURIComponent(location.hash.slice(1));
+    var id;
+    try {
+      id = decodeURIComponent(location.hash.slice(1));
+    } catch (error) {
+      return; // Malformed hash: nothing to reveal.
+    }
     var target = id && document.getElementById(id);
     if (!target) return;
     openAncestors(target);

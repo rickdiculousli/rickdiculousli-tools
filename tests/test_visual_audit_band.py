@@ -43,7 +43,7 @@ class BandTests(unittest.TestCase):
 
     def test_not_reported_counts_with_empty_modules(self):
         html = render_html(minimal_report())
-        self.assertEqual(html.count("not reported"), 2)
+        self.assertEqual(html.count("not reported"), 3)
         self.assertIn("Nothing needs attention", html)
 
     def test_failure_counts_split(self):
@@ -139,6 +139,10 @@ class BandTests(unittest.TestCase):
         html = render_html(minimal_report(modules=[{"type": "runs", "runs": [{"command": "a", "exit": 0}]}]))
         self.assertIn('<main id="report" data-all-asserted>', html)
         self.assertIn('<main id="report">', render_html(minimal_report()))
+
+    def test_filters_only_hide_item_rows(self):
+        css = render_html(minimal_report())
+        self.assertNotIn(".module li:not(", css)
 
     def test_no_strip_without_timeline(self):
         self.assertNotIn("<svg class=\"run-strip\"", render_html(minimal_report()))

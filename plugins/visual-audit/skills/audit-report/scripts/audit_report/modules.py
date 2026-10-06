@@ -91,7 +91,7 @@ def _step(step: dict, derived) -> str:
 
 
 def _collapsible(step: dict) -> bool:
-    return step["status"] == "ok" and step["failure"] == "ok"
+    return step["status"] == "ok" and step["failure"] == "ok" and not step.get("attention")
 
 
 def _steps(steps: list[dict], derived) -> str:
@@ -129,7 +129,7 @@ def render_timeline(module: dict, derived) -> str:
             parts.append(_steps(group, derived))
             continue
         unresolved = [s["status"] for s in group if s["failure"] == "unresolved"]
-        failing = bool(unresolved)
+        failing = bool(unresolved) or any(s.get("attention") for s in group)
         status = "fail" if "fail" in unresolved else "warn" if unresolved else "ok"
         id_attr = "" if anchor in seen else f' id="{anchor}"'
         seen.add(anchor)
@@ -174,7 +174,7 @@ def _bar(item: dict, scale: float) -> str:
     if item.get("binary"):
         return '<span class="binary">binary</span>'
     total = item["added"] + item["removed"]
-    width = 100.0 if scale == 0 else round(log1p(total) / scale * 100, 1)
+    width = 0.0 if scale == 0 else round(log1p(total) / scale * 100, 1)
     return (f'<span class="bar" style="width:{width}%">'
             f'<span class="bar-added" style="flex-grow:{item["added"]}"></span>'
             f'<span class="bar-removed" style="flex-grow:{item["removed"]}"></span></span>')
@@ -233,7 +233,10 @@ def _suite(suite: dict) -> str:
 def _run(run: dict, derived) -> str:
     status = RUN_STATUS[run["failure"]]
     failing = run["failure"] == "unresolved"
-    badge = f"exit {run['exit']}" + (f" · {RUN_TEXT[run['failure']]}" if run["failure"] in RUN_TEXT else "")
+    text = RUN_TEXT.get(run["failure"])
+    if run["failure"] == "unresolved" and run.get("expect_fail"):
+        text = "expected failure passed"
+    badge = f"exit {run['exit']}" + (f" · {text}" if text else "")
     duration = (f'<span class="duration">{run["duration_ms"] / 1000:.1f} s</span>'
                 if "duration_ms" in run else "")
     suites = "".join(_suite(suite) for suite in run.get("suites", []))

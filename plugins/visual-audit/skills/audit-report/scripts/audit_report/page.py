@@ -58,7 +58,9 @@ def _counts(report: dict, derived) -> str:
         parts.append(f'<a class="count" href="#attention">{failed}</a>' if runs["unresolved"] else failed)
         parts += [f"{runs[key]} {key}" for key in ("resolved", "expected") if runs[key]]
         rows.append(("Commands", " · ".join(parts)))
-    if derived.all_steps:
+    if not derived.all_steps:
+        rows.append(("Steps", '<span class="not-reported">not reported</span>'))
+    else:
         unresolved = [s for s in derived.all_steps if s["failure"] == "unresolved"]
         failed = sum(1 for s in unresolved if s["status"] == "fail")
         text = plural(failed, "failed step")
