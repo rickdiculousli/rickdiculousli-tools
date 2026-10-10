@@ -53,16 +53,18 @@ words, no validators, findings go to the execution log) and carry on.
    `## Single writer` resources. Only you apply them.
 7. **Write findings as they happen** to the overlay's `## Findings` sink (else the
    execution log): id, date, claim, status (including `refuted`), evidence. Do it
-   when a discovery or dead end is established, not at handoff.
+   when a discovery or dead end is established, not at handoff; if the sink is
+   tracked and delegations are open, see the hold in section 3, step 5.
 8. **Check; don't redo.** Review ledger results and the diff. Read raw material
    only to dig into a specific doubt.
-9. **Quota zones.** At `last-task`, open no new delegations. At `wrap`, close
-   every open delegation before handing off (see section 6).
+9. **Quota zones**, when a relay or a soft limit is in play. You learn the zone
+   from the relay or the user. At `last-task`, open no new delegations. At
+   `wrap`, close every open delegation before handing off (see section 6).
 
 ## 3. Procedure
 
-1. **Brief.** Choose an id (letters, digits, `.`, `_`, `-`; at most 64 chars;
-   never reused in this worktree). Write the brief to
+1. **Brief.** Choose an id matching `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` (a letter
+   or digit first; never reused in this worktree). Write the brief to
    `.agents/delegation/briefs/<id>.md` (create the folder if needed; `check.py`
    keeps `.agents/delegation/` git-ignored). Don't edit it after opening: `open`
    records its hash.
@@ -75,10 +77,12 @@ words, no validators, findings go to the execution log) and carry on.
    Pass `--writes` if the subagent may edit the worktree. Exit 2 means refused:
    a writer is open, a writer was asked for while others are open, the parallel
    limit is reached, or the id was used. Wait for a close, or keep the work.
-3. **Start the tier agent** (section 4) with the brief's full text as its task.
+3. **Start the tier agent** (section 4) with the brief's full text as its task,
+   after the tier's instructions where `reference/hosts.md` says so.
 4. **The subagent** works, runs validators only with the brief's `run` command,
    and returns the report. `run` prints `<id>#<n> PASS|FAIL exit=<code>
-   tree=<hash>`, with `unstable` appended if the tree changed while it ran.
+   tree=<first 12 chars>`, with `unstable` appended if the tree changed while it
+   ran. For the full hash use `query --json` or `check.py tree`.
 5. **Review** before you change anything in the worktree:
 
    ```sh
@@ -90,6 +94,11 @@ words, no validators, findings go to the execution log) and carry on.
    otherwise treat the claim as `asserted`. Then review the diff, apply proposed
    single-writer changes, and write findings. If you need fresh evidence after
    your edits, rerun validators under the same id before closing.
+
+   **While delegations are open, hold edits to tracked files**, findings
+   included: they change the tree, so a running check turns `unstable` and a
+   finished one goes stale. Query those delegations first, or wait for them to
+   return, then edit. Write the finding the moment the delegations are reviewed.
 6. **Close.**
 
    ```sh
@@ -134,8 +143,7 @@ your session to another provider. Subagents can't survive that switch, so:
   not `checked`.
 - **An executor is stuck:** it stops and reports its evidence. Close the
   delegation as `stuck`, then rule on the next step yourself.
-- **The host lacks the generated tier definitions:** follow the fallback in
-  `reference/hosts.md` (spawn with explicit model and effort; else a same-model
-  subagent with the tier named in the brief, at default effort).
+- **The host lacks the generated tier definitions:** follow this host's
+  fallback in `reference/hosts.md`.
 - **`check.py` exits 2:** read stderr. It refuses rather than guesses; don't work
   around a refusal by editing `.agents/delegation/`.

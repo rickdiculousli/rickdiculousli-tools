@@ -40,7 +40,7 @@ This plugin packages that as a reusable **base** plus a per-repo **overlay**, so
 | `skills/delegation/SKILL.md` | The base rules (below). Names tiers, never host models. Tells the agent how to find and read the overlay, and sends it to `reference/hosts.md` to start a tier on this host. States plainly that the skill is the explicit instruction to spawn tier subagents (Codex spawns none otherwise). |
 | `skills/delegation/reference/overlay.md` | The overlay format and a worked example (game-decomp's). |
 | `skills/delegation/reference/return-format.md` | The return format and the brief template, so briefs can quote it verbatim. |
-| `skills/delegation/reference/hosts.md` | Generated from `tiers.json`: the tier table (role, Claude Code model and effort, Codex model and effort) and, per host, how to start a tier. |
+| `skills/delegation/reference/hosts.md` | Generated from `tiers.json`: the tier table (role, Claude Code model and effort, Codex model and effort), per host how to start a tier, and each subagent tier's instructions, which Codex spawns and the Claude fallback put at the top of the task. |
 | `skills/delegation/scripts/check.py` | Stdlib Python 3.10+. The ledger, tree hash, validators and overlay lint (below). |
 | Generated agent definitions | Claude Code only: `agents/execute.md` and `agents/routine.md`, written by `sync_marketplaces.py` from `tiers.json`, addressed as `delegation:<tier>`. Each carries its `model` and `effort` frontmatter and a short body. Codex plugins can't ship agent definitions (step 0), so Codex uses the `spawn` route. Any other `agents/*.md` in the plugin is drift. |
 

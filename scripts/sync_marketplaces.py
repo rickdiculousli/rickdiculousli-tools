@@ -19,6 +19,7 @@ EFFORTS = {
     "codex": ("minimal", "low", "medium", "high", "xhigh"),
 }
 CODEX_ROUTES = ("definitions", "spawn", "same-model")
+REFERENCE = re.compile(r"skills/[a-z0-9]+(?:-[a-z0-9]+)*/reference/[a-z0-9]+(?:-[a-z0-9]+)*\.md\Z")
 
 
 def read_object(path: Path) -> dict:
@@ -92,13 +93,13 @@ def load_tiers(plugin_dir: Path) -> dict | None:
     if data.get("schema") != 1:
         raise ValueError(f"{where}: schema must be 1")
     reference = data.get("reference")
-    ref = PurePosixPath(reference) if isinstance(reference, str) else None
     if (
-        ref is None or "\\" in reference or ref.is_absolute() or ".." in ref.parts
-        or len(ref.parts) < 2 or ref.parts[0] != "skills" or ref.suffix != ".md"
-        or not (plugin_dir / ref).resolve().is_relative_to((plugin_dir / "skills").resolve())
+        not isinstance(reference, str) or not REFERENCE.fullmatch(reference)
+        or not (plugin_dir / reference).resolve().is_relative_to((plugin_dir / "skills").resolve())
     ):
-        raise ValueError(f"{where}: reference must be a .md path under skills/ inside the plugin, got {reference!r}")
+        raise ValueError(
+            f"{where}: reference must be skills/<skill>/reference/<name>.md inside the plugin, got {reference!r}"
+        )
     routes = data.get("routes")
     if not isinstance(routes, dict) or set(routes) != set(HOSTS):
         raise ValueError(f"{where}: routes must have exactly the keys {', '.join(HOSTS)}")
@@ -120,6 +121,8 @@ def load_tiers(plugin_dir: Path) -> dict | None:
         if tier["subagent"]:
             tier["description"] = _nonempty_text(tier.get("description"), f"{label}.description")
             tier["instructions"] = _nonempty_text(tier.get("instructions"), f"{label}.instructions")
+            if "````" in tier["instructions"]:
+                raise ValueError(f"{label}.instructions must not contain a ```` fence")
         hosts = tier.get("hosts")
         if not isinstance(hosts, dict):
             raise ValueError(f"{label}.hosts must be an object")
@@ -157,7 +160,8 @@ def _codex_start(plugin: str, route: str, subagents: list[tuple[str, dict]]) -> 
             "- `task_name`: a short name for the delegation, such as its id with `-` and `.` as `_`",
             '- `fork_turns`: `"none"`, always. A forked child inherits your context, which defeats delegation.',
             "- `model` and `reasoning_effort`: the tier's values below, given explicitly",
-            "- `message`: the brief's full text",
+            "- `message`: this tier's instructions (under \"Tier instructions\" below) at the top of `message`,",
+            "  followed by the brief's full text",
             "",
             "Per tier:",
             "",
@@ -171,13 +175,15 @@ def _codex_start(plugin: str, route: str, subagents: list[tuple[str, dict]]) -> 
             lines.append(f'- `{name}`: `model`: `"{entry["model"]}"`, {effort}')
         lines += [
             "",
-            "If `spawn_agent` rejects `model` or `reasoning_effort`, spawn without them and name",
-            "the tier in the brief: same model, default effort.",
+            "If `spawn_agent` rejects `model` or `reasoning_effort`, spawn without them, keep the",
+            "tier's instructions at the top of `message`, and name the tier in the brief: same",
+            "model, default effort.",
         ]
     elif route == "same-model":
         lines += [
-            "Spawn a subagent on the same model as you: `spawn_agent` with `fork_turns`: `\"none\"`",
-            "and the brief's full text as `message`, without `model` or `reasoning_effort`. Put the",
+            "Spawn a subagent on the same model as you: `spawn_agent` with `fork_turns`: `\"none\"`,",
+            "without `model` or `reasoning_effort`. Put the tier's instructions (under \"Tier",
+            "instructions\" below) at the top of `message`, followed by the brief's full text. Put the",
             "tier name in the brief; effort stays the default.",
         ]
     else:
@@ -193,7 +199,7 @@ def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
     subagents = [(name, tier) for name, tier in tiers["tiers"].items() if tier["subagent"]]
     for name, tier in subagents:
         claude = tier["hosts"]["claude"]
-        front = ["---", f"name: {name}", f"description: {json.dumps(tier['description'])}", f"model: {claude['model']}"]
+        front = ["---", f"name: {name}", f"description: {json.dumps(tier['description'], ensure_ascii=False)}", f"model: {claude['model']}"]
         if "effort" in claude:
             front.append(f"effort: {claude['effort']}")
         front.append("---")
@@ -228,11 +234,18 @@ def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
         "`CLAUDE_CODE_SUBAGENT_MODEL` forces every subagent's model. If either is set, the table",
         "doesn't hold; say so once.",
         "",
-        f"If the `{plugin}:<tier>` agents aren't available, start a general-purpose subagent and",
-        "name the tier in the brief: same model, default effort.",
+        f"If the `{plugin}:<tier>` agents aren't available, start a general-purpose subagent (still",
+        "without `model` or `effort`) with the tier's instructions (under \"Tier instructions\" below)",
+        "at the top of the prompt, followed by the brief's full text. Name the tier in the brief:",
+        "same model, default effort.",
         "", f"### Codex (route: {tiers['routes']['codex']})", "",
         *_codex_start(plugin, tiers["routes"]["codex"], subagents),
+        "", "## Tier instructions", "",
+        "Each tier's generated instructions, verbatim. A Claude Code tier agent already has them;",
+        "any other way of starting a tier puts them at the top of the task, before the brief.",
     ]
+    for name, tier in subagents:
+        lines += ["", f"### `{name}`", "", "````text", tier["instructions"], "````"]
     outputs[plugin_path / tiers["reference"]] = "\n".join(lines) + "\n"
     return outputs
 
@@ -259,6 +272,8 @@ def render_outputs(root: Path) -> dict[Path, str]:
     for path, portable in plugins:
         tiers = load_tiers(root.resolve() / path)
         if tiers is not None:
+            if (root / path / "agents").is_symlink():
+                raise ValueError(f"{path / 'agents'} must be a directory, not a symlink")
             texts.update(render_tiers(path, tiers))
         identity = {key: portable[key] for key in ("name", "version", "description", "author", "keywords") if key in portable}
         source = "./" + path.as_posix()

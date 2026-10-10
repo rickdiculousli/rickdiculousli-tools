@@ -176,6 +176,41 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
                 self.assertIn(marker, codex)
                 self.assertNotIn("`reasoning_effort`: `\"low\"`", codex)
 
+    def test_hosts_reference_carries_each_subagent_tier_instructions(self):
+        self.tiers["tiers"]["execute"]["instructions"] = ["Execute line one.", "- Execute line two."]
+        self.tiers["tiers"]["routine"]["instructions"] = "Routine only rule."
+        for route in ("spawn", "same-model"):
+            with self.subTest(route=route):
+                self.tiers["routes"]["codex"] = route
+                self.save_tiers()
+                sync(self.root)
+                text = self.hosts_text()
+                for line in ("Execute line one.", "- Execute line two.", "Routine only rule."):
+                    self.assertIn(line, text)
+                claude, codex = text.split("### Codex", 1)
+                self.assertIn("instructions", claude.split("general-purpose", 1)[1])
+                self.assertIn("top of `message`", codex)
+        self.assertNotIn("judge", text.split("## Tier instructions", 1)[1].split("## Starting", 1)[0])
+
+    def test_description_keeps_non_ascii(self):
+        self.tiers["tiers"]["execute"]["description"] = "Exécute 🚀 tier."
+        self.save_tiers()
+        sync(self.root)
+        lines = (self.plugin / "agents/execute.md").read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines[2], 'description: "Exécute 🚀 tier."')
+
+    def test_symlinked_agents_dir_rejected_before_writes(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "keep.md").write_text("keep\n")
+        (self.plugin / "agents").symlink_to(outside, target_is_directory=True)
+        for check in (True, False):
+            with self.subTest(check=check):
+                with self.assertRaisesRegex(ValueError, "agents"):
+                    sync(self.root, check=check)
+                self.assertEqual(sorted(p.name for p in outside.iterdir()), ["keep.md"])
+                self.assertFalse((self.root / ".claude-plugin").exists())
+
     def test_hand_edited_agent_fails_check(self):
         sync(self.root)
         agent = self.plugin / "agents/execute.md"
@@ -206,18 +241,24 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
         def escape_nested(t): t["reference"] = "skills/../../hosts.md"
         def escape_absolute(t): t["reference"] = "/tmp/hosts.md"
         def outside_skills(t): t["reference"] = "agents/hosts.md"
+        def authored_skill(t): t["reference"] = "skills/hello/SKILL.md"
+        def not_reference_dir(t): t["reference"] = "skills/hello/hosts.md"
+        def too_deep(t): t["reference"] = "skills/hello/reference/x/hosts.md"
         def bad_schema(t): t["schema"] = 2
         def bad_claude_route(t): t["routes"]["claude"] = "spawn"
         def bad_codex_route(t): t["routes"]["codex"] = "headless"
         def bad_name(t): t["tiers"]["Bad_Name"] = t["tiers"].pop("routine")
         def no_description(t): t["tiers"]["execute"]["description"] = " "
         def no_instructions(t): del t["tiers"]["routine"]["instructions"]
+        def fenced_instructions(t): t["tiers"]["routine"]["instructions"] = "a\n````\nb"
         cases = {
             bad_effort: "effort", bad_codex_effort: "effort", missing_model: "model",
             missing_host: "claude", escape_up: "reference", escape_nested: "reference",
-            escape_absolute: "reference", outside_skills: "reference", bad_schema: "schema",
+            escape_absolute: "reference", outside_skills: "reference", authored_skill: "reference",
+            not_reference_dir: "reference", too_deep: "reference", bad_schema: "schema",
             bad_claude_route: "routes.claude", bad_codex_route: "routes.codex",
             bad_name: "Bad_Name", no_description: "description", no_instructions: "instructions",
+            fenced_instructions: "instructions",
         }
         for mutate, field in cases.items():
             with self.subTest(case=mutate.__name__):

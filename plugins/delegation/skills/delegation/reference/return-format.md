@@ -35,6 +35,7 @@ may not know where the skill is installed.
 ````markdown
 # Delegation <id>
 
+Tier: <execute|routine>
 Goal: <one or two sentences: what done looks like>
 Inputs: <paths, symbols or addresses to read>
 May write: <paths, or "nothing (reader)">

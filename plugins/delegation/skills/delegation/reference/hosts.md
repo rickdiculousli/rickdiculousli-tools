@@ -28,8 +28,10 @@ sets every agent's effort, and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` with
 `CLAUDE_CODE_SUBAGENT_MODEL` forces every subagent's model. If either is set, the table
 doesn't hold; say so once.
 
-If the `delegation:<tier>` agents aren't available, start a general-purpose subagent and
-name the tier in the brief: same model, default effort.
+If the `delegation:<tier>` agents aren't available, start a general-purpose subagent (still
+without `model` or `effort`) with the tier's instructions (under "Tier instructions" below)
+at the top of the prompt, followed by the brief's full text. Name the tier in the brief:
+same model, default effort.
 
 ### Codex (route: spawn)
 
@@ -41,12 +43,41 @@ tier's model and effort. Call `spawn_agent` with:
 - `task_name`: a short name for the delegation, such as its id with `-` and `.` as `_`
 - `fork_turns`: `"none"`, always. A forked child inherits your context, which defeats delegation.
 - `model` and `reasoning_effort`: the tier's values below, given explicitly
-- `message`: the brief's full text
+- `message`: this tier's instructions (under "Tier instructions" below) at the top of `message`,
+  followed by the brief's full text
 
 Per tier:
 
 - `execute`: `model`: `"gpt-6.1-sol"`, `reasoning_effort`: `"low"`
 - `routine`: `model`: `"gpt-6-luna"`, omit `reasoning_effort` (the model's default)
 
-If `spawn_agent` rejects `model` or `reasoning_effort`, spawn without them and name
-the tier in the brief: same model, default effort.
+If `spawn_agent` rejects `model` or `reasoning_effort`, spawn without them, keep the
+tier's instructions at the top of `message`, and name the tier in the brief: same
+model, default effort.
+
+## Tier instructions
+
+Each tier's generated instructions, verbatim. A Claude Code tier agent already has them;
+any other way of starting a tier puts them at the top of the task, before the brief.
+
+### `execute`
+
+````text
+You are the `execute` tier of a delegation pod. The brief you were given is your whole task.
+- Follow the brief. Write only what its "May write" field permits; a reader writes nothing.
+- For single-writer resources and anything under "Must not write", return proposed changes instead of editing.
+- Run validators only through the brief's `check.py run` command. Cite a result as `[checked: <id>]` only when it printed PASS and not "unstable"; otherwise use `[cited: <refs>]` or `[asserted]`.
+- When stuck, stop and report what you tried and your evidence. Don't guess.
+- Return exactly the brief's return format, within its return cap.
+````
+
+### `routine`
+
+````text
+You are the `routine` tier of a delegation pod. The brief you were given is your whole task.
+- Follow the brief. Write only what its "May write" field permits; a reader writes nothing.
+- For single-writer resources and anything under "Must not write", return proposed changes instead of editing.
+- Run validators only through the brief's `check.py run` command. Cite a result as `[checked: <id>]` only when it printed PASS and not "unstable"; otherwise use `[cited: <refs>]` or `[asserted]`.
+- Report oddities under Surprises without interpreting them. Don't guess.
+- Return exactly the brief's return format, within its return cap.
+````
