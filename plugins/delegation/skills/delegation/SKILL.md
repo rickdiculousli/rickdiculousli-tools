@@ -42,10 +42,11 @@ or change an overlay, use the `setup` skill from this plugin.
    with evidence when stuck; `routine` reports oddities without interpreting them.
 3. **Brief** with the template in
    [reference/return-format.md](reference/return-format.md): settled context,
-   goal, inputs, what it may write, what it must not write, the done condition
-   or validators, the delegation id and the return format.
-4. **Return format.** Quote the block from `reference/return-format.md` verbatim
-   in every brief, with the overlay's return fields and cap.
+   goal, inputs, what it may write, what it must not write, and the done
+   condition or validators.
+4. **Return format.** Don't write it: `check.py brief` appends the delegation
+   id, the validator command, the return format and the overlay's return fields
+   and cap to every brief.
 5. **Batch and limit concurrency.** Group similar routine items into one call.
    Readers (write nothing, return data) may run in parallel up to the overlay's
    parallel limit. **At most one writer per worktree, and a writer runs alone.**
@@ -76,7 +77,8 @@ or change an overlay, use the `setup` skill from this plugin.
    or digit first; never reused in this worktree). Write the brief to
    `.delegation/briefs/<id>.md` (create the folder if needed; `check.py`
    keeps `.delegation/` git-ignored). Don't edit it after opening: `open`
-   records its hash.
+   records its hash, and the hash of every `.delegation/context/` file the brief
+   names.
 2. **Open.**
 
    ```sh
@@ -86,15 +88,17 @@ or change an overlay, use the `setup` skill from this plugin.
    Pass `--writes` if the subagent may edit the worktree. Exit 2 means refused:
    a writer is open, a writer was asked for while others are open, the parallel
    limit is reached, or the id was used. Wait for a close, or keep the work.
-3. **Start the tier agent** (section 4). Its task is one line, so the brief
-   isn't written into your context a second time:
+3. **Start the tier agent** (section 4). Its task is the one line `open`
+   printed after `task:`, so the brief isn't written into your context a second
+   time:
 
    ```text
    Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.
    ```
 
-   `brief` prints the brief recorded at `open`, and exits 2 if the delegation
-   isn't open or the file no longer matches its recorded hash. Tools don't
+   `brief` prints the brief recorded at `open` with the fixed parts appended, and
+   exits 2 if the delegation isn't open or the brief, or a context file it
+   names, no longer matches its recorded hash. Tools don't
    expand shell syntax: never pass `$(cat ...)` or a bare path as the task. Put
    the tier's instructions first where `reference/hosts.md` says so.
 4. **The subagent** works, runs validators only with the brief's `run` command,
@@ -125,7 +129,7 @@ or change an overlay, use the `setup` skill from this plugin.
    ```
 
 `check.py run <validator> --delegation <id> [--timeout <seconds>]` needs the
-delegation open. Set a timeout for long validators, and put it in the brief's `run` line.
+delegation open. Give slow validators a timeout in the brief's `Done when` line.
 `check.py tree` prints the current tree hash.
 
 ## 4. Starting a tier on this host

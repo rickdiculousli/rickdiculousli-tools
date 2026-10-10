@@ -26,6 +26,20 @@ SCHEMA = 1
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 TIERS = ("execute", "routine")
 OUTCOMES = ("done", "stuck", "abandoned")
+CONTEXT_REF = re.compile(r"\.delegation/context/[A-Za-z0-9_./-]*[A-Za-z0-9_-]")
+
+
+def _context_hashes(root: Path, brief: bytes) -> dict[str, str]:
+    """Hash each `.delegation/context/` file the brief names, keyed by that path."""
+    hashes = {}
+    for ref in sorted(set(CONTEXT_REF.findall(brief.decode("utf-8", errors="replace")))):
+        if ".." in Path(ref).parts:
+            raise DelegationError(f"context path escapes .delegation/context: {ref}")
+        target = root.resolve() / ref
+        if not target.is_file():
+            raise DelegationError(f"context file not found: {target}")
+        hashes[ref] = hashlib.sha256(target.read_bytes()).hexdigest()
+    return hashes
 
 
 def ledger_path(root: Path) -> Path:
@@ -113,7 +127,9 @@ def open_delegation(
         brief_name = brief.resolve().relative_to(root_resolved).as_posix()
     except ValueError:
         brief_name = str(brief)
-    brief_sha = hashlib.sha256(brief.read_bytes()).hexdigest()
+    brief_bytes = brief.read_bytes()
+    brief_sha = hashlib.sha256(brief_bytes).hexdigest()
+    context = _context_hashes(root, brief_bytes)
     tree = tree_hash(root, extra_inputs)
     with ledger_lock(root):
         events = read_events(root)
@@ -141,6 +157,7 @@ def open_delegation(
                 "writes": writes,
                 "brief": brief_name,
                 "brief_sha256": brief_sha,
+                "context": context,
                 "tree": tree,
             },
         )
@@ -157,6 +174,12 @@ def load_brief(root: Path, delegation: str) -> bytes:
     data = brief.read_bytes()
     if hashlib.sha256(data).hexdigest() != opened[0]["brief_sha256"]:
         raise DelegationError(f"brief changed since open: {brief}")
+    for ref, digest in opened[0].get("context", {}).items():
+        target = root.resolve() / ref
+        if not target.is_file():
+            raise DelegationError(f"context file not found: {target}")
+        if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+            raise DelegationError(f"context changed since open: {target}")
     return data
 
 

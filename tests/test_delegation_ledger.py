@@ -8,6 +8,7 @@ import unittest
 
 from delegation_support import SCRIPTS, git_repo, run_cli, write_overlay
 
+from delegation_check.brief import RETURN_FORMAT
 from delegation_check.ledger import ledger_path, read_events
 
 
@@ -38,7 +39,12 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(self.open("d1").returncode, 0)
         r = self.open("d2", tier="routine")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertRegex(r.stdout, r"\Aopened d2 \(routine, reader\) at [0-9a-f]{12}\n\Z")
+        self.assertRegex(
+            r.stdout,
+            r"\Aopened d2 \(routine, reader\) at [0-9a-f]{12}\n"
+            r"task: Run `python3 \S+/check\.py --root \S+ brief --delegation d2` "
+            r"and follow the brief it prints exactly\.\n\Z",
+        )
         text = run_cli(self.root, "pending").stdout
         self.assertIn("d1 execute reader opened ", text)
         self.assertIn("d2 routine reader opened ", text)
@@ -67,10 +73,55 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(event["tier"], "execute")
         self.assertRegex(event["timestamp"], r"\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
 
-    def test_brief_prints_recorded_brief(self):
+    def test_brief_prints_recorded_brief_and_footer(self):
+        write_overlay(self.root, "## Return fields\nglobals touched\n## Return cap\n250\n")
         self.open("d1")
         r = run_cli(self.root, "brief", "--delegation", "d1")
-        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "do the thing\n", ""))
+        self.assertEqual((r.returncode, r.stderr), (0, ""))
+        body, footer = r.stdout.split("\n\n", 1)
+        self.assertEqual(body, "do the thing")
+        self.assertTrue(footer.startswith("Delegation id: d1\n"))
+        script = str(SCRIPTS / "check.py")
+        self.assertIn(
+            f"    python3 {script} --root {self.root.resolve()} run '<validator>' --delegation d1\n", footer
+        )
+        self.assertIn(f"```\n{RETURN_FORMAT}\n```\n", footer)
+        self.assertTrue(footer.endswith("Return fields: globals touched\nReturn cap: 250 words\n"))
+
+    def test_brief_footer_defaults_without_overlay(self):
+        self.open("d1")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertTrue(r.stdout.endswith("Return fields: none\nReturn cap: 400 words\n"))
+
+    def test_brief_checks_context_files(self):
+        context = self.root / ".delegation" / "context" / "spec.md"
+        self.brief.write_text("Settled: read .delegation/context/spec.md first.\n")
+        r = self.open("d1")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("context file not found", r.stderr)
+        context.parent.mkdir(parents=True, exist_ok=True)
+        context.write_text("facts\n")
+        self.assertEqual(self.open("d2").returncode, 0)
+        (event,) = [e for e in read_events(self.root) if e.get("delegation") == "d2"]
+        self.assertEqual(
+            event["context"],
+            {".delegation/context/spec.md": hashlib.sha256(b"facts\n").hexdigest()},
+        )
+        self.assertEqual(run_cli(self.root, "brief", "--delegation", "d2").returncode, 0)
+        context.write_text("other facts\n")
+        r = run_cli(self.root, "brief", "--delegation", "d2")
+        self.assertEqual((r.returncode, r.stdout), (2, ""))
+        self.assertIn("context changed since open", r.stderr)
+
+    def test_context_path_may_not_escape(self):
+        self.brief.write_text("Settled: .delegation/context/../../a.txt\n")
+        r = self.open("d1")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("escapes .delegation/context", r.stderr)
+
+    def test_return_format_doc_matches_footer(self):
+        doc = (SCRIPTS.parent / "reference" / "return-format.md").read_text()
+        self.assertIn(f"```\n{RETURN_FORMAT}\n```", doc)
 
     def test_brief_refusals(self):
         r = run_cli(self.root, "brief", "--delegation", "d1")

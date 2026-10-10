@@ -1,6 +1,6 @@
 # Native lifecycle verification
 
-Last verified on October 10, 2026 (report timestamp 2026-10-10T04:57:36Z, UTC),
+Last verified on October 10, 2026 (report timestamp 2026-10-10T05:03:53Z, UTC),
 using the real locally installed CLIs, with a fresh temporary configuration
 profile for each host. Evidence labels: `checked` (observed running), `cited`
 (source or documentation reading), `asserted`.
@@ -19,7 +19,7 @@ profile for each host. Evidence labels: `checked` (observed running), `cited`
 | All four plugins uninstalled; absent from installed list | Passed | Passed |
 | Marketplace removed; absent from marketplace list | Passed | Passed |
 
-All results above are `checked`. The unit suite (184 tests) passed on Python 3.14
+All results above are `checked`. The unit suite (188 tests) passed on Python 3.14
 and on 3.10 (`uv run --no-project --python 3.10 -m unittest discover -s tests`).
 
 The marketplace is `rickdiculousli-plugins`. The tested plugins are
@@ -33,14 +33,15 @@ templates, and references are included. Both hosts installed identical skill con
 | `audit-report` | `d014925c6443c961b72529866b868ad1ece1146b62b97322a2076027a193117b` |
 | `hello` | `bf6ab583d5cd7ee791d8f3f551fc04c120b180bcd6e99effc4e52f3f3d6bd07d` |
 | `about` | `764ab249ba09f27a645b7fe4b60ab60e33b7b569bc189d158f7e139a46ec1434` |
-| `delegation` | `4e68dfa93758f4ab71c352de8baad960baf625354193ebf63df2d24941ebceb2` |
+| `delegation` | `7ea2b7f249d7f6a0d850b4d1ecbd650cd7c4aadbff0b1b9c3f9bd78cc4ee7ebf` |
 | `setup` (delegation) | `7fdf269e88bac806e09e650ecb0d5893b1ba98a9f90ebe371ca0304c21ed6219` |
 
 All five hashes match the 2026-10-10 lifecycle report (`/tmp/plugin-verification.json`),
 re-run after delegation 0.3.0: the shared-context rule, the `Settled` brief
-field, read-bound tier instructions, `check.py brief` with its one-line task, and
-the stderr note from an empty `query`. `brief` and `query` are covered by the
-unit suite (184 tests). Neither the `setup` skill nor the 0.3.0 brief changes
+field, read-bound tier instructions, `check.py brief` (appending the fixed brief
+parts and checking brief and context hashes) with the one-line task `open`
+prints, and the stderr note from an empty `query`. These are covered by the unit
+suite (188 tests). Neither the `setup` skill nor the 0.3.0 brief changes
 have been exercised by a model yet.
 
 ## Visual audit renderer

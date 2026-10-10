@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from . import DelegationError
+from .brief import footer, task_line
 from .ledger import OUTCOMES, TIERS, close_delegation, load_brief, open_delegation, pending, query, run_validator
 from .overlay import load_overlay
 from .tree import repo_root, tree_hash
@@ -34,13 +35,13 @@ def _open(root: Path, args: argparse.Namespace) -> int:
     )
     role = "writer" if args.writes else "reader"
     print(f"opened {args.delegation} ({args.tier}, {role}) at {event['tree'][:12]}")
+    print(f"task: {task_line(root, args.delegation)}")
     return 0
 
 
 def _brief(root: Path, args: argparse.Namespace) -> int:
-    sys.stdout.flush()
-    sys.stdout.buffer.write(load_brief(root, args.delegation))
-    sys.stdout.buffer.flush()
+    text = load_brief(root, args.delegation).decode("utf-8", errors="replace").rstrip("\n")
+    print(f"{text}\n\n{footer(root, args.delegation, load_overlay(root))}", end="")
     return 0
 
 

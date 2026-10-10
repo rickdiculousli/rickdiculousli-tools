@@ -229,8 +229,8 @@ def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
         ]
     lines += [
         "", "## Starting a tier", "",
-        "Start a tier only after `check.py open`. Its task is this loader line, not the brief's",
-        "text; `brief` prints the brief recorded at `open` and refuses if the file has changed:",
+        "Start a tier only after `check.py open`. Its task is the loader line `open` prints after",
+        "`task:`, not the brief's text; `brief` prints the recorded brief and refuses if it changed:",
         "",
         "    Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.",
         "",

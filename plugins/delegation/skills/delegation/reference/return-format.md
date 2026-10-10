@@ -2,7 +2,7 @@
 
 ## Return format
 
-Quote this block verbatim in every brief.
+`check.py brief` appends this block to every brief; don't write it yourself.
 
 ```
 Result: one paragraph.
@@ -29,10 +29,11 @@ while it ran) is never `checked`.
 ## Brief template
 
 Save as `.delegation/briefs/<id>.md`. Fill every field; write `none` where
-nothing applies. Use absolute paths for the script and root, since the subagent
-may not know where the skill is installed.
+nothing applies. Write only these fields: `check.py brief` appends the
+delegation id, the validator command with absolute paths, the return format,
+and the overlay's return fields and cap.
 
-````markdown
+```markdown
 # Delegation <id>
 
 Tier: <execute|routine>
@@ -41,25 +42,8 @@ Goal: <one or two sentences: what done looks like>
 Inputs: <paths, symbols or addresses to read; these bound your reading>
 May write: <paths, or "nothing (reader)">
 Must not write: <the overlay's single-writer resources, and anything not listed above>
-Done when: <the condition>; validators: <names from the overlay, or none>. A writer runs them last, after its final edit, so the results are at the tree the judge reviews.
-Delegation id: <id>
-
-Evidence: run validators only with this command, and cite the printed id as
-[checked: <id>#<n>] only when it printed PASS and not "unstable":
-
-    python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> run <validator> --delegation <id> --timeout <seconds>
-
-Return format:
-
-```
-Result: one paragraph.
-Claims:
-  - <claim> [checked: <ledger id>] | [cited: <refs>] | [asserted]
-Fields: <the overlay's return fields>
-Surprises: <anything unexpected>
-Ruled out: <approaches tried and rejected, and why>
+Done when: <the condition>; validators: <names from the overlay, with a timeout in seconds for slow ones, or none>. A writer runs them last, after its final edit, so the results are at the tree the judge reviews.
 ```
 
-Return fields: <the overlay's `## Return fields`, or none>
-Return cap: <the overlay's `## Return cap`, or 400> words
-````
+`open` records the hash of the brief and of every `.delegation/context/` file it
+names; `brief` refuses if any of them changed. Don't edit either after opening.
