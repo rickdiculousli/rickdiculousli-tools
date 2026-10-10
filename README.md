@@ -14,7 +14,7 @@ See [verification evidence and scope](docs/verification.md).
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
 | `repository-info` | Informational stub describing this layout |
-| `delegation` | `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. |
+| `delegation` | `setup` skill prepares a repo; `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. |
 
 ## Visual audit reports
 
@@ -44,7 +44,10 @@ git tree hash. Claude Code gets generated `delegation:execute` and
 `delegation:routine` agents; Codex has no plugin agent definitions, so the skill
 spawns its default subagent with the tier's model and effort.
 
-To use it in a repository, add this line to that repository's `AGENTS.md`:
+To set a repository up, open a session there and run `/delegation:setup` in Claude Code
+(or ask Codex to use the `setup` skill from `delegation`). It surveys the repo, drafts the
+overlay and pointer line for your approval, writes them, and runs every validator once
+through the ledger. To do it by hand, add this line to that repository's `AGENTS.md`:
 
 ```text
 Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.

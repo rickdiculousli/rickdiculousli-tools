@@ -27,7 +27,8 @@ The repo's overlay is `.agents/delegation.md`; its format is in
 [reference/overlay.md](reference/overlay.md). At the start of a session, read it
 and run `check.py lint`. Fix or report any problems it lists. If there is no
 overlay, say once that base defaults apply (parallel limit 3, return cap 400
-words, no validators, findings go to the execution log) and carry on.
+words, no validators, findings go to the execution log) and carry on. To create
+or change an overlay, use the `setup` skill from this plugin.
 
 ## 2. Rules
 
