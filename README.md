@@ -5,8 +5,8 @@ portable manifest and one set of skills. A small generator produces the host
 compatibility manifests and marketplaces; consumers install directly from the
 committed repository without a build step.
 
-All three plugins have been installed, byte-compared, and uninstalled through the
-real native marketplaces on Codex **0.160.1** and Claude Code **2.1.290**.
+All four plugins have been installed, byte-compared, and uninstalled through the
+real native marketplaces on Codex **0.162.1** and Claude Code **2.1.296**.
 See [verification evidence and scope](docs/verification.md).
 
 | Plugin | What it does |
@@ -14,7 +14,7 @@ See [verification evidence and scope](docs/verification.md).
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
 | `repository-info` | Informational stub describing this layout |
-| `delegation` | `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. Not yet lifecycle-verified |
+| `delegation` | `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. |
 
 ## Visual audit reports
 
@@ -36,6 +36,43 @@ To render a report by hand:
 python3 plugins/visual-audit/skills/audit-report/scripts/render_report.py report.json -o report.html
 ```
 
+## Delegation
+
+The `delegation` skill makes the main session the judge: it routes bulk work to
+`execute` and `routine` tier subagents and records validator results against the
+git tree hash. Claude Code gets generated `delegation:execute` and
+`delegation:routine` agents; Codex has no plugin agent definitions, so the skill
+spawns its default subagent with the tier's model and effort.
+
+To use it in a repository, add this line to that repository's `AGENTS.md`:
+
+```text
+Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.
+```
+
+The overlay at `.agents/delegation.md` holds that repository's validators, tier
+hints, findings sink and parallel limit. Its state lives in `.agents/delegation/`,
+which the tooling creates with its own `.gitignore`. Check the overlay and the
+evidence ledger with the bundled script (path as installed with the plugin):
+
+```sh
+python3 plugins/delegation/skills/delegation/scripts/check.py lint
+python3 plugins/delegation/skills/delegation/scripts/check.py tree
+python3 plugins/delegation/skills/delegation/scripts/check.py pending
+python3 plugins/delegation/skills/delegation/scripts/check.py query --help
+```
+
+Install and remove it like the other plugins:
+
+```sh
+claude plugin install delegation@rickdiculousli-plugins
+codex plugin add delegation@rickdiculousli-plugins
+claude plugin uninstall delegation@rickdiculousli-plugins
+codex plugin remove delegation@rickdiculousli-plugins
+```
+
+Routing quality has not been evaluated; that is for a pilot.
+
 ## Install from this checkout
 
 Run these commands from the repository root. They register this local checkout
@@ -48,6 +85,7 @@ claude plugin marketplace add "$PWD"
 claude plugin install visual-audit@rickdiculousli-plugins
 claude plugin install hello-world@rickdiculousli-plugins
 claude plugin install repository-info@rickdiculousli-plugins
+claude plugin install delegation@rickdiculousli-plugins
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
@@ -62,6 +100,7 @@ codex plugin marketplace add "$PWD"
 codex plugin add visual-audit@rickdiculousli-plugins
 codex plugin add hello-world@rickdiculousli-plugins
 codex plugin add repository-info@rickdiculousli-plugins
+codex plugin add delegation@rickdiculousli-plugins
 codex plugin list --marketplace rickdiculousli-plugins --available --json
 ```
 
@@ -75,11 +114,13 @@ In a new Codex session, ask it to use the `audit-report` skill from
 claude plugin uninstall visual-audit@rickdiculousli-plugins
 claude plugin uninstall hello-world@rickdiculousli-plugins
 claude plugin uninstall repository-info@rickdiculousli-plugins
+claude plugin uninstall delegation@rickdiculousli-plugins
 claude plugin marketplace remove rickdiculousli-plugins
 
 codex plugin remove visual-audit@rickdiculousli-plugins
 codex plugin remove hello-world@rickdiculousli-plugins
 codex plugin remove repository-info@rickdiculousli-plugins
+codex plugin remove delegation@rickdiculousli-plugins
 codex plugin marketplace remove rickdiculousli-plugins
 ```
 

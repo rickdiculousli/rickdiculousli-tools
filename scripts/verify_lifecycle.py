@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -61,6 +62,26 @@ def compare_tree(expected: list[str], source: Path, installed: Path) -> list[str
         if relative.as_posix() not in wanted:
             problems.append(f"extra: {relative.as_posix()}")
     return sorted(problems)
+
+
+def plugin_agents(plugin_dir: Path) -> list[str]:
+    """Sorted stems of the plugin's agent definitions."""
+    return sorted(path.stem for path in (plugin_dir / "agents").glob("*.md"))
+
+
+def missing_inventory(details: str, skills: list[str], agents: list[str]) -> list[str]:
+    """Skills and agents absent from `claude plugin details` output."""
+    lines = [line.strip() for line in details.splitlines()]
+    skill_lines = [line for line in lines if line.startswith("Skills (")]
+    agent_lines = [line for line in lines if line.startswith("Agents (")]
+    problems = []
+    for name in skills:
+        if not any(re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", line) for line in skill_lines):
+            problems.append(f"missing skill: {name}")
+    for name in agents:
+        if not any(re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", line) for line in agent_lines):
+            problems.append(f"missing agent: {name}")
+    return problems
 
 
 def plugin_id(item: dict) -> str:
@@ -173,11 +194,12 @@ def verify_host(host: str, root: Path, profile: Path) -> dict:
             require(not problems, f"Installed files differ from source for {identity}: {', '.join(problems)}")
             skills = [{"name": source.parent.name, "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}
                       for source in sorted((root / path / "skills").glob("*/SKILL.md"))]
+            agents = plugin_agents(root / path)
             if host == "claude":
                 inventory = command("skill_inventory", "plugin", "details", manifest["name"])
-                require(all(skill["name"] in inventory for skill in skills) and "Skills" in inventory,
-                        f"Native skill inventory missing for {identity}")
-            inspections.append({"pluginId": identity, "skills": skills, "installedPath": str(cached)})
+                problems = missing_inventory(inventory, [skill["name"] for skill in skills], agents)
+                require(not problems, f"Native inventory incomplete for {identity}: {', '.join(problems)}")
+            inspections.append({"pluginId": identity, "skills": skills, "agents": agents, "installedPath": str(cached)})
         result["plugins"] = inspections
         result["stages"].extend(["all_plugins_installed_and_enabled", "installed_files_verified"])
 

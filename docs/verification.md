@@ -1,26 +1,30 @@
 # Native lifecycle verification
 
-Last verified on October 6, 2026 (report timestamp 2026-10-06T15:01:41Z, after the
-final review fixes), using the real locally installed CLIs, with a fresh temporary
-configuration profile for each host.
+Last verified on October 10, 2026 (report timestamp 2026-10-10T03:01:51Z, UTC),
+using the real locally installed CLIs, with a fresh temporary configuration
+profile for each host. Evidence labels: `checked` (observed running), `cited`
+(source or documentation reading), `asserted`.
 
-| Check | Codex 0.160.1 | Claude Code 2.1.290 |
+| Check | Codex 0.162.1 | Claude Code 2.1.296 |
 | --- | --- | --- |
 | Generated metadata matches portable sources | Passed | Passed |
 | Native manifest and skill validation | Discovery/install accepted manifests | `claude plugin validate` passed |
 | Empty isolated profile confirmed | Passed | Passed |
 | Repository marketplace registered and listed | Passed | Passed |
-| All three plugins discoverable | Passed | Passed |
-| All three plugins installed and enabled | Passed | Passed |
+| All four plugins discoverable | Passed | Passed |
+| All four plugins installed and enabled | Passed | Passed |
 | Installed portable manifests match source | Passed | Passed |
 | Every committed plugin file matches its installed copy byte for byte; no extra files | Passed | Passed |
-| Native skill component inventory | Installed files inspected | `plugin details` lists `hello`, `about`, and `audit-report` |
-| All three plugins uninstalled; absent from installed list | Passed | Passed |
+| Native component inventory | Installed files inspected | `plugin details` lists each plugin's skills and, for `delegation`, agents `execute` and `routine` |
+| All four plugins uninstalled; absent from installed list | Passed | Passed |
 | Marketplace removed; absent from marketplace list | Passed | Passed |
 
+All results above are `checked`. The unit suite (180 tests) passed on Python 3.14
+and on 3.10 (`uv run --no-project --python 3.10 -m unittest discover -s tests`).
+
 The marketplace is `rickdiculousli-plugins`. The tested plugins are
-`visual-audit`, `hello-world`, and `repository-info` (all `@rickdiculousli-plugins`,
-version `0.1.0`). File comparison covers every file tracked by Git in each plugin
+`visual-audit`, `hello-world`, `repository-info`, and `delegation` (all
+`@rickdiculousli-plugins`, version `0.1.0`). File comparison covers every file tracked by Git in each plugin
 directory except generated host manifests, so `visual-audit`'s renderer scripts,
 templates, and references are included. Both hosts installed identical skill content:
 
@@ -29,6 +33,10 @@ templates, and references are included. Both hosts installed identical skill con
 | `audit-report` | `d014925c6443c961b72529866b868ad1ece1146b62b97322a2076027a193117b` |
 | `hello` | `bf6ab583d5cd7ee791d8f3f551fc04c120b180bcd6e99effc4e52f3f3d6bd07d` |
 | `about` | `764ab249ba09f27a645b7fe4b60ab60e33b7b569bc189d158f7e139a46ec1434` |
+| `delegation` | `d031282d6c4beb8e80338b9c0b652274df1895bb47fdba4fe346e0ed12e7481d` |
+
+The three earlier hashes were recorded on October 6; the table was not re-read
+against the October 10 report except for `delegation`, whose hash comes from it.
 
 ## Visual audit renderer
 
@@ -49,6 +57,7 @@ From the repository root, with Python 3.10+ and both CLIs on PATH:
 ```sh
 python3 scripts/sync_marketplaces.py --check
 python3 -m unittest discover -s tests -v
+uv run --no-project --python 3.10 -m unittest discover -s tests -v
 python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
 ```
 
@@ -71,8 +80,9 @@ Uninstallation is checked using native installed-plugin lists. Available catalog
 entries or host-retained cache directories do not count as installed plugins.
 
 This verifies local CLI marketplaces, installation, skill packaging, and removal.
-It does not claim graphical marketplace testing, model-driven execution of any
-skill (including an agent producing a real audit report), or Git remote deployment. The repository had no configured remote
+It does not claim graphical marketplace testing, routing quality of `delegation` (that is for a pilot), model-driven execution of any
+skill (including an agent producing a real audit report; the one-agent check below
+is the only model run), or Git remote deployment. The repository had no configured remote
 during verification. The external skill-creator validator needed unavailable
 PyYAML; native Claude skill validation and installed-content checks were used
 instead, without adding a dependency.
@@ -159,7 +169,7 @@ subagent with the tier's model and effort (`model` and `reasoning_effort`
 arguments). Rick approved this route on 2026-10-09. The `same-model` fallback
 is not needed on 0.162.1.
 
-### Claude Code (`cited`; live check is Task 8)
+### Claude Code (`cited`; live result under Task 8)
 
 The [subagent docs](https://code.claude.com/docs/en/sub-agents) say plugin
 agents honour the `model` and `effort` frontmatter fields. `hooks`,
@@ -167,6 +177,32 @@ agents honour the `model` and `effort` frontmatter fields. `hooks`,
 agents. A per-invocation `model` overrides frontmatter, and
 `CLAUDE_CODE_EFFORT_LEVEL` overrides effort. No Claude Code subagent was run
 for this step.
+
+## Delegation live checks (Task 8)
+
+Date: 2026-10-10.
+
+### (a) Claude: model of `delegation:routine` (`checked`)
+
+Command, from the repository root, normal auth, no installs or config writes:
+`claude --plugin-dir plugins/delegation -p "Use the delegation:routine agent to run 'echo ok' and report back its output in one line."`
+(`--plugin-dir` exists in 2.1.296). The agent replied `ok`. The subagent
+transcript `~/.claude/projects/<repo>/e7ca5816-8d08-413c-bd3c-a5b12e101be0/subagents/agent-afdd51028a4b4be8d.jsonl`
+has `agent-afdd51028a4b4be8d.meta.json` with `"agentType":"delegation:routine"`.
+Its assistant messages carry `"model":"claude-haiku-5-5"` (3 of 3).
+
+Effort: the transcript lines carry a session-level `"effort":"medium"` with
+`"advisorModel":"claude-opus-5-5"`, but that field is not tied to the agent's
+frontmatter, so the subagent's own effort is not observable; documented
+behaviour (`cited`) applies. The agent also could not write the brief file or run
+`check.py` in that headless run, so no ledger entry was made.
+
+### (b) Codex: effort when `reasoning_effort` is omitted (not performed)
+
+Not performed: Codex quota is at its limit. What a spawned child gets when
+`reasoning_effort` is omitted, and whether a hyphenated `task_name`
+(`routine-probe`) is accepted, remain unverified. Step 0 only used `reply_ok`.
+`tiers.json` is unchanged.
 
 ## Format references
 

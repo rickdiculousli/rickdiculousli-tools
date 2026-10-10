@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts.sync_marketplaces import load_catalog
-from scripts.verify_lifecycle import compare_tree, verify_host
+from scripts.verify_lifecycle import compare_tree, missing_inventory, plugin_agents, verify_host
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,6 +103,29 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("empty", result["error"])
         command.assert_not_called()
 
+
+class InventoryTests(unittest.TestCase):
+    DETAILS = """delegation 0.1.0
+
+Component inventory
+  Skills (1)  delegation
+  Agents (4)  execute, routine
+  Hooks (0)
+"""
+
+    def test_missing_inventory_reports_absent_agent(self):
+        self.assertEqual(missing_inventory(self.DETAILS, ["delegation"], ["execute", "routine"]), [])
+        self.assertEqual(missing_inventory(self.DETAILS.replace("execute, ", ""), ["delegation"],
+                                           ["execute", "routine"]), ["missing agent: execute"])
+        self.assertEqual(missing_inventory("  Skills (1)  other", ["delegation"], []), ["missing skill: delegation"])
+
+    def test_missing_inventory_requires_agents_line_only_when_agents_exist(self):
+        self.assertEqual(missing_inventory("Skills (1)  a", ["a"], []), [])
+        self.assertEqual(missing_inventory("Skills (1)  a", ["a"], ["execute"]), ["missing agent: execute"])
+
+    def test_plugin_agents_lists_generated_definitions(self):
+        self.assertEqual(plugin_agents(ROOT / "plugins/delegation"), ["execute", "routine"])
+        self.assertEqual(plugin_agents(ROOT / "plugins/hello-world"), [])
 
 
 class CompareTreeTests(unittest.TestCase):
