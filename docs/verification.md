@@ -211,12 +211,26 @@ subcommand ran as
 (`run` printed `d1#1 PASS exit=0`). The brief file itself was written outside the
 sandbox. The temporary repo was removed afterwards.
 
-### (b) Codex: effort when `reasoning_effort` is omitted (not performed)
+### (b) Codex: effort when `reasoning_effort` is omitted (`checked`)
 
-Not performed: Codex quota is at its limit. What a spawned child gets when
-`reasoning_effort` is omitted, and whether a hyphenated `task_name`
-(`routine-probe`) is accepted, remain unverified. Step 0 only used `reply_ok`.
-`tiers.json` is unchanged.
+Performed 2026-10-10 with Rick's approval, near the end of the Codex quota. Each run:
+`codex exec --sandbox read-only --skip-git-repo-check -m gpt-6-luna -c model_reasoning_effort=high "<prompt>"`
+from a fresh `/tmp` directory (the `-c` override applies to that run only). The
+parent ran at `high` so that an inherited effort would be distinguishable from the
+model default. No `[agents]` defaults are set in the profile.
+
+- Run 1: `spawn_agent` with `task_name` `routine-probe` was rejected:
+  `agent_name must use only lowercase letters, digits, and underscores`. No child
+  started (6,125 tokens).
+- Run 2: `spawn_agent` arguments
+  `{"task_name":"routine_probe","fork_turns":"none","model":"gpt-6-luna"}` (no
+  `reasoning_effort`). Parent `turn_context`: `"model": "gpt-6-luna"`, `"effort": "high"`.
+  Child (`parent_thread_id` `01a123ce-db7c-7a40-9df8-346c2f7a182a`) `turn_context`:
+  `"model": "gpt-6-luna"`, `"effort": "medium"`. The child replied `ok` (3,066 tokens).
+
+So an omitted `reasoning_effort` gives the model's default (`medium` for
+`gpt-6-luna`), not the parent's effort; `tiers.json` stays as is. `task_name` must be
+lowercase letters, digits and underscores; the generated `hosts.md` says so.
 
 ## Format references
 

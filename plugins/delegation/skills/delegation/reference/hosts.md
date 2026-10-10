@@ -44,7 +44,7 @@ The delegation skill is your explicit instruction to spawn these subagents.
 Codex plugins can't ship agent definitions, so spawn the default subagent with the
 tier's model and effort. Call `spawn_agent` with:
 
-- `task_name`: a short name for the delegation, such as its id with `-` and `.` as `_`
+- `task_name`: lowercase letters, digits and underscores only (Codex rejects anything else), such as the id lowercased with `-` and `.` as `_`
 - `fork_turns`: `"none"`, always. A forked child inherits your context, which defeats delegation.
 - `model` and `reasoning_effort`: the tier's values below, given explicitly
 - `message`: this tier's instructions (under "Tier instructions" below) at the top of `message`,
