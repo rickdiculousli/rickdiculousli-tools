@@ -36,7 +36,8 @@ source in bulk. Collect:
 
 | Overlay heading | Look for |
 |---|---|
-| `## Validators` | Commands that pass or fail mechanically: test suites, linters, type checks, consistency scripts. Each must run from the root, exit 0 on success, not edit tracked files (that makes results `unstable`), and finish in minutes. Prefer offline ones. |
+| `## Validators` | Commands that pass or fail mechanically: test suites, linters, type checks, consistency scripts. Each must run from the root, exit 0 on success, not edit tracked files (that makes results `unstable`), and finish in minutes. Prefer offline ones. Mark fast linters and format checks `[cheap]`; give slow suites `[timeout=<seconds>]`; give builds that compete for memory or a device the same `[lock=<name>]`. |
+| `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. |
 | `## Oracle` | What ultimately says work is right (golden files, reference traces, a spec suite). Tie prose to checks with `validator:<name>`. |
 | `## Extra inputs` | Git-ignored files the validators depend on: golden traces, built binaries, downloaded fixtures. Only paths inside the repo. |
 | `## Single writer` | Resources that break under concurrent writes or that only the judge should change: databases, tool projects behind an MCP server (Ghidra, Figma), generated tables fed to an apply step, shared lockfiles. |
@@ -80,11 +81,12 @@ Wait for approval or edits.
    - write a short brief to `.delegation/briefs/setup.md` ("Setup: prove each
      validator runs");
    - `check.py open --delegation setup-<YYYYMMDD> --tier routine --brief .delegation/briefs/setup.md`;
-   - for each validator, `check.py run <name> --delegation setup-<YYYYMMDD> --timeout 1800`;
+   - for each validator, `check.py run <name> --delegation setup-<YYYYMMDD>`, adding
+     `--timeout 1800` for one without its own timeout;
    - `check.py close --delegation setup-<YYYYMMDD> --outcome done`, or
      `--outcome stuck --note "<which failed>"`.
 3. A validator that fails or prints `unstable` isn't usable as written. Show its
-   output tail, propose a fix (a narrower command, an ignore rule, a missing build
+   output tail (the full output is in the log it prints), propose a fix (a narrower command, an ignore rule, a missing build
    step), and re-run after the user agrees. A validator that is red for real
    (existing test failures) can stay, but say so.
 4. `check.py pending` must print `No open delegations.`

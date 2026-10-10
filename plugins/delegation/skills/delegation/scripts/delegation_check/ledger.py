@@ -15,6 +15,8 @@ import time
 from typing import Iterator, Sequence
 
 from . import DelegationError
+from . import locks
+from .overlay import Lock, Validator
 from .tree import state_dir, tree_hash
 
 try:
@@ -42,21 +44,26 @@ def _context_hashes(root: Path, brief: bytes) -> dict[str, str]:
     return hashes
 
 
-def ledger_path(root: Path) -> Path:
-    return state_dir(root) / "ledger.jsonl"
-
-
 @contextlib.contextmanager
-def ledger_lock(root: Path) -> Iterator[None]:
+def _exclusive(path: Path) -> Iterator[None]:
+    """Hold an exclusive lock on path for the duration of the block."""
     if fcntl is None:
         yield
         return
-    with (state_dir(root) / "ledger.lock").open("a") as handle:
+    with path.open("a") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield
         finally:
             fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def ledger_path(root: Path) -> Path:
+    return state_dir(root) / "ledger.jsonl"
+
+
+def ledger_lock(root: Path) -> contextlib.AbstractContextManager[None]:
+    return _exclusive(state_dir(root) / "ledger.lock")
 
 
 def read_events(root: Path) -> list[dict]:
@@ -200,20 +207,23 @@ TAIL_LINES = 40
 TAIL_CHARS = 4000
 
 
-def _execute(root: Path, command: str, timeout: float | None) -> tuple[int | None, bool, bytes]:
+def execute(
+    root: Path, command: str | Sequence[str], timeout: float | None, capture: bool = True
+) -> tuple[int | None, bool, bytes]:
+    """Run a shell command string (or an argv list), killing its process group on timeout."""
     posix = os.name == "posix"
     process = subprocess.Popen(
         command,
-        shell=True,
+        shell=isinstance(command, str),
         cwd=root,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.STDOUT if capture else None,
         start_new_session=posix,
     )
     try:
         output, _ = process.communicate(timeout=timeout)
-        return process.returncode, False, output
+        return process.returncode, False, output or b""
     except subprocess.TimeoutExpired:
         if posix:
             with contextlib.suppress(ProcessLookupError):
@@ -221,24 +231,38 @@ def _execute(root: Path, command: str, timeout: float | None) -> tuple[int | Non
         else:
             process.kill()
         output, _ = process.communicate()
-        return None, True, output
+        return None, True, output or b""
+
+
+def log_path(root: Path, result_id: str) -> Path:
+    """Where a result's complete output is kept: .delegation/logs/<delegation>/<n>.log."""
+    delegation, _, number = result_id.rpartition("#")
+    return state_dir(root) / "logs" / delegation / f"{number}.log"
 
 
 def run_validator(
     root: Path,
     delegation: str,
     name: str,
-    command: str,
+    validator: Validator,
+    lock: Lock | None,
     extra_inputs: Sequence[str],
     timeout: float | None,
 ) -> dict:
     if delegation not in {e["delegation"] for e in pending(root)}:
         raise DelegationError(f"delegation is not open: {delegation}")
-    before = tree_hash(root, extra_inputs)
-    started = time.monotonic()
-    code, timed_out, output = _execute(root, command, timeout)
-    duration = round(time.monotonic() - started, 3)
-    after = tree_hash(root, extra_inputs)
+    timeout = timeout if timeout is not None else validator.timeout
+    held = (
+        locks.hold(root, validator.lock, lock or Lock(), {"delegation": delegation, "command": name})
+        if validator.lock
+        else contextlib.nullcontext({"slot": None, "wait_s": None})
+    )
+    with held as slot:
+        before = tree_hash(root, extra_inputs)
+        started = time.monotonic()
+        code, timed_out, output = execute(root, validator.command, timeout)
+        duration = round(time.monotonic() - started, 3)
+        after = tree_hash(root, extra_inputs)
     text = output.decode("utf-8", errors="replace")
     tail = "\n".join(text.splitlines()[-TAIL_LINES:])[-TAIL_CHARS:]
     with ledger_lock(root):
@@ -250,22 +274,31 @@ def run_validator(
             for e in events
             if e.get("event") == "result" and e.get("delegation") == delegation
         )
+        result_id = f"{delegation}#{count + 1}"
+        log = log_path(root, result_id)
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_bytes(output)
         return _append(
             root,
             {
                 "event": "result",
-                "id": f"{delegation}#{count + 1}",
+                "id": result_id,
                 "delegation": delegation,
                 "validator": name,
-                "command": command,
+                "command": validator.command,
                 "exit": code,
                 "ok": code == 0 and not timed_out,
                 "timed_out": timed_out,
+                "timeout_s": timeout,
                 "duration_s": duration,
+                "lock": validator.lock,
+                "lock_slot": slot["slot"],
+                "lock_wait_s": slot["wait_s"],
                 "tree": before,
                 "stable": before == after,
                 "output_sha256": hashlib.sha256(output).hexdigest(),
                 "output_tail": tail,
+                "log": log.relative_to(root).as_posix(),
             },
         )
 

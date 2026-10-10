@@ -8,8 +8,9 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 |---|---|---|
 | `## Bulk work` | What counts as bulk in this repo | Base rule 1 only |
 | `## Oracle` | What verifies work mechanically | None |
-| `## Validators` | `name: command` lines | None; all claims are `cited` or `asserted` |
+| `## Validators` | `name [attributes]: command` lines | None; all claims are `cited` or `asserted` |
 | `## Extra inputs` | Ignored paths folded into the tree hash | None |
+| `## Locks` | `name: slots=<n>, wait=<seconds>` lines | None |
 | `## Single writer` | Resources only the judge writes | None |
 | `## Findings` | The findings sink and its schema | The execution log |
 | `## Return fields` | Repo-specific fields for returns | None |
@@ -28,8 +29,41 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 - **`## Validators`.** One `name: command` per line, split at the first colon.
   Names match `[a-z0-9][a-z0-9_-]*` and must be unique. `check.py run <name>`
   runs the command through the shell from the worktree root, stdin closed,
-  stdout and stderr merged; the ledger keeps the exit code, duration, a SHA-256
-  of the output and its last 40 lines (at most 4000 characters).
+  stdout and stderr merged. The full output goes to
+  `.delegation/logs/<delegation>/<n>.log`; the ledger keeps that path, the exit
+  code, duration, a SHA-256 of the output and its last 40 lines (at most 4000
+  characters).
+- **Validator attributes.** Optional, in brackets after the name, separated by
+  commas: `test [timeout=1800, lock=cargo]: cargo test --workspace`.
+  - `cheap`: fast enough to run while working. Briefs tell subagents to run
+    cheap validators first and fix what they report before anything slower.
+  - `timeout=<seconds>`: the default for `run`; `--timeout` overrides it.
+  - `lock=<name>`: `run` waits for a free slot of this lock and holds it while
+    the command runs. The lock must be declared under `## Locks`, and the
+    validator needs a `timeout`, so nothing holds a lock indefinitely. The
+    ledger records the lock, the slot and the wait.
+  An unknown or malformed attribute is a lint problem.
+- **`## Locks`.** One `name: slots=<n>, wait=<seconds>` per line; both
+  attributes are optional (`name:` alone is one slot, waiting indefinitely).
+  A lock limits how many commands that need it run at once across **every
+  worktree of the repo**: give memory-hungry builds the same lock and at most
+  `slots` of them run at a time, even from parallel worktrees and sandboxed
+  hosts. A process that waits longer than `wait` is refused (exit 2, no ledger
+  entry); while it waits it prints who holds each slot.
+  - Validators take a lock with `lock=<name>`; any other command takes one with
+    `check.py exec --lock <name> --timeout <seconds> [--delegation <id>] -- <command>`,
+    which runs it without a ledger entry and exits with its status (124 on
+    timeout).
+  - Slot counts suit one machine; the environment variable
+    `DELEGATION_LOCK_<NAME>` (upper case, `-` as `_`) overrides one for a machine
+    or session, for example `DELEGATION_LOCK_CARGO=2`. Set it the same way for
+    every session on the machine: each session uses only the slots it knows of.
+  - `check.py locks` lists each lock's slots and who holds them.
+  - How it works: each slot is a file under `/tmp/delegation-locks-<hash of
+    git's common directory>/`, held with `flock`. The kernel releases a slot
+    when its holder exits, even on a crash, so there is no server to start and
+    no stale lock to clear. Sandboxes that keep `.git` read-only still allow
+    `/tmp`. Windows has no `flock`; there, locks hold nothing.
 - **`validator:<name>` references.** Anywhere in the file, `validator:<name>`
   must name a registered validator, or lint reports `unregistered validator`.
   Use it in `## Oracle` or `## Tier hints` to tie prose to a check.
@@ -74,9 +108,12 @@ Decompiling and naming functions per module file; porting simulation code to Rus
 ## Oracle
 Golden-trace diff (per-tick thing state); the unit test suites.
 ## Validators
-unit: uv run -m unittest discover -s tests -v
+unit [timeout=900]: uv run -m unittest discover -s tests -v
 probes: uv run -m unittest discover -s research/probes/tests -v
-refs: uv run --no-project python -I research/modules/check_refs.py
+refs [cheap]: uv run --no-project python -I research/modules/check_refs.py
+port [timeout=1800, lock=cargo]: cargo test --workspace
+## Locks
+cargo: slots=1, wait=3600
 ## Single writer
 The Ghidra project (through ghidra-mcp); research/modules/functions.csv, then apply_annotations.py.
 ## Findings

@@ -1,6 +1,6 @@
 # Native lifecycle verification
 
-Last verified on October 10, 2026 (report timestamp 2026-10-10T05:08:37Z, UTC),
+Last verified on October 10, 2026 (report timestamp 2026-10-10T18:22:16Z, UTC),
 using the real locally installed CLIs, with a fresh temporary configuration
 profile for each host. Evidence labels: `checked` (observed running), `cited`
 (source or documentation reading), `asserted`.
@@ -19,12 +19,12 @@ profile for each host. Evidence labels: `checked` (observed running), `cited`
 | All four plugins uninstalled; absent from installed list | Passed | Passed |
 | Marketplace removed; absent from marketplace list | Passed | Passed |
 
-All results above are `checked`. The unit suite (189 tests) passed on Python 3.14
+All results above are `checked`. The unit suite (201 tests) passed on Python 3.14
 and on 3.10 (`uv run --no-project --python 3.10 -m unittest discover -s tests`).
 
 The marketplace is `rickdiculousli-plugins`. The tested plugins are
 `visual-audit`, `hello-world`, `repository-info`, and `delegation` (all
-`@rickdiculousli-plugins`, `delegation` at version `0.3.0`, the others at `0.1.0`). File comparison covers every file tracked by Git in each plugin
+`@rickdiculousli-plugins`, `delegation` at version `0.4.0`, the others at `0.1.0`). File comparison covers every file tracked by Git in each plugin
 directory except generated host manifests, so `visual-audit`'s renderer scripts,
 templates, and references are included. Both hosts installed identical skill content:
 
@@ -33,16 +33,23 @@ templates, and references are included. Both hosts installed identical skill con
 | `audit-report` | `d014925c6443c961b72529866b868ad1ece1146b62b97322a2076027a193117b` |
 | `hello` | `bf6ab583d5cd7ee791d8f3f551fc04c120b180bcd6e99effc4e52f3f3d6bd07d` |
 | `about` | `764ab249ba09f27a645b7fe4b60ab60e33b7b569bc189d158f7e139a46ec1434` |
-| `delegation` | `bb0ba6fabd143363414a49c70cbff1a30c272d18dbee911c0e6699bc5316732f` |
-| `setup` (delegation) | `7fdf269e88bac806e09e650ecb0d5893b1ba98a9f90ebe371ca0304c21ed6219` |
+| `delegation` | `4699be37857b43c68df06e61110147fa373e30ba54c0b1f008ce3dd9b7874ec0` |
+| `setup` (delegation) | `e8bed6693c3e9252548e016ca7a30a23645df62bd64bd88e28c68ef07dea2990` |
 
 All five hashes match the 2026-10-10 lifecycle report (`/tmp/plugin-verification.json`),
-re-run after delegation 0.3.0: the shared-context rule, the `Settled` brief
+re-run after delegation 0.4.0: validator attributes `cheap`, `timeout=<seconds>`
+and `lock=<name>`; `## Locks` with slots, a wait limit and the
+`DELEGATION_LOCK_<NAME>` override (flock on slot files under `/tmp`, keyed by
+git's common directory, shared by every worktree), holder details,
+`check.py exec --lock` and `check.py locks`; full validator output kept in `.delegation/logs/<id>/<n>.log`
+and printed on failure, the cheap-first order in the brief footer, and the tier
+rule allowing builds, focused tests and diagnostics as `[asserted]`. Earlier, in
+0.3.0: the shared-context rule, the `Settled` brief
 field, read-bound tier instructions, `check.py brief` (appending the fixed brief
 parts and checking brief and context hashes) with the one-line task `open`
 prints, `brief --with-instructions` (so Codex and the Claude fallback pass one line
 too), and the stderr note from an empty `query`. These are covered by the unit
-suite (189 tests). Neither the `setup` skill nor the 0.3.0 brief changes
+suite (201 tests). Neither the `setup` skill nor the 0.3.0 and 0.4.0 changes
 have been exercised by a model yet.
 
 ## Visual audit renderer
@@ -222,6 +229,21 @@ Re-run 2026-10-10 for delegation 0.3.0, same method: `open` (recording a
 `.delegation/context/` hash), `brief`, `brief --with-instructions`, `run`,
 `query` and `close` exited 0 inside the sandbox; `brief` exited 2 after the
 context file changed.
+
+Re-run 2026-10-10 for delegation 0.4.0, same method, with overlay
+`ok [cheap]: true` and `heavy [lock=mem, timeout=30]: echo heavy; exit 1`:
+`lint`, `open`, `run ok`, `brief` and `close` exited 0; `run heavy` exited 1,
+printed the log path, and the ledger recorded `lock: mem`, `timeout_s: 30.0` and
+the log file with the full output. A first attempt with the lock under
+`.git/delegation-locks` exited 2 (`Operation not permitted`: the sandbox keeps
+`.git` read-only), which is why locks live under `/tmp`.
+
+Then, with `## Locks` (`mem: slots=1, wait=5`), `lint`, `locks`, `open`,
+`run heavy`, `exec --lock mem --timeout 5 -- echo via-exec` and `close` exited 0
+inside the sandbox. Across the boundary: while a sandboxed
+`exec --lock mem -- sleep 2` held the slot, an unsandboxed `check.py locks`
+showed it as held by that delegation, and an unsandboxed `exec --lock mem`
+printed the holder, waited about a second, then ran.
 
 ### (b) Codex: effort when `reasoning_effort` is omitted (`checked`)
 

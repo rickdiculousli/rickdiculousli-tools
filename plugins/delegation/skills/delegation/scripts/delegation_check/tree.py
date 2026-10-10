@@ -42,6 +42,20 @@ def state_dir(root: Path) -> Path:
     return directory
 
 
+def lock_dir(root: Path) -> Path:
+    """Locks shared by every worktree of the repository.
+
+    They live under /tmp, keyed by git's common directory, because sandboxes
+    (Codex's workspace mode) leave `.git` read-only but /tmp writable.
+    """
+    common = Path(_git(root, ["rev-parse", "--git-common-dir"]).strip())
+    common = (common if common.is_absolute() else root / common).resolve()
+    key = hashlib.sha256(str(common).encode("utf-8")).hexdigest()[:16]
+    directory = Path("/tmp") / f"delegation-locks-{key}"
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
 def git_tree(root: Path) -> str:
     root = root.resolve()
     directory = state_dir(root)

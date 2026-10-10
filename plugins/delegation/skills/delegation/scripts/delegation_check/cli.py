@@ -9,7 +9,8 @@ from pathlib import Path
 
 from . import DelegationError
 from .brief import footer, task_line, tier_instructions
-from .ledger import OUTCOMES, TIERS, close_delegation, load_brief, open_delegation, pending, query, run_validator
+from . import locks
+from .ledger import OUTCOMES, TIERS, close_delegation, execute, load_brief, open_delegation, pending, query, run_validator
 from .overlay import load_overlay
 from .tree import repo_root, tree_hash
 
@@ -79,18 +80,56 @@ def _pending(root: Path, args: argparse.Namespace) -> int:
 
 def _run(root: Path, args: argparse.Namespace) -> int:
     overlay = load_overlay(root)
-    command = overlay.validators.get(args.validator)
-    if command is None:
+    validator = overlay.validators.get(args.validator)
+    if validator is None:
         known = ", ".join(sorted(overlay.validators)) or "none"
         raise DelegationError(f'unknown validator "{args.validator}"; registered: {known}')
     result = run_validator(
-        root, args.delegation, args.validator, command, overlay.extra_inputs, args.timeout
+        root, args.delegation, args.validator, validator, overlay.locks.get(validator.lock or ""),
+        overlay.extra_inputs, args.timeout,
     )
     print(_result_line(result))
     if not result["ok"]:
         if result["output_tail"]:
             print(result["output_tail"])
+        print(f"full output: {root.resolve() / result['log']}")
         return 1
+    return 0
+
+
+def _declared(root: Path, name: str):
+    overlay = load_overlay(root)
+    if name not in overlay.locks:
+        known = ", ".join(sorted(overlay.locks)) or "none"
+        raise DelegationError(f'unknown lock "{name}"; declared: {known}')
+    return overlay.locks[name]
+
+
+def _exec(root: Path, args: argparse.Namespace) -> int:
+    command = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
+    if not command:
+        raise DelegationError("exec needs a command after --")
+    lock = _declared(root, args.lock)
+    holder = {"delegation": args.delegation, "command": " ".join(command)}
+    with locks.hold(root, args.lock, lock, holder):
+        code, timed_out, _ = execute(root, command, args.timeout, capture=False)
+    if timed_out:
+        print(f"check.py: timed out after {args.timeout:g}s: {holder['command']}", file=sys.stderr)
+        return 124
+    return code if code is not None else 1
+
+
+def _locks(root: Path, args: argparse.Namespace) -> int:
+    overlay = load_overlay(root)
+    if not overlay.locks:
+        print("No locks declared.")
+    for name, lock in overlay.locks.items():
+        count = locks.slots(name, lock)
+        source = f" ({locks.env_name(name)})" if count != lock.slots else ""
+        wait = f", wait {lock.wait:g}s" if lock.wait is not None else ""
+        print(f"{name}: {count} slot{'s' if count != 1 else ''}{source}{wait}")
+        for line in locks.status(root, name, lock):
+            print(f"  {line}")
     return 0
 
 
@@ -152,7 +191,15 @@ def build_parser() -> argparse.ArgumentParser:
     runner = commands.add_parser("run", help="Run a registered validator and record the result")
     runner.add_argument("validator")
     runner.add_argument("--delegation", required=True)
-    runner.add_argument("--timeout", type=float)
+    runner.add_argument("--timeout", type=float, help="Seconds; overrides the overlay's timeout")
+    execer = commands.add_parser(
+        "exec", help="Run any command while holding a declared lock (no ledger entry)"
+    )
+    execer.add_argument("--lock", required=True)
+    execer.add_argument("--timeout", required=True, type=float, help="Seconds; a lock is never held without one")
+    execer.add_argument("--delegation", help="Shown to other sessions as the lock's holder")
+    execer.add_argument("argv", nargs=argparse.REMAINDER, metavar="-- command", help="The command and its arguments")
+    commands.add_parser("locks", help="List declared locks and who holds each slot")
     asker = commands.add_parser("query", help="List recorded validator results")
     asker.add_argument("--delegation", required=True)
     asker.add_argument("--tree", help='A tree hash, or "current" to recompute it')
@@ -185,6 +232,10 @@ def main(argv: list[str] | None = None) -> int:
             return _query(root, args)
         if args.command == "pending":
             return _pending(root, args)
+        if args.command == "exec":
+            return _exec(root, args)
+        if args.command == "locks":
+            return _locks(root, args)
     except DelegationError as error:
         print(f"check.py: {error}", file=sys.stderr)
         return 2

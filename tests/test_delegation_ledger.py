@@ -99,9 +99,24 @@ class LedgerTests(unittest.TestCase):
         plain = run_cli(self.root, "brief", "--delegation", "d1").stdout
         self.assertTrue(plain.startswith("do the thing\n"))
 
+    def test_brief_footer_names_cheap_validators(self):
+        write_overlay(self.root, "## Validators\nfmt [cheap]: x\ntest: y\nlint [cheap]: z\n")
+        self.open("d1")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertIn("Order: run the cheap validators (fmt, lint) while you work", r.stdout)
+        self.assertNotIn("Locks:", r.stdout)
+
+    def test_brief_footer_explains_locks(self):
+        write_overlay(self.root, "## Locks\ncargo: slots=2\nmem:\n")
+        self.open("d1")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertIn("Locks: cargo (2 slots), mem (1 slot).", r.stdout)
+        self.assertIn("exec --lock '<lock>' --timeout '<seconds>' --delegation d1 -- '<command>'", r.stdout)
+
     def test_brief_footer_defaults_without_overlay(self):
         self.open("d1")
         r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertIn("Order: run the cheap validators (none) while you work", r.stdout)
         self.assertTrue(r.stdout.endswith("Return fields: none\nReturn cap: 400 words\n"))
 
     def test_brief_checks_context_files(self):

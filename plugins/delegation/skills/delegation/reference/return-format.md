@@ -42,7 +42,7 @@ Goal: <one or two sentences: what done looks like>
 Inputs: <paths, symbols or addresses to read; these bound your reading>
 May write: <paths, or "nothing (reader)">
 Must not write: <the overlay's single-writer resources, and anything not listed above>
-Done when: <the condition>; validators: <names from the overlay, with a timeout in seconds for slow ones, or none>. A writer runs them last, after its final edit, so the results are at the tree the judge reviews.
+Done when: <the condition>; validators: <names from the overlay that cover this change, or none>. A writer runs them last, after its final edit, so the results are at the tree the judge reviews.
 ```
 
 `open` records the hash of the brief and of every `.delegation/context/` file it

@@ -46,16 +46,37 @@ def tier_instructions(tier: str) -> str:
 def footer(root: Path, delegation: str, overlay: Overlay) -> str:
     run = command(root, "run", "<validator>", "--delegation", delegation)
     fields = overlay.sections.get("Return fields", "").strip() or "none"
+    cheap = ", ".join(name for name, v in overlay.validators.items() if v.cheap) or "none"
+    locks = []
+    if overlay.locks:
+        names = ", ".join(f"{name} ({lock.slots} slot{'s' if lock.slots != 1 else ''})"
+                          for name, lock in overlay.locks.items())
+        exec_line = command(root, "exec", "--lock", "<lock>", "--timeout", "<seconds>",
+                            "--delegation", delegation, "--", "<command>")
+        locks = [
+            f"Locks: {names}. Validators wait for theirs. Run any other command that needs",
+            "one (a heavy build or test) through this, which waits for a free slot:",
+            "",
+            f"    {exec_line}",
+            "",
+        ]
     return "\n".join(
         [
             f"Delegation id: {delegation}",
             "",
             "Evidence: run validators only with this command, and cite the printed id as",
             f'[checked: {delegation}#<n>] only when it printed PASS and not "unstable".',
-            "Add `--timeout <seconds>` when the brief gives one for that validator:",
+            "The overlay's timeouts apply; add `--timeout <seconds>` when the brief gives another:",
             "",
             f"    {run}",
             "",
+            f"Order: run the cheap validators ({cheap}) while you work, and fix what they report",
+            "before running anything slower. After your final edit, run the brief's validators",
+            "cheapest first and stop at the first failure; fix it, then start that pass again.",
+            "A failed run prints the path of its full output; search or slice it",
+            "(grep, tail -n) rather than reading it whole, and don't rerun to see it.",
+            "",
+            *locks,
             "Return format:",
             "",
             "```",

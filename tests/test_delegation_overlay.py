@@ -4,7 +4,7 @@ import unittest
 
 from delegation_support import git_repo, run_cli, write_overlay
 
-from delegation_check.overlay import load_overlay
+from delegation_check.overlay import Lock, Validator, load_overlay
 
 SPEC_EXAMPLE = """# Delegation overlay: game-decomp
 ## Bulk work
@@ -46,7 +46,7 @@ class OverlayTests(unittest.TestCase):
         o = load_overlay(self.root)
         self.assertTrue(o.exists)
         self.assertEqual(
-            o.validators["refs"],
+            o.validators["refs"].command,
             "uv run --no-project python -I research/modules/check_refs.py",
         )
         self.assertEqual(set(o.validators), {"unit", "probes", "refs"})
@@ -60,9 +60,79 @@ class OverlayTests(unittest.TestCase):
         )
         write_overlay(self.root, text)
         o = load_overlay(self.root)
-        self.assertEqual(o.validators, {"unit": "x"})
+        self.assertEqual(o.validators, {"unit": Validator("x")})
         self.assertEqual(o.extra_inputs, ("golden/trace.bin",))
         self.assertEqual(o.problems, ())
+
+    def test_validator_attributes(self):
+        text = (
+            "## Validators\n"
+            "lint [cheap]: cargo clippy -- -D warnings\n"
+            "test [timeout=1800, lock=cargo]: cargo test --workspace\n"
+            "fmt []: cargo fmt --check\n"
+            "## Oracle\nvalidator:test\n"
+            "## Locks\ncargo: slots=2, wait=600\nmem:\n"
+        )
+        write_overlay(self.root, text)
+        o = load_overlay(self.root)
+        self.assertEqual(o.problems, ())
+        self.assertEqual(o.validators, {
+            "lint": Validator("cargo clippy -- -D warnings", cheap=True),
+            "test": Validator("cargo test --workspace", timeout=1800.0, lock="cargo"),
+            "fmt": Validator("cargo fmt --check"),
+        })
+        self.assertEqual(o.locks, {"cargo": Lock(2, 600.0), "mem": Lock(1, None)})
+
+    def test_validator_attribute_problems(self):
+        text = (
+            "## Validators\n"
+            "a [fast]: x\n"
+            "b [timeout=0]: x\n"
+            "c [timeout=soon]: x\n"
+            "d [lock=Big Lock]: x\n"
+            "e [cheap, cheap]: x\n"
+            "f [cheap=yes]: x\n"
+            "g [cheap: x\n"
+        )
+        write_overlay(self.root, text)
+        o = load_overlay(self.root)
+        problems = "\n".join(o.problems)
+        for needle in (
+            'line 2: unknown validator attribute "fast"',
+            'line 3: timeout needs a positive number, got "0"',
+            'line 4: timeout needs a positive number, got "soon"',
+            "line 5: lock name must match",
+            'line 6: duplicate validator attribute "cheap"',
+            'line 7: unknown validator attribute "cheap=yes"',
+            'line 8: expected "name: command"',
+        ):
+            self.assertIn(needle, problems)
+        self.assertNotIn("g", o.validators)
+
+    def test_lock_problems(self):
+        text = (
+            "## Validators\n"
+            "a [lock=ghost, timeout=5]: x\n"
+            "b [lock=cargo]: x\n"
+            "## Locks\n"
+            "cargo: slots=0\n"
+            "cargo: slots=1\n"
+            "disk: wait=never\n"
+            "net: fast\n"
+            "Bad Name: slots=1\n"
+        )
+        write_overlay(self.root, text)
+        problems = "\n".join(load_overlay(self.root).problems)
+        for needle in (
+            'line 2: lock "ghost" is not declared under ## Locks',
+            'line 3: validator "b" holds a lock, so it needs a timeout',
+            'line 5: slots needs a positive integer, got "0"',
+            'line 6: duplicate lock "cargo"',
+            'line 7: wait needs a positive number, got "never"',
+            'line 8: unknown lock attribute "fast"',
+            'line 9: expected "name: slots=<n>, wait=<seconds>"',
+        ):
+            self.assertIn(needle, problems)
 
     def test_lint_problems(self):
         text = (

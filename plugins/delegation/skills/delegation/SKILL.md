@@ -59,17 +59,30 @@ or change an overlay, use the `setup` skill from this plugin.
    the digest, save it once to `.delegation/context/<name>.md`, and point every
    sibling's `Settled` field at it. Fill `Settled` yourself only from what you
    already know; don't read bulk material to write it.
-7. **Single writer.** Subagents return proposed changes for the overlay's
+7. **Sequence dependent work.** When one item needs another's output (shared
+   types, module exports), open it after the producer is reviewed and in the
+   worktree, and name the producer's paths or commit in its `Settled` field.
+   Don't let parallel workers write their own copies of shared code; merging
+   them costs more than waiting.
+8. **Check focused, then broad.** A brief's `Done when` names the validators
+   that cover its own change. After you combine a batch of work, run the broad
+   ones (whole-workspace suites) once, by delegating them to one `routine`
+   reader. Treat each writer's results as evidence for its part only, not for
+   the combined tree.
+9. **Single writer.** Subagents return proposed changes for the overlay's
    `## Single writer` resources. Only you apply them.
-8. **Write findings as they happen** to the overlay's `## Findings` sink (else the
-   execution log): id, date, claim, status (including `refuted`), evidence. Do it
-   when a discovery or dead end is established, not at handoff; if the sink is
-   tracked and delegations are open, see the hold in section 3, step 5.
-9. **Check; don't redo.** Review ledger results and the diff. Read raw material
-   only to dig into a specific doubt.
-10. **Quota zones**, when a relay or a soft limit is in play. You learn the zone
-    from the relay or the user. At `last-task`, open no new delegations. At
-    `wrap`, close every open delegation before handing off (see section 6).
+10. **Write findings as they happen** to the overlay's `## Findings` sink (else the
+    execution log): id, date, claim, status (including `refuted`), evidence. Do it
+    when a discovery or dead end is established, not at handoff; if the sink is
+    tracked and delegations are open, see the hold in section 3, step 5.
+11. **Check; don't redo.** Review ledger results and the diff. Read raw material
+    only to dig into a specific doubt. A failed result keeps its full output in
+    the file `log` names; read it there instead of rerunning the command.
+12. **Quota zones**, when a relay or a soft limit is in play. You learn the zone
+    from the relay or the user. At `last-task`, open no new implementation work:
+    spend what's left on review, the broad check (rule 8) and findings. At
+    `wrap`, close every open delegation before handing off (see section 6), and
+    name any check that didn't finish in the close note.
 
 ## 3. Procedure
 
@@ -101,8 +114,9 @@ or change an overlay, use the `setup` skill from this plugin.
    exits 2 if the delegation isn't open or the brief, or a context file it
    names, no longer matches its recorded hash. Tools don't expand shell syntax:
    never pass `$(cat ...)` or a bare path as the task.
-4. **The subagent** works, runs validators only with the brief's `run` command,
-   and returns the report. `run` prints `<id>#<n> PASS|FAIL exit=<code>
+4. **The subagent** works, runs validators only with the brief's `run` command
+   (cheap ones while it works, then the brief's set cheapest first after its
+   final edit, stopping at the first failure), and returns the report. `run` prints `<id>#<n> PASS|FAIL exit=<code>
    tree=<first 12 chars>`, with `unstable` appended if the tree changed while it
    ran. For the full hash use `query --json` or `check.py tree`.
 5. **Review** before you change anything in the worktree:
@@ -129,8 +143,18 @@ or change an overlay, use the `setup` skill from this plugin.
    ```
 
 `check.py run <validator> --delegation <id> [--timeout <seconds>]` needs the
-delegation open. Give slow validators a timeout in the brief's `Done when` line.
-`check.py tree` prints the current tree hash.
+delegation open. It uses the overlay's timeout for that validator unless
+`--timeout` is given, waits for the validator's `lock` if the overlay sets one,
+and keeps the full output in `.delegation/logs/<id>/<n>.log`; a failed run
+prints that path. `check.py tree` prints the current tree hash.
+
+**Locks** (overlay `## Locks`) cap how many heavy commands run at once across
+every worktree of the repo. `check.py exec --lock <name> --timeout <seconds>
+[--delegation <id>] -- <command>` runs any other command under a lock (the brief
+footer shows subagents this command). `check.py locks` shows who holds each
+slot; check it when a subagent reports waiting. If this machine can take more or
+fewer than the overlay's slots, set `DELEGATION_LOCK_<NAME>` for the session
+(see [reference/overlay.md](reference/overlay.md)).
 
 ## 4. Starting a tier on this host
 
@@ -150,7 +174,8 @@ session is at another setting, say so once and continue.
 A pod is you plus your subagents. Pods never depend on a relay, but one may hand
 your session to another provider. Subagents can't survive that switch, so:
 
-- At quota zone `last-task`, open no new delegations.
+- At quota zone `last-task`, open no new implementation delegations. A short
+  `routine` reader for the broad check is fine if it can finish before `wrap`.
 - At `wrap`, close every open delegation (as `abandoned` if unfinished) before
   handing off. Findings, the ledger and the execution log carry the state.
 - The relay's release check runs `check.py pending --json` and requires an empty

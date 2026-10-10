@@ -1,11 +1,12 @@
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
 
-from delegation_support import SCRIPTS, git_repo, run_cli, write_overlay
+from delegation_support import SCRIPTS, git, git_repo, run_cli, write_overlay
 
 from delegation_check.ledger import read_events
 
@@ -15,6 +16,7 @@ bad: echo oops; exit 3
 edit: echo x >> a.txt
 slow: sleep 0.2
 hang: sleep 5
+capped [timeout=0.3]: sleep 5
 ## Parallel limit
 4
 """
@@ -69,6 +71,10 @@ class RunTests(unittest.TestCase):
         self.assertFalse(event["timed_out"])
         self.assertEqual(event["output_tail"], "hello")
         self.assertEqual(len(event["output_sha256"]), 64)
+        self.assertEqual(event["log"], ".delegation/logs/d1/1.log")
+        self.assertEqual((self.root / event["log"]).read_text(), "hello\n")
+        self.assertIsNone(event["timeout_s"])
+        self.assertIsNone(event["lock"])
         self.assertEqual(event["tree"], run_cli(self.root, "tree").stdout.strip())
         run_cli(self.root, "run", "ok", "--delegation", "d1")
         self.assertEqual([e["id"] for e in self.results()], ["d1#1", "d1#2"])
@@ -195,6 +201,106 @@ class RunTests(unittest.TestCase):
         self.assertIsNone(event["exit"])
         self.assertTrue(event["timed_out"])
         self.assertFalse(event["ok"])
+
+    def test_overlay_timeout_applies_unless_overridden(self):
+        self.open()
+        r = run_cli(self.root, "run", "capped", "--delegation", "d1")
+        self.assertEqual(r.returncode, 1)
+        r = run_cli(self.root, "run", "capped", "--delegation", "d1", "--timeout", "0.1")
+        self.assertEqual(r.returncode, 1)
+        first, second = self.results()
+        self.assertTrue(first["timed_out"])
+        self.assertEqual((first["timeout_s"], second["timeout_s"]), (0.3, 0.1))
+
+    def run_both(self, overlay, env=None):
+        """Run validator `heavy` at the same time in this worktree and a second one."""
+        write_overlay(self.root, overlay)
+        git(self.root, "add", ".agents")
+        git(self.root, "commit", "-q", "-m", "overlay")
+        other = self.root.parent / "other"
+        git(self.root, "worktree", "add", "-q", str(other))
+        for root in (self.root, other):
+            r = run_cli(root, "open", "--delegation", "d1", "--tier", "routine", "--brief", str(self.brief))
+            self.assertEqual(r.returncode, 0, r.stderr)
+        procs = [
+            subprocess.Popen(
+                [sys.executable, str(SCRIPTS / "check.py"), "run", "heavy", "--delegation", "d1"],
+                cwd=root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                env={**os.environ, **(env or {})},
+            )
+            for root in (self.root, other)
+        ]
+        outputs = [proc.communicate(timeout=60) for proc in procs]
+        events = [e for root in (self.root, other) for e in read_events(root) if e["event"] == "result"]
+        return procs, outputs, events
+
+    def test_lock_is_shared_across_worktrees(self):
+        procs, outputs, events = self.run_both(
+            "## Locks\nmem:\n## Validators\nheavy [lock=mem, timeout=10]: sleep 0.5\n"
+        )
+        self.assertEqual([p.returncode for p in procs], [0, 0], outputs)
+        self.assertEqual([e["lock"] for e in events], ["mem", "mem"])
+        self.assertEqual([e["lock_slot"] for e in events], [0, 0])
+        self.assertGreater(max(e["lock_wait_s"] for e in events), 0.3)
+        self.assertIn("waiting for lock mem: mem.0 held by d1", "".join(err for _, err in outputs))
+
+    def test_lock_slots_admit_that_many(self):
+        procs, outputs, events = self.run_both(
+            "## Locks\nmem: slots=2\n## Validators\nheavy [lock=mem, timeout=10]: sleep 0.5\n"
+        )
+        self.assertEqual(sorted(e["lock_slot"] for e in events), [0, 1])
+        self.assertLess(max(e["lock_wait_s"] for e in events), 0.3)
+
+    def test_environment_overrides_slots(self):
+        procs, outputs, events = self.run_both(
+            "## Locks\nmem: slots=1\n## Validators\nheavy [lock=mem, timeout=10]: sleep 0.5\n",
+            env={"DELEGATION_LOCK_MEM": "2"},
+        )
+        self.assertEqual(sorted(e["lock_slot"] for e in events), [0, 1])
+
+    def test_lock_wait_limit_refuses_without_a_result(self):
+        procs, outputs, events = self.run_both(
+            "## Locks\nmem: wait=0.2\n## Validators\nheavy [lock=mem, timeout=10]: sleep 1\n"
+        )
+        self.assertEqual(sorted(p.returncode for p in procs), [0, 2])
+        self.assertIn("lock mem still busy after 0.2s", "".join(err for _, err in outputs))
+        self.assertEqual(len(events), 1)
+
+    def test_exec_holds_lock_and_passes_exit_code(self):
+        write_overlay(self.root, "## Locks\nmem:\n")
+        holder = subprocess.Popen(
+            [sys.executable, str(SCRIPTS / "check.py"), "exec", "--lock", "mem", "--timeout", "10",
+             "--delegation", "d9", "--", "sleep", "1"],
+            cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        import time
+        deadline = time.monotonic() + 5
+        while "held by d9" not in run_cli(self.root, "locks").stdout:
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.05)
+        r = run_cli(self.root, "locks")
+        self.assertRegex(r.stdout, r"\Amem: 1 slot\n  mem\.0 held by d9 \(pid \d+, since [^)]+\): sleep 1\n\Z")
+        r = run_cli(self.root, "exec", "--lock", "mem", "--timeout", "10", "--", "sh", "-c", "echo ran; exit 7")
+        holder.communicate(timeout=10)
+        self.assertEqual((r.returncode, r.stdout), (7, "ran\n"))
+        self.assertIn("waiting for lock mem", r.stderr)
+        self.assertEqual(run_cli(self.root, "locks").stdout, "mem: 1 slot\n  mem.0 free\n")
+        r = run_cli(self.root, "exec", "--lock", "mem", "--timeout", "0.2", "--", "sleep", "3")
+        self.assertEqual(r.returncode, 124)
+        self.assertIn("timed out after 0.2s", r.stderr)
+        r = run_cli(self.root, "exec", "--lock", "ghost", "--timeout", "1", "--", "true")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn('unknown lock "ghost"; declared: mem', r.stderr)
+        self.assertNotEqual(run_cli(self.root, "exec", "--lock", "mem", "--", "true").returncode, 0)
+
+    def test_failed_run_prints_full_log_path(self):
+        write_overlay(self.root, "## Validators\nlong: seq 1 500; exit 1\n")
+        self.open()
+        r = run_cli(self.root, "run", "long", "--delegation", "d1")
+        self.assertEqual(r.returncode, 1)
+        log = self.root.resolve() / ".delegation/logs/d1/1.log"
+        self.assertTrue(r.stdout.endswith(f"full output: {log}\n"))
+        self.assertEqual(len(log.read_text().splitlines()), 500)
 
     def test_output_tail_is_capped(self):
         write_overlay(self.root, "## Validators\nlong: seq 1 500\n")

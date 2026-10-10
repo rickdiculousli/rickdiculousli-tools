@@ -53,8 +53,11 @@ through the ledger. To do it by hand, add this line to that repository's `AGENTS
 Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.
 ```
 
-The overlay at `.agents/delegation.md` holds that repository's validators, tier
-hints, findings sink and parallel limit. Its state lives in `.delegation/`,
+The overlay at `.agents/delegation.md` holds that repository's validators (with
+optional `cheap`, `timeout` and `lock` attributes), locks that cap heavy
+commands across every worktree (`check.py exec --lock`, `check.py locks`), tier
+hints, findings sink and parallel limit. Its state, including each validator run's full
+output, lives in `.delegation/`,
 which the tooling creates with its own `.gitignore`. Check the overlay and the
 evidence ledger with the bundled script. These paths exist only in this
 checkout; in a consuming repository the skill resolves the script as
@@ -66,6 +69,8 @@ python3 plugins/delegation/skills/delegation/scripts/check.py tree
 python3 plugins/delegation/skills/delegation/scripts/check.py pending
 python3 plugins/delegation/skills/delegation/scripts/check.py query --help
 python3 plugins/delegation/skills/delegation/scripts/check.py brief --help
+python3 plugins/delegation/skills/delegation/scripts/check.py locks
+python3 plugins/delegation/skills/delegation/scripts/check.py exec --help
 ```
 
 Install and remove it like the other plugins:
