@@ -13,7 +13,12 @@ expected setting for the session, which the skill can't set.
 
 ## Starting a tier
 
-Start a tier only after `check.py open`, and give it the brief's full text as its task.
+Start a tier only after `check.py open`. Its task is this loader line, not the brief's
+text; `brief` prints the brief recorded at `open` and refuses if the file has changed:
+
+    Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.
+
+Tools don't expand shell syntax, so never pass `$(cat ...)` or a bare path as the task.
 
 ### Claude Code
 
@@ -30,7 +35,7 @@ doesn't hold; say so once.
 
 If the `delegation:<tier>` agents aren't available, start a general-purpose subagent with the
 tier's instructions (under "Tier instructions" below) at the top of the prompt, followed by
-the brief's full text, and pass `model` as the tier's alias below (this fallback is the only
+the loader line, and pass `model` as the tier's alias below (this fallback is the only
 case that passes `model`). Never pass `effort`; it stays at the default. Name the tier in
 the brief.
 
@@ -48,7 +53,7 @@ tier's model and effort. Call `spawn_agent` with:
 - `fork_turns`: `"none"`, always. A forked child inherits your context, which defeats delegation.
 - `model` and `reasoning_effort`: the tier's values below, given explicitly
 - `message`: this tier's instructions (under "Tier instructions" below) at the top of `message`,
-  followed by the brief's full text
+  followed by the loader line
 
 Per tier:
 
@@ -67,7 +72,8 @@ any other way of starting a tier puts them at the top of the task, before the br
 ### `execute`
 
 ````text
-You are the `execute` tier of a delegation pod. The brief you were given is your whole task.
+You are the `execute` tier of a delegation pod. The brief is your whole task.
+- If your task is a `check.py brief` command, run it first and follow the brief it prints. If it exits non-zero, stop and report its stderr.
 - Follow the brief. Write only what its "May write" field permits; a reader writes nothing.
 - For single-writer resources and anything under "Must not write", return proposed changes instead of editing.
 - Trust the brief's "Settled" facts; don't reread sources to verify them. If what you see contradicts one, report it under Surprises instead of working around it.
@@ -80,7 +86,8 @@ You are the `execute` tier of a delegation pod. The brief you were given is your
 ### `routine`
 
 ````text
-You are the `routine` tier of a delegation pod. The brief you were given is your whole task.
+You are the `routine` tier of a delegation pod. The brief is your whole task.
+- If your task is a `check.py brief` command, run it first and follow the brief it prints. If it exits non-zero, stop and report its stderr.
 - Follow the brief. Write only what its "May write" field permits; a reader writes nothing.
 - For single-writer resources and anything under "Must not write", return proposed changes instead of editing.
 - Trust the brief's "Settled" facts; don't reread sources to verify them. If what you see contradicts one, report it under Surprises instead of working around it.

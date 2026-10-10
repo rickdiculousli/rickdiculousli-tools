@@ -67,6 +67,30 @@ class LedgerTests(unittest.TestCase):
         self.assertEqual(event["tier"], "execute")
         self.assertRegex(event["timestamp"], r"\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d")
 
+    def test_brief_prints_recorded_brief(self):
+        self.open("d1")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "do the thing\n", ""))
+
+    def test_brief_refusals(self):
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("delegation is not open: d1", r.stderr)
+        self.open("d1")
+        self.brief.write_text("do another thing\n")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertEqual((r.returncode, r.stdout), (2, ""))
+        self.assertIn("brief changed since open", r.stderr)
+        self.brief.unlink()
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("brief not found", r.stderr)
+        self.brief.write_text("do the thing\n")
+        run_cli(self.root, "close", "--delegation", "d1", "--outcome", "done")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("delegation is not open: d1", r.stderr)
+
     def test_refusals(self):
         self.assertEqual(self.open("d1").returncode, 0)
         run_cli(self.root, "close", "--delegation", "d1", "--outcome", "done")

@@ -146,6 +146,20 @@ def open_delegation(
         )
 
 
+def load_brief(root: Path, delegation: str) -> bytes:
+    opened = [e for e in pending(root) if e["delegation"] == delegation]
+    if not opened:
+        raise DelegationError(f"delegation is not open: {delegation}")
+    brief = Path(opened[0]["brief"])
+    brief = brief if brief.is_absolute() else root.resolve() / brief
+    if not brief.is_file():
+        raise DelegationError(f"brief not found: {brief}")
+    data = brief.read_bytes()
+    if hashlib.sha256(data).hexdigest() != opened[0]["brief_sha256"]:
+        raise DelegationError(f"brief changed since open: {brief}")
+    return data
+
+
 def close_delegation(root: Path, delegation: str, outcome: str, note: str | None) -> dict:
     if outcome not in OUTCOMES:
         raise DelegationError(f"outcome must be one of {', '.join(OUTCOMES)}, got {outcome!r}")

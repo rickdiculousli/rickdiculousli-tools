@@ -41,7 +41,7 @@ Goal: <one or two sentences: what done looks like>
 Inputs: <paths, symbols or addresses to read; these bound your reading>
 May write: <paths, or "nothing (reader)">
 Must not write: <the overlay's single-writer resources, and anything not listed above>
-Done when: <the condition>; validators: <names from the overlay, or none>
+Done when: <the condition>; validators: <names from the overlay, or none>. A writer runs them last, after its final edit, so the results are at the tree the judge reviews.
 Delegation id: <id>
 
 Evidence: run validators only with this command, and cite the printed id as

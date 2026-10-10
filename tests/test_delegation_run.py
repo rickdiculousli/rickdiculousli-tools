@@ -105,6 +105,22 @@ class RunTests(unittest.TestCase):
         text = run_cli(self.root, "query", "--delegation", "d1")
         self.assertIn("d1#1 PASS", text.stdout)
 
+    def test_query_explains_empty_result(self):
+        self.open("d1")
+        r = run_cli(self.root, "query", "--delegation", "d1", "--tree", "current")
+        self.assertEqual((r.returncode, r.stdout, r.stderr), (0, "", "no runs recorded for d1\n"))
+        run_cli(self.root, "run", "bad", "--delegation", "d1")
+        old = run_cli(self.root, "tree").stdout.strip()
+        (self.root / "a.txt").write_text("changed\n")
+        new = run_cli(self.root, "tree").stdout.strip()
+        r = run_cli(self.root, "query", "--delegation", "d1", "--tree", "current")
+        self.assertEqual((r.returncode, r.stdout), (0, ""))
+        self.assertEqual(
+            r.stderr, f"no stable results at tree {new[:12]}; latest: d1#1 FAIL at tree {old[:12]}\n"
+        )
+        r = run_cli(self.root, "query", "--delegation", "d1", "--tree", "current", "--json")
+        self.assertEqual(r.stderr, "")
+
     def test_validator_that_edits_tree_is_unstable(self):
         self.open()
         before = run_cli(self.root, "tree").stdout.strip()

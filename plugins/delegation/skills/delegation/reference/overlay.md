@@ -45,6 +45,26 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 - All other sections are free text for the judge; `check.py` doesn't interpret
   them.
 
+## Fixture-backed validators
+
+A validator can carry the oracle itself, so oracle-backed acceptance is `checked`
+rather than only `cited`. Set the fixture's environment in the command, or call
+the repo's fixture runner:
+
+```markdown
+## Validators
+trace-diff: GOLDEN_TRACES=research/traces/golden uv run -m unittest tests.test_trace_diff -v
+fixtures: uv run python -I scripts/run_fixtures.py --require-all
+## Extra inputs
+research/traces/golden
+```
+
+A missing fixture must fail the validator, not skip: a suite that skips exits 0,
+which the ledger records as PASS. Make the command require the fixture (for
+example `test -d research/traces/golden && ...`, or a runner flag that turns
+skips into failures). If the fixtures are git-ignored, list them under
+`## Extra inputs` so changing them makes earlier results stale.
+
 ## Worked example: `game-decomp`
 
 ```markdown

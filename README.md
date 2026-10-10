@@ -65,6 +65,7 @@ python3 plugins/delegation/skills/delegation/scripts/check.py lint
 python3 plugins/delegation/skills/delegation/scripts/check.py tree
 python3 plugins/delegation/skills/delegation/scripts/check.py pending
 python3 plugins/delegation/skills/delegation/scripts/check.py query --help
+python3 plugins/delegation/skills/delegation/scripts/check.py brief --help
 ```
 
 Install and remove it like the other plugins:

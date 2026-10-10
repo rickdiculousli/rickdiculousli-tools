@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from . import DelegationError
-from .ledger import OUTCOMES, TIERS, close_delegation, open_delegation, pending, query, run_validator
+from .ledger import OUTCOMES, TIERS, close_delegation, load_brief, open_delegation, pending, query, run_validator
 from .overlay import load_overlay
 from .tree import repo_root, tree_hash
 
@@ -34,6 +34,13 @@ def _open(root: Path, args: argparse.Namespace) -> int:
     )
     role = "writer" if args.writes else "reader"
     print(f"opened {args.delegation} ({args.tier}, {role}) at {event['tree'][:12]}")
+    return 0
+
+
+def _brief(root: Path, args: argparse.Namespace) -> int:
+    sys.stdout.flush()
+    sys.stdout.buffer.write(load_brief(root, args.delegation))
+    sys.stdout.buffer.flush()
     return 0
 
 
@@ -100,7 +107,21 @@ def _query(root: Path, args: argparse.Namespace) -> int:
     else:
         for result in results:
             print(_result_line(result))
+        if not results:
+            print(_no_results(root, args.delegation, tree), file=sys.stderr)
     return 0
+
+
+def _no_results(root: Path, delegation: str, tree: str | None) -> str:
+    runs = query(root, delegation, None)
+    if not runs:
+        return f"no runs recorded for {delegation}"
+    last = runs[-1]
+    status = "PASS" if last["ok"] else "FAIL"
+    latest = f"{last['id']} {status} at tree {last['tree'][:12]}"
+    if not last["stable"]:
+        latest += " unstable"
+    return f"no stable results at tree {tree[:12]}; latest: {latest}"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,6 +135,8 @@ def build_parser() -> argparse.ArgumentParser:
     opener.add_argument("--tier", required=True, choices=TIERS)
     opener.add_argument("--brief", required=True, type=Path)
     opener.add_argument("--writes", action="store_true", help="The delegation may edit the worktree")
+    loader = commands.add_parser("brief", help="Print an open delegation's brief, checked against its hash")
+    loader.add_argument("--delegation", required=True)
     closer = commands.add_parser("close", help="Record a delegation as finished")
     closer.add_argument("--delegation", required=True)
     closer.add_argument("--outcome", required=True, choices=OUTCOMES)
@@ -146,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "open":
             return _open(root, args)
+        if args.command == "brief":
+            return _brief(root, args)
         if args.command == "close":
             return _close(root, args)
         if args.command == "run":

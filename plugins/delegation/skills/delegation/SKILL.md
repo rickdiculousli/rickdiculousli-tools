@@ -86,8 +86,17 @@ or change an overlay, use the `setup` skill from this plugin.
    Pass `--writes` if the subagent may edit the worktree. Exit 2 means refused:
    a writer is open, a writer was asked for while others are open, the parallel
    limit is reached, or the id was used. Wait for a close, or keep the work.
-3. **Start the tier agent** (section 4) with the brief's full text as its task,
-   after the tier's instructions where `reference/hosts.md` says so.
+3. **Start the tier agent** (section 4). Its task is one line, so the brief
+   isn't written into your context a second time:
+
+   ```text
+   Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.
+   ```
+
+   `brief` prints the brief recorded at `open`, and exits 2 if the delegation
+   isn't open or the file no longer matches its recorded hash. Tools don't
+   expand shell syntax: never pass `$(cat ...)` or a bare path as the task. Put
+   the tier's instructions first where `reference/hosts.md` says so.
 4. **The subagent** works, runs validators only with the brief's `run` command,
    and returns the report. `run` prints `<id>#<n> PASS|FAIL exit=<code>
    tree=<first 12 chars>`, with `unstable` appended if the tree changed while it
@@ -98,7 +107,8 @@ or change an overlay, use the `setup` skill from this plugin.
    python3 <skill-dir>/scripts/check.py query --delegation <id> --tree current [--json]
    ```
 
-   This lists only stable results recorded at the current tree. A
+   This lists only stable results recorded at the current tree; when there are
+   none, stderr names the latest result and its tree instead. A
    `[checked: <id>#<n>]` claim stands only if that id is listed and passed;
    otherwise treat the claim as `asserted`. Then review the diff, apply proposed
    single-writer changes, and write findings. If you need fresh evidence after

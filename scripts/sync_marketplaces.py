@@ -161,7 +161,7 @@ def _codex_start(plugin: str, route: str, subagents: list[tuple[str, dict]]) -> 
             '- `fork_turns`: `"none"`, always. A forked child inherits your context, which defeats delegation.',
             "- `model` and `reasoning_effort`: the tier's values below, given explicitly",
             "- `message`: this tier's instructions (under \"Tier instructions\" below) at the top of `message`,",
-            "  followed by the brief's full text",
+            "  followed by the loader line",
             "",
             "Per tier:",
             "",
@@ -183,11 +183,11 @@ def _codex_start(plugin: str, route: str, subagents: list[tuple[str, dict]]) -> 
         lines += [
             "Spawn a subagent on the same model as you: `spawn_agent` with `fork_turns`: `\"none\"`,",
             "without `model` or `reasoning_effort`. Put the tier's instructions (under \"Tier",
-            "instructions\" below) at the top of `message`, followed by the brief's full text. Put the",
+            "instructions\" below) at the top of `message`, followed by the loader line. Put the",
             "tier name in the brief; effort stays the default.",
         ]
     else:
-        lines += ["Start the tier's agent by name, with the brief's full text as its task:", ""]
+        lines += ["Start the tier's agent by name, with the loader line as its task:", ""]
         lines += [f"- `{name}`: `{plugin}-{name}`" for name, _ in subagents]
     return lines
 
@@ -229,7 +229,12 @@ def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
         ]
     lines += [
         "", "## Starting a tier", "",
-        "Start a tier only after `check.py open`, and give it the brief's full text as its task.",
+        "Start a tier only after `check.py open`. Its task is this loader line, not the brief's",
+        "text; `brief` prints the brief recorded at `open` and refuses if the file has changed:",
+        "",
+        "    Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.",
+        "",
+        "Tools don't expand shell syntax, so never pass `$(cat ...)` or a bare path as the task.",
         "", "### Claude Code", "",
         "Use the Agent tool with `subagent_type` set to the tier's agent:", "",
     ]
@@ -244,7 +249,7 @@ def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
         "",
         f"If the `{plugin}:<tier>` agents aren't available, start a general-purpose subagent with the",
         "tier's instructions (under \"Tier instructions\" below) at the top of the prompt, followed by",
-        "the brief's full text, and pass `model` as the tier's alias below (this fallback is the only",
+        "the loader line, and pass `model` as the tier's alias below (this fallback is the only",
         "case that passes `model`). Never pass `effort`; it stays at the default. Name the tier in",
         "the brief.",
         "",
