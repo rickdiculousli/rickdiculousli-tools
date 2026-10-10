@@ -13,10 +13,15 @@ expected setting for the session, which the skill can't set.
 
 ## Starting a tier
 
-Start a tier only after `check.py open`. Its task is the loader line `open` prints after
-`task:`, not the brief's text; `brief` prints the recorded brief and refuses if it changed:
+Start a tier only after `check.py open`. Its task is one of the two loader lines `open`
+prints, not the brief's text; `brief` prints the recorded brief and refuses if it changed:
 
-    Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.
+- `task:`, for an agent defined with the tier's instructions:
+
+      Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.
+
+- `task with instructions:`, for any other subagent. It adds `--with-instructions`, so
+  `brief` prints the tier's instructions (under "Tier instructions" below) first.
 
 Tools don't expand shell syntax, so never pass `$(cat ...)` or a bare path as the task.
 
@@ -34,10 +39,9 @@ sets every agent's effort, and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` with
 doesn't hold; say so once.
 
 If the `delegation:<tier>` agents aren't available, start a general-purpose subagent with the
-tier's instructions (under "Tier instructions" below) at the top of the prompt, followed by
-the loader line, and pass `model` as the tier's alias below (this fallback is the only
-case that passes `model`). Never pass `effort`; it stays at the default. Name the tier in
-the brief.
+`task with instructions:` line as its prompt, and pass `model` as the tier's alias below
+(this fallback is the only case that passes `model`). Never pass `effort`; it stays at the
+default.
 
 - `execute`: `model` = `sonnet`
 - `routine`: `model` = `haiku`
@@ -52,22 +56,20 @@ tier's model and effort. Call `spawn_agent` with:
 - `task_name`: lowercase letters, digits and underscores only (Codex rejects anything else), such as the id lowercased with `-` and `.` as `_`
 - `fork_turns`: `"none"`, always. A forked child inherits your context, which defeats delegation.
 - `model` and `reasoning_effort`: the tier's values below, given explicitly
-- `message`: this tier's instructions (under "Tier instructions" below) at the top of `message`,
-  followed by the loader line
+- `message`: the `task with instructions:` line that `open` printed
 
 Per tier:
 
 - `execute`: `model`: `"gpt-6.1-sol"`, `reasoning_effort`: `"low"`
 - `routine`: `model`: `"gpt-6-luna"`, omit `reasoning_effort` (the model's default)
 
-If `spawn_agent` rejects `model` or `reasoning_effort`, spawn without them, keep the
-tier's instructions at the top of `message`, and name the tier in the brief: same
-model, default effort.
+If `spawn_agent` rejects `model` or `reasoning_effort`, spawn without them and with the
+same `message`: same model, default effort.
 
 ## Tier instructions
 
 Each tier's generated instructions, verbatim. A Claude Code tier agent already has them;
-any other way of starting a tier puts them at the top of the task, before the brief.
+`brief --with-instructions` prints them for any other subagent, before the brief.
 
 ### `execute`
 

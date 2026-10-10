@@ -163,7 +163,8 @@ def open_delegation(
         )
 
 
-def load_brief(root: Path, delegation: str) -> bytes:
+def load_brief(root: Path, delegation: str) -> tuple[dict, bytes]:
+    """The open event and brief bytes, after checking the brief and context hashes."""
     opened = [e for e in pending(root) if e["delegation"] == delegation]
     if not opened:
         raise DelegationError(f"delegation is not open: {delegation}")
@@ -180,7 +181,7 @@ def load_brief(root: Path, delegation: str) -> bytes:
             raise DelegationError(f"context file not found: {target}")
         if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
             raise DelegationError(f"context changed since open: {target}")
-    return data
+    return opened[0], data
 
 
 def close_delegation(root: Path, delegation: str, outcome: str, note: str | None) -> dict:

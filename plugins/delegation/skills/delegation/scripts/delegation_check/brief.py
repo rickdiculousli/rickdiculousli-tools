@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import shlex
 
+from . import DelegationError
 from .overlay import Overlay
 
 CHECK_PY = Path(__file__).resolve().parents[1] / "check.py"
+INSTRUCTIONS = Path(__file__).resolve().parents[2] / "reference" / "tier-instructions.json"
 
 RETURN_FORMAT = """Result: one paragraph.
 Claims:
@@ -23,8 +26,21 @@ def command(root: Path, *args: str) -> str:
     return " ".join(shlex.quote(part) for part in parts)
 
 
-def task_line(root: Path, delegation: str) -> str:
-    return f"Run `{command(root, 'brief', '--delegation', delegation)}` and follow the brief it prints exactly."
+def task_line(root: Path, delegation: str, with_instructions: bool = False) -> str:
+    flag = ["--with-instructions"] if with_instructions else []
+    loader = command(root, "brief", *flag, "--delegation", delegation)
+    return f"Run `{loader}` and follow the brief it prints exactly."
+
+
+def tier_instructions(tier: str) -> str:
+    """The generated instructions for a tier, which agent definitions otherwise carry."""
+    try:
+        tiers = json.loads(INSTRUCTIONS.read_text(encoding="utf-8"))["tiers"]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise DelegationError(f"cannot read tier instructions from {INSTRUCTIONS}: {error}") from error
+    if not isinstance(tiers.get(tier), str):
+        raise DelegationError(f"no instructions for tier {tier!r} in {INSTRUCTIONS}")
+    return tiers[tier]
 
 
 def footer(root: Path, delegation: str, overlay: Overlay) -> str:

@@ -148,6 +148,8 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
             "effort: low", "---",
         ])
         self.assertFalse((agents / "judge.md").exists())
+        instructions = json.loads((self.plugin / "skills/hello/reference/tier-instructions.json").read_text())
+        self.assertEqual(instructions["tiers"], {"execute": "Follow the brief.\nStop when stuck.", "routine": "Follow the brief."})
         self.assertTrue(sync(self.root, check=True))
 
     def test_hosts_reference_lists_every_tier_and_route(self):
@@ -191,8 +193,10 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
                 for line in ("Execute line one.", "- Execute line two.", "Routine only rule."):
                     self.assertIn(line, text)
                 claude, codex = text.split("### Codex", 1)
-                self.assertIn("instructions", claude.split("general-purpose", 1)[1])
-                self.assertIn("top of `message`", codex)
+                self.assertIn("`task with instructions:`", claude.split("general-purpose", 1)[1])
+                self.assertIn("`task with instructions:` line", codex.split("## Tier instructions", 1)[0])
+                instructions = json.loads((self.plugin / "skills/hello/reference/tier-instructions.json").read_text())
+                self.assertEqual(instructions["tiers"]["execute"], "Execute line one.\n- Execute line two.")
         self.assertNotIn("judge", text.split("## Tier instructions", 1)[1].split("## Starting", 1)[0])
 
     def test_description_keeps_non_ascii(self):

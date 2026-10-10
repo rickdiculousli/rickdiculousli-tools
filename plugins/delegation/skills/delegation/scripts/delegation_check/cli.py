@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from . import DelegationError
-from .brief import footer, task_line
+from .brief import footer, task_line, tier_instructions
 from .ledger import OUTCOMES, TIERS, close_delegation, load_brief, open_delegation, pending, query, run_validator
 from .overlay import load_overlay
 from .tree import repo_root, tree_hash
@@ -36,12 +36,15 @@ def _open(root: Path, args: argparse.Namespace) -> int:
     role = "writer" if args.writes else "reader"
     print(f"opened {args.delegation} ({args.tier}, {role}) at {event['tree'][:12]}")
     print(f"task: {task_line(root, args.delegation)}")
+    print(f"task with instructions: {task_line(root, args.delegation, with_instructions=True)}")
     return 0
 
 
 def _brief(root: Path, args: argparse.Namespace) -> int:
-    text = load_brief(root, args.delegation).decode("utf-8", errors="replace").rstrip("\n")
-    print(f"{text}\n\n{footer(root, args.delegation, load_overlay(root))}", end="")
+    event, data = load_brief(root, args.delegation)
+    text = data.decode("utf-8", errors="replace").rstrip("\n")
+    head = f"{tier_instructions(event['tier'])}\n\n" if args.with_instructions else ""
+    print(f"{head}{text}\n\n{footer(root, args.delegation, load_overlay(root))}", end="")
     return 0
 
 
@@ -138,6 +141,8 @@ def build_parser() -> argparse.ArgumentParser:
     opener.add_argument("--writes", action="store_true", help="The delegation may edit the worktree")
     loader = commands.add_parser("brief", help="Print an open delegation's brief, checked against its hash")
     loader.add_argument("--delegation", required=True)
+    loader.add_argument("--with-instructions", action="store_true",
+                        help="Print the tier's instructions first, for a subagent without a tier definition")
     closer = commands.add_parser("close", help="Record a delegation as finished")
     closer.add_argument("--delegation", required=True)
     closer.add_argument("--outcome", required=True, choices=OUTCOMES)

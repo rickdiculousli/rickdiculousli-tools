@@ -8,7 +8,7 @@ import unittest
 
 from delegation_support import SCRIPTS, git_repo, run_cli, write_overlay
 
-from delegation_check.brief import RETURN_FORMAT
+from delegation_check.brief import INSTRUCTIONS, RETURN_FORMAT
 from delegation_check.ledger import ledger_path, read_events
 
 
@@ -43,7 +43,9 @@ class LedgerTests(unittest.TestCase):
             r.stdout,
             r"\Aopened d2 \(routine, reader\) at [0-9a-f]{12}\n"
             r"task: Run `python3 \S+/check\.py --root \S+ brief --delegation d2` "
-            r"and follow the brief it prints exactly\.\n\Z",
+            r"and follow the brief it prints exactly\.\n"
+            r"task with instructions: Run `python3 \S+/check\.py --root \S+ brief --with-instructions "
+            r"--delegation d2` and follow the brief it prints exactly\.\n\Z",
         )
         text = run_cli(self.root, "pending").stdout
         self.assertIn("d1 execute reader opened ", text)
@@ -87,6 +89,15 @@ class LedgerTests(unittest.TestCase):
         )
         self.assertIn(f"```\n{RETURN_FORMAT}\n```\n", footer)
         self.assertTrue(footer.endswith("Return fields: globals touched\nReturn cap: 250 words\n"))
+
+    def test_brief_with_instructions_prints_tier_instructions_first(self):
+        self.open("d1", tier="routine")
+        r = run_cli(self.root, "brief", "--with-instructions", "--delegation", "d1")
+        self.assertEqual((r.returncode, r.stderr), (0, ""))
+        instructions = json.loads(INSTRUCTIONS.read_text())["tiers"]["routine"]
+        self.assertTrue(r.stdout.startswith(f"{instructions}\n\ndo the thing\n\nDelegation id: d1\n"))
+        plain = run_cli(self.root, "brief", "--delegation", "d1").stdout
+        self.assertTrue(plain.startswith("do the thing\n"))
 
     def test_brief_footer_defaults_without_overlay(self):
         self.open("d1")

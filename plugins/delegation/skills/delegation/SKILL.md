@@ -88,9 +88,10 @@ or change an overlay, use the `setup` skill from this plugin.
    Pass `--writes` if the subagent may edit the worktree. Exit 2 means refused:
    a writer is open, a writer was asked for while others are open, the parallel
    limit is reached, or the id was used. Wait for a close, or keep the work.
-3. **Start the tier agent** (section 4). Its task is the one line `open`
-   printed after `task:`, so the brief isn't written into your context a second
-   time:
+3. **Start the tier agent** (section 4). Its task is one line `open` printed,
+   so the brief isn't written into your context a second time: `task:` for an
+   agent defined with the tier's instructions, `task with instructions:` for any
+   other subagent (it prints the tier's instructions first). The `task:` line:
 
    ```text
    Run `python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> brief --delegation <id>` and follow the brief it prints exactly.
@@ -98,9 +99,8 @@ or change an overlay, use the `setup` skill from this plugin.
 
    `brief` prints the brief recorded at `open` with the fixed parts appended, and
    exits 2 if the delegation isn't open or the brief, or a context file it
-   names, no longer matches its recorded hash. Tools don't
-   expand shell syntax: never pass `$(cat ...)` or a bare path as the task. Put
-   the tier's instructions first where `reference/hosts.md` says so.
+   names, no longer matches its recorded hash. Tools don't expand shell syntax:
+   never pass `$(cat ...)` or a bare path as the task.
 4. **The subagent** works, runs validators only with the brief's `run` command,
    and returns the report. `run` prints `<id>#<n> PASS|FAIL exit=<code>
    tree=<first 12 chars>`, with `unstable` appended if the tree changed while it
