@@ -97,6 +97,8 @@ plugins/<name>/
   skills/<skill>/SKILL.md             # authored once; shared by both hosts
   .claude-plugin/plugin.json          # generated compatibility metadata
   .codex-plugin/plugin.json           # generated compatibility metadata
+  tiers.json                          # optional: subagent tiers (delegation)
+  agents/<tier>.md                    # generated from tiers.json (Claude Code)
 .claude-plugin/marketplace.json       # generated Claude marketplace
 .agents/plugins/marketplace.json      # generated Codex marketplace
 scripts/sync_marketplaces.py          # deterministic metadata generation
@@ -135,7 +137,17 @@ registration alone does not guarantee an existing installed cache has refreshed.
 
 New plugins are included automatically in lifecycle verification. Future MCP
 servers, hooks, or host-specific components need explicit adapter support and
-host verification; the current plugins use portable skills only.
+host verification.
+
+A plugin with a `tiers.json` (currently only `delegation`) also gets generated
+subagent tiers: one Claude Code agent `agents/<tier>.md` per tier marked
+`"subagent": true`, carrying its `model` and `effort`, and a host table at the
+path named by `reference`, which tells each host how to start a tier. Codex
+plugins can't ship agent definitions, so `routes.codex` (`spawn`, `same-model`
+or `definitions`) selects the Codex instructions in that table. Model ids live
+only in `tiers.json` and the generated files. In such a plugin, any
+`agents/*.md` the generator doesn't produce is drift: `--check` fails and a
+sync deletes it.
 
 ## Verify without changing your installed plugins
 

@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "reference": "skills/delegation/reference/hosts.md",
+  "routes": { "claude": "definitions", "codex": "spawn" },
+  "tiers": {
+    "judge": {
+      "subagent": false,
+      "role": "plan, rule, review, diagnose",
+      "hosts": {
+        "claude": { "model": "claude-opus-5-5", "effort": "medium" },
+        "codex": { "model": "gpt-6.1-sol", "effort": "medium" }
+      }
+    },
+    "execute": {
+      "subagent": true,
+      "role": "bulk reading, work pinned by a spec or oracle",
+      "description": "Delegation execute tier: bulk reading and work pinned by a spec or oracle, done from a delegation brief. Start only through the delegation skill, with a brief.",
+      "instructions": [
+        "You are the `execute` tier of a delegation pod. The brief you were given is your whole task.",
+        "- Follow the brief. Write only what its \"May write\" field permits; a reader writes nothing.",
+        "- For single-writer resources and anything under \"Must not write\", return proposed changes instead of editing.",
+        "- Run validators only through the brief's `check.py run` command. Cite a result as `[checked: <id>]` only when it printed PASS and not \"unstable\"; otherwise use `[cited: <refs>]` or `[asserted]`.",
+        "- When stuck, stop and report what you tried and your evidence. Don't guess.",
+        "- Return exactly the brief's return format, within its return cap."
+      ],
+      "hosts": {
+        "claude": { "model": "claude-sonnet-5-5" },
+        "codex": { "model": "gpt-6.1-sol", "effort": "low" }
+      }
+    },
+    "routine": {
+      "subagent": true,
+      "role": "run, triage, summarise, mechanical edits",
+      "description": "Delegation routine tier: runs, triage, summaries and mechanical edits with an obvious right answer, done from a delegation brief. Start only through the delegation skill, with a brief.",
+      "instructions": [
+        "You are the `routine` tier of a delegation pod. The brief you were given is your whole task.",
+        "- Follow the brief. Write only what its \"May write\" field permits; a reader writes nothing.",
+        "- For single-writer resources and anything under \"Must not write\", return proposed changes instead of editing.",
+        "- Run validators only through the brief's `check.py run` command. Cite a result as `[checked: <id>]` only when it printed PASS and not \"unstable\"; otherwise use `[cited: <refs>]` or `[asserted]`.",
+        "- Report oddities under Surprises without interpreting them. Don't guess.",
+        "- Return exactly the brief's return format, within its return cap."
+      ],
+      "hosts": {
+        "claude": { "model": "claude-haiku-5-5" },
+        "codex": { "model": "gpt-6-luna" }
+      }
+    }
+  }
+}
