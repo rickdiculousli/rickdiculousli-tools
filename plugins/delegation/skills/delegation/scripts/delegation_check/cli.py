@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from . import DelegationError
-from .ledger import close_delegation, open_delegation, pending, OUTCOMES, TIERS
+from .ledger import OUTCOMES, TIERS, close_delegation, open_delegation, pending, query, run_validator
 from .overlay import load_overlay
 from .tree import repo_root, tree_hash
 
@@ -66,6 +66,43 @@ def _pending(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+def _run(root: Path, args: argparse.Namespace) -> int:
+    overlay = load_overlay(root)
+    command = overlay.validators.get(args.validator)
+    if command is None:
+        known = ", ".join(sorted(overlay.validators)) or "none"
+        raise DelegationError(f'unknown validator "{args.validator}"; registered: {known}')
+    result = run_validator(
+        root, args.delegation, args.validator, command, overlay.extra_inputs, args.timeout
+    )
+    print(_result_line(result))
+    if not result["ok"]:
+        if result["output_tail"]:
+            print(result["output_tail"])
+        return 1
+    return 0
+
+
+def _result_line(result: dict) -> str:
+    status = "PASS" if result["ok"] else "FAIL"
+    code = "timeout" if result["timed_out"] else result["exit"]
+    line = f"{result['id']} {status} exit={code} tree={result['tree'][:12]}"
+    return line if result["stable"] else line + " unstable"
+
+
+def _query(root: Path, args: argparse.Namespace) -> int:
+    tree = args.tree
+    if tree == "current":
+        tree = tree_hash(root, load_overlay(root).extra_inputs)
+    results = query(root, args.delegation, tree)
+    if args.json:
+        print(json.dumps({"tree": tree, "results": results}))
+    else:
+        for result in results:
+            print(_result_line(result))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="check.py", description=__doc__)
     parser.add_argument("--root", type=Path, help="Worktree root (default: the git root of the cwd)")
@@ -83,6 +120,14 @@ def build_parser() -> argparse.ArgumentParser:
     closer.add_argument("--note")
     lister = commands.add_parser("pending", help="List open delegations")
     lister.add_argument("--json", action="store_true")
+    runner = commands.add_parser("run", help="Run a registered validator and record the result")
+    runner.add_argument("validator")
+    runner.add_argument("--delegation", required=True)
+    runner.add_argument("--timeout", type=float)
+    asker = commands.add_parser("query", help="List recorded validator results")
+    asker.add_argument("--delegation", required=True)
+    asker.add_argument("--tree", help='A tree hash, or "current" to recompute it')
+    asker.add_argument("--json", action="store_true")
     return parser
 
 
@@ -103,6 +148,10 @@ def main(argv: list[str] | None = None) -> int:
             return _open(root, args)
         if args.command == "close":
             return _close(root, args)
+        if args.command == "run":
+            return _run(root, args)
+        if args.command == "query":
+            return _query(root, args)
         if args.command == "pending":
             return _pending(root, args)
     except DelegationError as error:

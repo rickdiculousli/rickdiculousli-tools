@@ -7,7 +7,11 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import os
 import re
+import signal
+import subprocess
+import time
 from typing import Iterator, Sequence
 
 from . import DelegationError
@@ -146,3 +150,85 @@ def close_delegation(root: Path, delegation: str, outcome: str, note: str | None
             root,
             {"event": "close", "delegation": delegation, "outcome": outcome, "note": note},
         )
+
+
+TAIL_LINES = 40
+TAIL_CHARS = 4000
+
+
+def _execute(root: Path, command: str, timeout: float | None) -> tuple[int | None, bool, bytes]:
+    posix = os.name == "posix"
+    process = subprocess.Popen(
+        command,
+        shell=True,
+        cwd=root,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        start_new_session=posix,
+    )
+    try:
+        output, _ = process.communicate(timeout=timeout)
+        return process.returncode, False, output
+    except subprocess.TimeoutExpired:
+        if posix:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+        else:
+            process.kill()
+        output, _ = process.communicate()
+        return None, True, output
+
+
+def run_validator(
+    root: Path,
+    delegation: str,
+    name: str,
+    command: str,
+    extra_inputs: Sequence[str],
+    timeout: float | None,
+) -> dict:
+    if delegation not in {e["delegation"] for e in pending(root)}:
+        raise DelegationError(f"delegation is not open: {delegation}")
+    before = tree_hash(root, extra_inputs)
+    started = time.monotonic()
+    code, timed_out, output = _execute(root, command, timeout)
+    duration = round(time.monotonic() - started, 3)
+    after = tree_hash(root, extra_inputs)
+    text = output.decode("utf-8", errors="replace")
+    tail = "\n".join(text.splitlines()[-TAIL_LINES:])[-TAIL_CHARS:]
+    with ledger_lock(root):
+        count = sum(
+            1
+            for e in read_events(root)
+            if e.get("event") == "result" and e.get("delegation") == delegation
+        )
+        return _append(
+            root,
+            {
+                "event": "result",
+                "id": f"{delegation}#{count + 1}",
+                "delegation": delegation,
+                "validator": name,
+                "command": command,
+                "exit": code,
+                "ok": code == 0 and not timed_out,
+                "timed_out": timed_out,
+                "duration_s": duration,
+                "tree": before,
+                "stable": before == after,
+                "output_sha256": hashlib.sha256(output).hexdigest(),
+                "output_tail": tail,
+            },
+        )
+
+
+def query(root: Path, delegation: str, tree: str | None) -> list[dict]:
+    results = [
+        e
+        for e in read_events(root)
+        if e.get("event") == "result" and e.get("delegation") == delegation
+    ]
+    if tree is not None:
+        results = [e for e in results if e.get("tree") == tree and e.get("stable")]
+    return results
