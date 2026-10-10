@@ -14,6 +14,7 @@ See [verification evidence and scope](docs/verification.md).
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
 | `repository-info` | Informational stub describing this layout |
+| `delegation` | `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. Not yet lifecycle-verified |
 
 ## Visual audit reports
 

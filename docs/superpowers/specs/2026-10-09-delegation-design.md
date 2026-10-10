@@ -36,12 +36,17 @@ This plugin packages that as a reusable **base** plus a per-repo **overlay**, so
 | Piece | What it is |
 |---|---|
 | `plugin.json` | Portable manifest, version `0.1.0`, listed in `catalog.json`. |
-| `tiers.json` | The only place host models and effort live. Per host, per tier: model id, effort (or absent for the host default). |
-| `skills/delegation/SKILL.md` | The base rules (below). Names tiers, never host models. Tells the agent how to find and read the overlay and which agent definition each tier maps to on this host. |
+| `tiers.json` | The only place host models and effort live. Per host, per tier: model id, effort (or absent for the host default). Also the route per host (`routes.claude = "definitions"`; `routes.codex` is `definitions`, `spawn` or `same-model`) and the path of the generated host table. |
+| `skills/delegation/SKILL.md` | The base rules (below). Names tiers, never host models. Tells the agent how to find and read the overlay, and sends it to `reference/hosts.md` to start a tier on this host. States plainly that the skill is the explicit instruction to spawn tier subagents (Codex spawns none otherwise). |
 | `skills/delegation/reference/overlay.md` | The overlay format and a worked example (game-decomp's). |
 | `skills/delegation/reference/return-format.md` | The return format and the brief template, so briefs can quote it verbatim. |
+| `skills/delegation/reference/hosts.md` | Generated from `tiers.json`: the tier table (role, Claude Code model and effort, Codex model and effort) and, per host, how to start a tier. |
 | `skills/delegation/scripts/check.py` | Stdlib Python 3.10+. The ledger, tree hash, validators and overlay lint (below). |
-| Generated agent definitions | `execute` and `routine`, one per host where the host supports them, written by `sync_marketplaces.py` from `tiers.json`. Each carries its model and effort, and a short body pointing at `return-format.md`. |
+| Generated agent definitions | Claude Code only: `agents/execute.md` and `agents/routine.md`, written by `sync_marketplaces.py` from `tiers.json`, addressed as `delegation:<tier>`. Each carries its `model` and `effort` frontmatter and a short body. Codex plugins can't ship agent definitions (step 0), so Codex uses the `spawn` route. Any other `agents/*.md` in the plugin is drift. |
+
+**Codex route rule** (Rick, 2026-10-09). If Codex plugins can't ship agent definitions but spawn-time model and effort work, the Codex skill spawns its default subagent with the tier's model and effort from the generated host table (`spawn_agent` with `model`, `reasoning_effort` and `fork_turns: "none"`, so the child doesn't inherit the judge's context). The same-model fallback applies only if spawn-time values don't work either. Step 0 found exactly that case on Codex 0.162.1: `routes.codex = "spawn"`.
+
+**Claude spawn rule.** The Agent tool's per-call `model` overrides frontmatter, so the skill forbids passing `model` or `effort` when starting a tier agent. `CLAUDE_CODE_EFFORT_LEVEL`, and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` with `CLAUDE_CODE_SUBAGENT_MODEL`, override the definitions; `hosts.md` says so.
 
 ### In each consuming repo
 
@@ -49,13 +54,13 @@ This plugin packages that as a reusable **base** plus a per-repo **overlay**, so
 |---|---|
 | Pointer in `AGENTS.md` | `Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.` |
 | `.agents/delegation.md` | The overlay. |
-| Ledger | `.agents/delegation-ledger.jsonl`, git-ignored by the repo. |
+| State directory | `.agents/delegation/`, created by `check.py` with its own `.gitignore` containing `*`, so the repo needs no ignore rule. Holds `ledger.jsonl`, `ledger.lock`, briefs in `briefs/<id>.md`, and short-lived `tmp-index-*` and `tmp-objects-*` entries during a tree hash. |
 
 ### Data flow
 
 1. The session reads `AGENTS.md`, sees the pointer, and loads the skill when real work starts.
 2. The skill reads the overlay (falling back to base defaults for missing sections).
-3. To delegate, the judge runs `check.py open`, then starts the generated `execute` or `routine` agent with a brief built from the template plus the overlay's return fields.
+3. To delegate, the judge writes a brief to `.agents/delegation/briefs/<id>.md` from the template plus the overlay's return fields, runs `check.py open` (with `--writes` for a writer), then starts the `execute` or `routine` tier as `reference/hosts.md` says for this host.
 4. The subagent works, runs validators through `check.py run`, and returns a structured report. It never writes to single-writer resources.
 5. The judge reads the ledger for that delegation at the current tree, merges proposed changes, applies them to single-writer resources, writes findings, and runs `check.py close`.
 
@@ -98,22 +103,31 @@ A claim that something passed must be `checked`. A validator that fails, or a le
 ## `check.py`
 
 ```
-check.py run <validator> --delegation <id>    run a registered validator, append its result
-check.py query --delegation <id> [--tree current] [--json]
-check.py open  --delegation <id> --tier execute|routine --brief <path>
-check.py close --delegation <id> --outcome done|stuck|abandoned
+check.py [--root <worktree>] <command>         --root defaults to the git root of the cwd
+check.py run <validator> --delegation <id> [--timeout S]   run a registered validator, append its result
+check.py query --delegation <id> [--tree current|<hash>] [--json]
+check.py open  --delegation <id> --tier execute|routine --brief <path> [--writes]
+check.py close --delegation <id> --outcome done|stuck|abandoned [--note <text>]
 check.py pending [--json]                      open delegations with no close
 check.py tree                                  print the current tree hash
 check.py lint                                  check the overlay
 ```
 
-**Ledger entry** (one JSON object per line): `schema`, `event` (`result` / `open` / `close`), `delegation`, `timestamp`, and for results: `validator`, `command`, `exit`, `duration_s`, `tree`, `output_sha256`, `output_tail`.
+Exit codes: 0 ok; 1 lint problems or a failing validator; 2 an error or a refused operation.
+
+**State directory.** Everything `check.py` writes lives in `<root>/.agents/delegation/`, which it creates with a `.gitignore` containing `*`: the ledger `ledger.jsonl`, the lock `ledger.lock`, temporary indexes `tmp-index-<pid>-<hex>` and temporary object directories `tmp-objects-<pid>-<hex>`. Briefs go in `briefs/<id>.md`. It never writes to `$TMPDIR`, the git directory or the real index.
+
+**Writer enforcement.** `open --writes` refuses to start a writer while any delegation is open; `open` refuses any delegation while a writer is open, and refuses a reader once open readers reach the overlay's parallel limit. Ids are never reused in a worktree. Appends happen under an exclusive lock on `ledger.lock`, so parallel readers get distinct result ids.
+
+**Ledger entry** (one JSON object per line): `schema`, `event` (`result` / `open` / `close`), `delegation`, `timestamp`. Opens add `tier`, `writes`, `brief`, `brief_sha256` and `tree`; closes add `outcome` and `note`. Results add `id` (`<delegation>#<n>`), `validator`, `command`, `exit`, `ok`, `timed_out`, `duration_s`, `tree` (hashed before the run), `stable` (the tree was the same after the run), `output_sha256` and `output_tail`. `query --tree` keeps only stable results at that tree.
 
 **Tree hash.** The hash of the working tree exactly as it is, including uncommitted changes and untracked files that aren't ignored, computed without touching the real index or committing:
 
 ```sh
 GIT_INDEX_FILE=<tmp> git add -A && git write-tree
 ```
+
+The temporary index starts as a copy of the real one. `GIT_OBJECT_DIRECTORY` points at a temporary objects directory inside `.agents/delegation/`, with the real objects directory as `GIT_ALTERNATE_OBJECT_DIRECTORIES`, so hashing writes nothing under `.git` (a sandboxed agent in a linked worktree may not be able to write the shared git directory). Tree ids are unchanged by this; the temporary entries are removed afterwards.
 
 Extra inputs that git ignores (golden traces, built binaries) are folded in when the overlay lists them under `## Extra inputs`: the tree hash becomes a hash of the git tree plus each listed path's content hash. A query with `--tree current` recomputes it, so any change since a check makes that check stale.
 
@@ -184,18 +198,22 @@ The relay's side of this is recorded in an addendum to its spec.
 
 **Step 0, before building the Codex side.** Find out what a Codex plugin can ship besides skills, and whether a Codex subagent can be given a model and effort. Record the result and versions in `docs/verification.md`. If yes, the generator writes Codex definitions. If no, the Codex skill states the tier in the brief and uses a same-model subagent at the default effort. Either way nothing is assumed.
 
+*Result (recorded in `docs/verification.md`):* on Codex 0.162.1 a plugin can't ship agent definitions, but `spawn_agent`'s `model` and `reasoning_effort` take effect in the child, so `routes.codex = "spawn"` under the Codex route rule (see Components). The generated `hosts.md` tells Codex to pass `fork_turns: "none"`.
+
 Also confirm on Claude Code that a plugin's agent definitions are picked up and that their `model` and effort frontmatter takes effect.
 
 **Tests** (stdlib `unittest`, alongside the existing suite):
 
-- **Generator:** `tiers.json` produces the expected definitions; `sync_marketplaces.py --check` fails on a hand-edited generated file.
+- **Generator:** `tiers.json` produces the expected Claude definitions (no `judge` definition; `effort` only when set) and a `hosts.md` naming every tier's model and the Codex route; `sync_marketplaces.py --check` fails on a hand-edited generated file; an `agents/*.md` that `tiers.json` doesn't generate is drift that `--check` reports and `sync` deletes; invalid `tiers.json` is rejected before any write; plugins without `tiers.json` are unaffected.
 - **`check.py`:**
   - The tree hash is stable when nothing changes, and changes on an edit, a new untracked file, and a change to a declared extra input.
-  - It never modifies the real index.
+  - It never modifies the real index, and writes nothing under `.git` or `$TMPDIR`; writing the ledger or a temporary index doesn't change the hash.
   - `run` appends a result; `query` filters by delegation and by tree; a check at an older tree is excluded under `--tree current`.
   - `open`/`close`/`pending` track lifecycle; an unclosed delegation shows in `pending`.
+  - `open` refuses a writer while anything is open, anything while a writer is open, and a reader past the parallel limit.
+  - Concurrent `run`s get distinct result ids; a validator that edits the tree records an unstable result.
   - `lint` reports unknown headings and unregistered validators.
-- **Lifecycle:** `verify_lifecycle.py` installs into a disposable profile and confirms the skill and generated definitions appear on each host.
+- **Lifecycle:** `verify_lifecycle.py` installs into a disposable profile and confirms the skill and generated definitions appear on each host (Claude Code agents; Codex has none on the `spawn` route).
 - **Not tested, and not claimed:** whether models route well. That's the pilot's job.
 
 **Error handling:**
@@ -203,7 +221,7 @@ Also confirm on Claude Code that a plugin's agent definitions are picked up and 
 - No overlay: base defaults apply; the skill says so once.
 - A validator fails: the ledger records it; the claim is `asserted`, not `checked`.
 - An executor is stuck: it stops and reports its evidence; the judge closes the delegation as `stuck`.
-- A host lacks the generated definitions: the same fallback as the Codex case in step 0.
+- A host lacks the generated definitions: the same fallback as the Codex case in step 0 (spawn with explicit model and effort; else same-model at default effort), as `hosts.md` states for that host.
 
 ## Rollout
 
@@ -212,7 +230,7 @@ Also confirm on Claude Code that a plugin's agent definitions are picked up and 
    - the overlay and the `AGENTS.md` pointer
    - `refuted` added to the findings statuses
    - the `unit`, `probes` and `refs` validators, writing `research/modules/check_refs.py` (every claimed address is a function in `functions.csv`; every cited Windows match is in the match table)
-   - `.agents/delegation-ledger.jsonl` git-ignored
+   - no ignore rule needed: `check.py` keeps `.agents/delegation/` ignored itself
    - run the Rust plan's **Task 2** (naming across module files) as the pilot, as parallel readers
    - judge it roughly: quota points per task from a coordinator repo, and how much of the judge's context is free at the end
 3. **coordinator** (its own change): `projects.md` rows for `game-decomp` and this repo, and a note of which repos have an overlay.

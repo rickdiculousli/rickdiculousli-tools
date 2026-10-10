@@ -5,6 +5,7 @@
   "plugins": [
     "plugins/hello-world",
     "plugins/repository-info",
-    "plugins/visual-audit"
+    "plugins/visual-audit",
+    "plugins/delegation"
   ]
 }

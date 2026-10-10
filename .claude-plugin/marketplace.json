@@ -44,6 +44,20 @@
         "visualization"
       ],
       "source": "./plugins/visual-audit"
+    },
+    {
+      "name": "delegation",
+      "version": "0.1.0",
+      "description": "Pods of judge, execute and routine agents: route bulk work to cheaper tiers and keep evidence by tree hash.",
+      "author": {
+        "name": "Rick Li"
+      },
+      "keywords": [
+        "delegation",
+        "subagents",
+        "evidence"
+      ],
+      "source": "./plugins/delegation"
     }
   ]
 }
