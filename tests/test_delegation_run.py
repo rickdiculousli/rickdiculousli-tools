@@ -149,6 +149,16 @@ class RunTests(unittest.TestCase):
         self.assertEqual(run_cli(self.root, "run", "ok", "--delegation", "d1").returncode, 2)
         self.assertEqual(self.results(), [])
 
+    def test_delegation_closed_during_run_is_refused(self):
+        self.open()
+        proc = self.spawn("d1", "slow")
+        import time
+        time.sleep(0.1)
+        run_cli(self.root, "close", "--delegation", "d1", "--outcome", "abandoned")
+        out, err = proc.communicate(timeout=60)
+        self.assertEqual(proc.returncode, 2, out + err)
+        self.assertEqual(self.results(), [])
+
     def test_timeout_is_recorded(self):
         self.open()
         r = run_cli(self.root, "run", "hang", "--delegation", "d1", "--timeout", "0.3")

@@ -105,8 +105,14 @@ def open_delegation(
         raise DelegationError(f"invalid delegation id: {delegation!r}")
     if tier not in TIERS:
         raise DelegationError(f"tier must be one of {', '.join(TIERS)}, got {tier!r}")
+    root_resolved = root.resolve()
+    brief = brief if brief.is_absolute() else root_resolved / brief
     if not brief.is_file():
         raise DelegationError(f"brief not found: {brief}")
+    try:
+        brief_name = brief.resolve().relative_to(root_resolved).as_posix()
+    except ValueError:
+        brief_name = str(brief)
     brief_sha = hashlib.sha256(brief.read_bytes()).hexdigest()
     tree = tree_hash(root, extra_inputs)
     with ledger_lock(root):
@@ -133,7 +139,7 @@ def open_delegation(
                 "delegation": delegation,
                 "tier": tier,
                 "writes": writes,
-                "brief": str(brief),
+                "brief": brief_name,
                 "brief_sha256": brief_sha,
                 "tree": tree,
             },
@@ -198,9 +204,12 @@ def run_validator(
     text = output.decode("utf-8", errors="replace")
     tail = "\n".join(text.splitlines()[-TAIL_LINES:])[-TAIL_CHARS:]
     with ledger_lock(root):
+        events = read_events(root)
+        if delegation not in {e["delegation"] for e in _pending(events)}:
+            raise DelegationError(f"delegation closed while the validator ran: {delegation}")
         count = sum(
             1
-            for e in read_events(root)
+            for e in events
             if e.get("event") == "result" and e.get("delegation") == delegation
         )
         return _append(

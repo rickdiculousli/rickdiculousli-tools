@@ -1,10 +1,12 @@
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
 
-from delegation_support import git_repo, run_cli, write_overlay
+from delegation_support import SCRIPTS, git_repo, run_cli, write_overlay
 
 from delegation_check.ledger import ledger_path, read_events
 
@@ -102,6 +104,19 @@ class LedgerTests(unittest.TestCase):
         for name in ("a", "b", "c", "d"):
             self.assertEqual(self.open(name).returncode, 0, name)
         self.assertEqual(self.open("e").returncode, 2)
+
+    def test_relative_brief_resolves_against_root(self):
+        (self.root / "briefs").mkdir()
+        (self.root / "briefs/b.md").write_text("x\n")
+        elsewhere = self.brief.parent
+        r = subprocess.run(
+            [sys.executable, str(SCRIPTS / "check.py"), "--root", str(self.root),
+             "open", "--delegation", "rel", "--tier", "execute", "--brief", "briefs/b.md"],
+            cwd=elsewhere, capture_output=True, text=True,
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        (event,) = read_events(self.root)
+        self.assertEqual(event["brief"], "briefs/b.md")
 
     def test_malformed_ledger_is_an_error(self):
         self.open("d1")

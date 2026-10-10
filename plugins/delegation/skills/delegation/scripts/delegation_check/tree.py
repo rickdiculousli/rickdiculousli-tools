@@ -43,19 +43,33 @@ def state_dir(root: Path) -> Path:
 
 
 def git_tree(root: Path) -> str:
+    root = root.resolve()
     directory = state_dir(root)
-    temp = directory / f"tmp-index-{os.getpid()}-{secrets.token_hex(4)}"
+    suffix = f"{os.getpid()}-{secrets.token_hex(4)}"
+    temp = directory / f"tmp-index-{suffix}"
     lock = temp.with_name(temp.name + ".lock")
+    objects = directory / f"tmp-objects-{suffix}"
     try:
         real = Path(_git(root, ["rev-parse", "--git-path", "index"]).strip())
         if not real.is_absolute():
             real = root / real
+        real_objects = Path(_git(root, ["rev-parse", "--git-path", "objects"]).strip())
+        if not real_objects.is_absolute():
+            real_objects = root / real_objects
         if real.is_file():
             shutil.copyfile(real, temp)
-        env = dict(os.environ, GIT_INDEX_FILE=str(temp))
-        _git(root, ["add", "-A"], env)
-        return _git(root, ["write-tree"], env).strip()
+        objects.mkdir()
+        env = dict(
+            os.environ,
+            GIT_INDEX_FILE=str(temp),
+            GIT_OBJECT_DIRECTORY=str(objects),
+            GIT_ALTERNATE_OBJECT_DIRECTORIES=str(real_objects),
+        )
+        quiet = ["-c", "core.splitIndex=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false"]
+        _git(root, [*quiet, "add", "-A"], env)
+        return _git(root, [*quiet, "write-tree"], env).strip()
     finally:
+        shutil.rmtree(objects, ignore_errors=True)
         for leftover in (temp, lock):
             try:
                 leftover.unlink()

@@ -82,6 +82,43 @@ class TreeTests(unittest.TestCase):
         self.assertFalse((self.root / ".agents").exists())
         self.assertEqual(repo_root(wt).resolve(), wt.resolve())
 
+    def snapshot(self, git_dir):
+        return {
+            str(p.relative_to(git_dir)): p.read_bytes()
+            for p in git_dir.rglob("*")
+            if p.is_file()
+        }
+
+    def test_clean_tree_matches_git_write_tree(self):
+        self.assertEqual(tree_hash(self.root), git(self.root, "write-tree").stdout.strip())
+
+    def test_writes_nothing_under_git_main_checkout(self):
+        (self.root / "a.txt").write_text("edited\n")
+        (self.root / "untracked.txt").write_text("u\n")
+        git_dir = self.root / ".git"
+        before = self.snapshot(git_dir)
+        tree_hash(self.root)
+        self.assertEqual(before, self.snapshot(git_dir))
+        self.assertEqual(list((self.root / ".agents/delegation").glob("tmp-*")), [])
+
+    def test_writes_nothing_under_git_linked_worktree(self):
+        wt = self.tmp / "wt"
+        git(self.root, "worktree", "add", "-q", str(wt))
+        (wt / "a.txt").write_text("edited\n")
+        (wt / "untracked.txt").write_text("u\n")
+        git_dir = self.root / ".git"
+        before = self.snapshot(git_dir)
+        tree_hash(wt)
+        self.assertEqual(before, self.snapshot(git_dir))
+        self.assertEqual(list((wt / ".agents/delegation").glob("tmp-*")), [])
+
+    def test_relative_root(self):
+        import os
+        old = os.getcwd()
+        os.chdir(self.root.parent)
+        self.addCleanup(os.chdir, old)
+        self.assertEqual(tree_hash(Path("repo")), tree_hash(self.root))
+
     def test_repo_root_from_subdirectory(self):
         (self.root / "sub").mkdir()
         self.assertEqual(repo_root(self.root / "sub").resolve(), self.root.resolve())
