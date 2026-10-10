@@ -41,26 +41,34 @@ or change an overlay, use the `setup` skill from this plugin.
    overlay's `## Tier hints`. Neither tier guesses: `execute` stops and reports
    with evidence when stuck; `routine` reports oddities without interpreting them.
 3. **Brief** with the template in
-   [reference/return-format.md](reference/return-format.md): goal, inputs, what it
-   may write, what it must not write, the done condition or validators, the
-   delegation id and the return format.
+   [reference/return-format.md](reference/return-format.md): settled context,
+   goal, inputs, what it may write, what it must not write, the done condition
+   or validators, the delegation id and the return format.
 4. **Return format.** Quote the block from `reference/return-format.md` verbatim
    in every brief, with the overlay's return fields and cap.
 5. **Batch and limit concurrency.** Group similar routine items into one call.
    Readers (write nothing, return data) may run in parallel up to the overlay's
    parallel limit. **At most one writer per worktree, and a writer runs alone.**
    `check.py open` enforces both.
-6. **Single writer.** Subagents return proposed changes for the overlay's
+6. **Read shared context once.** Parallel siblings that need the same material
+   (a spec, shared types, conventions) each pay to read it. Fan out when that
+   material is small next to each item's own work. When it is large, batch the
+   items into fewer calls, or first delegate one `execute` reader to digest it:
+   facts, signatures and conventions with refs, within the return cap. Review
+   the digest, save it once to `.delegation/context/<name>.md`, and point every
+   sibling's `Settled` field at it. Fill `Settled` yourself only from what you
+   already know; don't read bulk material to write it.
+7. **Single writer.** Subagents return proposed changes for the overlay's
    `## Single writer` resources. Only you apply them.
-7. **Write findings as they happen** to the overlay's `## Findings` sink (else the
+8. **Write findings as they happen** to the overlay's `## Findings` sink (else the
    execution log): id, date, claim, status (including `refuted`), evidence. Do it
    when a discovery or dead end is established, not at handoff; if the sink is
    tracked and delegations are open, see the hold in section 3, step 5.
-8. **Check; don't redo.** Review ledger results and the diff. Read raw material
+9. **Check; don't redo.** Review ledger results and the diff. Read raw material
    only to dig into a specific doubt.
-9. **Quota zones**, when a relay or a soft limit is in play. You learn the zone
-   from the relay or the user. At `last-task`, open no new delegations. At
-   `wrap`, close every open delegation before handing off (see section 6).
+10. **Quota zones**, when a relay or a soft limit is in play. You learn the zone
+    from the relay or the user. At `last-task`, open no new delegations. At
+    `wrap`, close every open delegation before handing off (see section 6).
 
 ## 3. Procedure
 
