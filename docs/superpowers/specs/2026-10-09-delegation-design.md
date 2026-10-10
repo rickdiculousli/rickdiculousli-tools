@@ -18,7 +18,7 @@ This plugin packages that as a reusable **base** plus a per-repo **overlay**, so
   |---|---|---|
   | `judge`: plan, rule, review, diagnose | Opus 5.5, medium effort | Sol 6.1, medium effort |
   | `execute`: bulk reading, work pinned by a spec or oracle | Sonnet 5.5 | Sol 6.1, low effort |
-  | `routine`: run, triage, summarise, mechanical edits | Haiku 4.5 | Luna 6 |
+  | `routine`: run, triage, summarise, mechanical edits | Haiku 5.5 | Luna 6 |
 
   Codex has only two usable models, so effort is a tier lever as well as the model. Same-model delegation (Sol to Sol) is still worth it for bulk work: it keeps the judge's context small, gives each task a clean context and allows parallel readers. It costs somewhat more total tokens and is not worth it for short tasks.
 - **Overlays live in the repo they describe**, at `.agents/delegation.md`. Not in `AGENTS.md`, not centrally.
