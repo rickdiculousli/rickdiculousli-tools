@@ -19,7 +19,7 @@ profile for each host. Evidence labels: `checked` (observed running), `cited`
 | All four plugins uninstalled; absent from installed list | Passed | Passed |
 | Marketplace removed; absent from marketplace list | Passed | Passed |
 
-All results above are `checked`. The unit suite (180 tests) passed on Python 3.14
+All results above are `checked`. The unit suite (181 tests) passed on Python 3.14
 and on 3.10 (`uv run --no-project --python 3.10 -m unittest discover -s tests`).
 
 The marketplace is `rickdiculousli-plugins`. The tested plugins are
@@ -33,10 +33,10 @@ templates, and references are included. Both hosts installed identical skill con
 | `audit-report` | `d014925c6443c961b72529866b868ad1ece1146b62b97322a2076027a193117b` |
 | `hello` | `bf6ab583d5cd7ee791d8f3f551fc04c120b180bcd6e99effc4e52f3f3d6bd07d` |
 | `about` | `764ab249ba09f27a645b7fe4b60ab60e33b7b569bc189d158f7e139a46ec1434` |
-| `delegation` | `d031282d6c4beb8e80338b9c0b652274df1895bb47fdba4fe346e0ed12e7481d` |
+| `delegation` | `531db043f2567109b8cd2733dd2239006aeb5c72a13b5109554279559c837a43` |
 
-The three earlier hashes were recorded on October 6; the table was not re-read
-against the October 10 report except for `delegation`, whose hash comes from it.
+All four hashes match the 2026-10-10 lifecycle report (`/tmp/plugin-verification.json`),
+which was re-read against this table after the final-review fixes.
 
 ## Visual audit renderer
 
@@ -196,6 +196,20 @@ Effort: the transcript lines carry a session-level `"effort":"medium"` with
 frontmatter, so the subagent's own effort is not observable; documented
 behaviour (`cited`) applies. The agent also could not write the brief file or run
 `check.py` in that headless run, so no ledger entry was made.
+
+### Codex sandbox check (`checked`)
+
+Date: 2026-10-10. `codex-cli 0.162.1`. No model call. Codex's `:workspace` sandbox
+makes `.agents/` read-only, so the state directory is `.delegation/`; the overlay
+stays at `.agents/delegation.md` (read only). In a disposable git repo under `/tmp`
+(one committed file, one untracked file, overlay `## Validators\nok: true`), each
+subcommand ran as
+`codex sandbox -P :workspace -C <repo> -- python3 -I <repo-checkout>/plugins/delegation/skills/delegation/scripts/check.py <subcommand>`:
+`tree`, `open --delegation d1 --tier routine --brief .delegation/briefs/d1.md`,
+`run ok --delegation d1`, `query --delegation d1 --tree current --json`,
+`pending --json` and `close --delegation d1 --outcome done`. All exited 0
+(`run` printed `d1#1 PASS exit=0`). The brief file itself was written outside the
+sandbox. The temporary repo was removed afterwards.
 
 ### (b) Codex: effort when `reasoning_effort` is omitted (not performed)
 

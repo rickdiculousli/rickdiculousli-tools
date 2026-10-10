@@ -157,4 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     except DelegationError as error:
         print(f"check.py: {error}", file=sys.stderr)
         return 2
+    except OSError as error:
+        print(f"check.py: cannot access {error.filename or 'a file'}: {error.strerror or error}", file=sys.stderr)
+        return 2
     return 2

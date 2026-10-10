@@ -28,7 +28,7 @@ while it ran) is never `checked`.
 
 ## Brief template
 
-Save as `.agents/delegation/briefs/<id>.md`. Fill every field; write `none` where
+Save as `.delegation/briefs/<id>.md`. Fill every field; write `none` where
 nothing applies. Use absolute paths for the script and root, since the subagent
 may not know where the skill is installed.
 
@@ -46,7 +46,7 @@ Delegation id: <id>
 Evidence: run validators only with this command, and cite the printed id as
 [checked: <id>#<n>] only when it printed PASS and not "unstable":
 
-    python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> run <validator> --delegation <id>
+    python3 <absolute skill-dir>/scripts/check.py --root <absolute worktree root> run <validator> --delegation <id> --timeout <seconds>
 
 Return format:
 

@@ -161,6 +161,9 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
             self.assertIn(f"`{name}`", text)
         self.assertIn("`example:execute`", text)
         self.assertIn("Never pass `model` or `effort`", text)
+        self.assertIn("- `execute`: `model` = `sonnet`", text)
+        self.assertIn("- `routine`: `model` = `haiku`", text)
+        self.assertNotIn("`model` = `opus`", text)
         self.assertIn("CLAUDE_CODE_EFFORT_LEVEL", text)
         self.assertIn("CLAUDE_CODE_SUBAGENT_MODEL_FORCE", text)
         spawn = text.split("### Codex", 1)[1]
@@ -251,8 +254,9 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
         def no_description(t): t["tiers"]["execute"]["description"] = " "
         def no_instructions(t): del t["tiers"]["routine"]["instructions"]
         def fenced_instructions(t): t["tiers"]["routine"]["instructions"] = "a\n````\nb"
+        def bad_claude_model(t): t["tiers"]["execute"]["hosts"]["claude"]["model"] = "sonnet-5-5"
         cases = {
-            bad_effort: "effort", bad_codex_effort: "effort", missing_model: "model",
+            bad_claude_model: "alias", bad_effort: "effort", bad_codex_effort: "effort", missing_model: "model",
             missing_host: "claude", escape_up: "reference", escape_nested: "reference",
             escape_absolute: "reference", outside_skills: "reference", authored_skill: "reference",
             not_reference_dir: "reference", too_deep: "reference", bad_schema: "schema",

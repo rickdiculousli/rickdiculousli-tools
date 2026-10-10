@@ -42,6 +42,17 @@ class RunTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         return json.loads(r.stdout)
 
+    def test_unwritable_state_dir_exits_2(self):
+        import os
+        if os.geteuid() == 0:
+            self.skipTest("root ignores directory permissions")
+        self.root.chmod(0o555)
+        self.addCleanup(self.root.chmod, 0o755)
+        r = run_cli(self.root, "pending")
+        self.assertEqual(r.returncode, 2, r.stderr)
+        self.assertIn("check.py: cannot access", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+
     def test_run_appends_result(self):
         self.open()
         r = run_cli(self.root, "run", "ok", "--delegation", "d1")
@@ -120,7 +131,7 @@ class RunTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, out + err)
 
     def assert_clean_lines(self):
-        raw = (self.root / ".agents/delegation/ledger.jsonl").read_text()
+        raw = (self.root / ".delegation/ledger.jsonl").read_text()
         for line in raw.splitlines():
             json.loads(line)
 

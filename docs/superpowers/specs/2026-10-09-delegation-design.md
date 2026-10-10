@@ -54,13 +54,13 @@ This plugin packages that as a reusable **base** plus a per-repo **overlay**, so
 |---|---|
 | Pointer in `AGENTS.md` | `Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.` |
 | `.agents/delegation.md` | The overlay. |
-| State directory | `.agents/delegation/`, created by `check.py` with its own `.gitignore` containing `*`, so the repo needs no ignore rule. Holds `ledger.jsonl`, `ledger.lock`, briefs in `briefs/<id>.md`, and short-lived `tmp-index-*` and `tmp-objects-*` entries during a tree hash. |
+| State directory | `.delegation/`, created by `check.py` with its own `.gitignore` containing `*`, so the repo needs no ignore rule. Holds `ledger.jsonl`, `ledger.lock`, briefs in `briefs/<id>.md`, and short-lived `tmp-index-*` and `tmp-objects-*` entries during a tree hash. |
 
 ### Data flow
 
 1. The session reads `AGENTS.md`, sees the pointer, and loads the skill when real work starts.
 2. The skill reads the overlay (falling back to base defaults for missing sections).
-3. To delegate, the judge writes a brief to `.agents/delegation/briefs/<id>.md` from the template plus the overlay's return fields, runs `check.py open` (with `--writes` for a writer), then starts the `execute` or `routine` tier as `reference/hosts.md` says for this host.
+3. To delegate, the judge writes a brief to `.delegation/briefs/<id>.md` from the template plus the overlay's return fields, runs `check.py open` (with `--writes` for a writer), then starts the `execute` or `routine` tier as `reference/hosts.md` says for this host.
 4. The subagent works, runs validators through `check.py run`, and returns a structured report. It never writes to single-writer resources.
 5. The judge reads the ledger for that delegation at the current tree, merges proposed changes, applies them to single-writer resources, writes findings, and runs `check.py close`.
 
@@ -115,7 +115,7 @@ check.py lint                                  check the overlay
 
 Exit codes: 0 ok; 1 lint problems or a failing validator; 2 an error or a refused operation.
 
-**State directory.** Everything `check.py` writes lives in `<root>/.agents/delegation/`, which it creates with a `.gitignore` containing `*`: the ledger `ledger.jsonl`, the lock `ledger.lock`, temporary indexes `tmp-index-<pid>-<hex>` and temporary object directories `tmp-objects-<pid>-<hex>`. Briefs go in `briefs/<id>.md`. It never writes to `$TMPDIR`, the git directory or the real index.
+**State directory.** Everything `check.py` writes lives in `<root>/.delegation/`, which it creates with a `.gitignore` containing `*`: the ledger `ledger.jsonl`, the lock `ledger.lock`, temporary indexes `tmp-index-<pid>-<hex>` and temporary object directories `tmp-objects-<pid>-<hex>`. Briefs go in `briefs/<id>.md`. It never writes to `$TMPDIR`, the git directory or the real index.
 
 **Writer enforcement.** `open --writes` refuses to start a writer while any delegation is open; `open` refuses any delegation while a writer is open, and refuses a reader once open readers reach the overlay's parallel limit. Ids are never reused in a worktree. Appends happen under an exclusive lock on `ledger.lock`, so parallel readers get distinct result ids.
 
@@ -127,7 +127,7 @@ Exit codes: 0 ok; 1 lint problems or a failing validator; 2 an error or a refuse
 GIT_INDEX_FILE=<tmp> git add -A && git write-tree
 ```
 
-The temporary index starts as a copy of the real one. `GIT_OBJECT_DIRECTORY` points at a temporary objects directory inside `.agents/delegation/`, with the real objects directory as `GIT_ALTERNATE_OBJECT_DIRECTORIES`, so hashing writes nothing under `.git` (a sandboxed agent in a linked worktree may not be able to write the shared git directory). Tree ids are unchanged by this; the temporary entries are removed afterwards.
+The temporary index starts as a copy of the real one. `GIT_OBJECT_DIRECTORY` points at a temporary objects directory inside `.delegation/`, with the real objects directory as `GIT_ALTERNATE_OBJECT_DIRECTORIES`, so hashing writes nothing under `.git` (a sandboxed agent in a linked worktree may not be able to write the shared git directory). Tree ids are unchanged by this; the temporary entries are removed afterwards.
 
 Extra inputs that git ignores (golden traces, built binaries) are folded in when the overlay lists them under `## Extra inputs`: the tree hash becomes a hash of the git tree plus each listed path's content hash. A query with `--tree current` recomputes it, so any change since a check makes that check stale.
 
@@ -230,7 +230,7 @@ Also confirm on Claude Code that a plugin's agent definitions are picked up and 
    - the overlay and the `AGENTS.md` pointer
    - `refuted` added to the findings statuses
    - the `unit`, `probes` and `refs` validators, writing `research/modules/check_refs.py` (every claimed address is a function in `functions.csv`; every cited Windows match is in the match table)
-   - no ignore rule needed: `check.py` keeps `.agents/delegation/` ignored itself
+   - no ignore rule needed: `check.py` keeps `.delegation/` ignored itself
    - run the Rust plan's **Task 2** (naming across module files) as the pilot, as parallel readers
    - judge it roughly: quota points per task from a coordinator repo, and how much of the judge's context is free at the end
 3. **coordinator** (its own change): `projects.md` rows for `game-decomp` and this repo, and a note of which repos have an overlay.

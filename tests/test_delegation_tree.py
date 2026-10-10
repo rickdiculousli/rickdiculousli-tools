@@ -78,7 +78,7 @@ class TreeTests(unittest.TestCase):
         before = {p.name for p in self.tmp.iterdir()}
         self.assertRegex(tree_hash(wt), r"\A[0-9a-f]{40}\Z")
         self.assertEqual(before, {p.name for p in self.tmp.iterdir()})
-        self.assertTrue((wt / ".agents/delegation/.gitignore").exists())
+        self.assertTrue((wt / ".delegation/.gitignore").exists())
         self.assertFalse((self.root / ".agents").exists())
         self.assertEqual(repo_root(wt).resolve(), wt.resolve())
 
@@ -99,7 +99,7 @@ class TreeTests(unittest.TestCase):
         before = self.snapshot(git_dir)
         tree_hash(self.root)
         self.assertEqual(before, self.snapshot(git_dir))
-        self.assertEqual(list((self.root / ".agents/delegation").glob("tmp-*")), [])
+        self.assertEqual(list((self.root / ".delegation").glob("tmp-*")), [])
 
     def test_writes_nothing_under_git_linked_worktree(self):
         wt = self.tmp / "wt"
@@ -110,7 +110,7 @@ class TreeTests(unittest.TestCase):
         before = self.snapshot(git_dir)
         tree_hash(wt)
         self.assertEqual(before, self.snapshot(git_dir))
-        self.assertEqual(list((wt / ".agents/delegation").glob("tmp-*")), [])
+        self.assertEqual(list((wt / ".delegation").glob("tmp-*")), [])
 
     def test_relative_root(self):
         import os

@@ -192,6 +192,14 @@ def _codex_start(plugin: str, route: str, subagents: list[tuple[str, dict]]) -> 
     return lines
 
 
+def _claude_alias(model_id: str) -> str:
+    """Agent tool `model` alias for a Claude model id: the word after `claude-`."""
+    match = re.match(r"claude-(opus|sonnet|haiku|fable)-", model_id)
+    if not match:
+        raise ValueError(f"cannot derive a Claude model alias from {model_id!r}")
+    return match.group(1)
+
+
 def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
     """Render tier agents and the host table; keys are repo-relative paths."""
     plugin = plugin_path.name
@@ -234,10 +242,13 @@ def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
         "`CLAUDE_CODE_SUBAGENT_MODEL` forces every subagent's model. If either is set, the table",
         "doesn't hold; say so once.",
         "",
-        f"If the `{plugin}:<tier>` agents aren't available, start a general-purpose subagent (still",
-        "without `model` or `effort`) with the tier's instructions (under \"Tier instructions\" below)",
-        "at the top of the prompt, followed by the brief's full text. Name the tier in the brief:",
-        "same model, default effort.",
+        f"If the `{plugin}:<tier>` agents aren't available, start a general-purpose subagent with the",
+        "tier's instructions (under \"Tier instructions\" below) at the top of the prompt, followed by",
+        "the brief's full text, and pass `model` as the tier's alias below (this fallback is the only",
+        "case that passes `model`). Never pass `effort`; it stays at the default. Name the tier in",
+        "the brief.",
+        "",
+        *[f"- `{name}`: `model` = `{_claude_alias(tier['hosts']['claude']['model'])}`" for name, tier in subagents],
         "", f"### Codex (route: {tiers['routes']['codex']})", "",
         *_codex_start(plugin, tiers["routes"]["codex"], subagents),
         "", "## Tier instructions", "",

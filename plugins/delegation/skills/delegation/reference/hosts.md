@@ -28,10 +28,14 @@ sets every agent's effort, and `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` with
 `CLAUDE_CODE_SUBAGENT_MODEL` forces every subagent's model. If either is set, the table
 doesn't hold; say so once.
 
-If the `delegation:<tier>` agents aren't available, start a general-purpose subagent (still
-without `model` or `effort`) with the tier's instructions (under "Tier instructions" below)
-at the top of the prompt, followed by the brief's full text. Name the tier in the brief:
-same model, default effort.
+If the `delegation:<tier>` agents aren't available, start a general-purpose subagent with the
+tier's instructions (under "Tier instructions" below) at the top of the prompt, followed by
+the brief's full text, and pass `model` as the tier's alias below (this fallback is the only
+case that passes `model`). Never pass `effort`; it stays at the default. Name the tier in
+the brief.
+
+- `execute`: `model` = `sonnet`
+- `routine`: `model` = `haiku`
 
 ### Codex (route: spawn)
 

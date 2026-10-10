@@ -51,9 +51,11 @@ Delegation: follow the delegation skill; this repo's overlay is .agents/delegati
 ```
 
 The overlay at `.agents/delegation.md` holds that repository's validators, tier
-hints, findings sink and parallel limit. Its state lives in `.agents/delegation/`,
+hints, findings sink and parallel limit. Its state lives in `.delegation/`,
 which the tooling creates with its own `.gitignore`. Check the overlay and the
-evidence ledger with the bundled script (path as installed with the plugin):
+evidence ledger with the bundled script. These paths exist only in this
+checkout; in a consuming repository the skill resolves the script as
+`<skill-dir>/scripts/check.py`:
 
 ```sh
 python3 plugins/delegation/skills/delegation/scripts/check.py lint

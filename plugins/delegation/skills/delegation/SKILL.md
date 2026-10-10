@@ -65,13 +65,13 @@ words, no validators, findings go to the execution log) and carry on.
 
 1. **Brief.** Choose an id matching `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` (a letter
    or digit first; never reused in this worktree). Write the brief to
-   `.agents/delegation/briefs/<id>.md` (create the folder if needed; `check.py`
-   keeps `.agents/delegation/` git-ignored). Don't edit it after opening: `open`
+   `.delegation/briefs/<id>.md` (create the folder if needed; `check.py`
+   keeps `.delegation/` git-ignored). Don't edit it after opening: `open`
    records its hash.
 2. **Open.**
 
    ```sh
-   python3 <skill-dir>/scripts/check.py open --delegation <id> --tier execute|routine --brief .agents/delegation/briefs/<id>.md [--writes]
+   python3 <skill-dir>/scripts/check.py open --delegation <id> --tier execute|routine --brief .delegation/briefs/<id>.md [--writes]
    ```
 
    Pass `--writes` if the subagent may edit the worktree. Exit 2 means refused:
@@ -106,7 +106,8 @@ words, no validators, findings go to the execution log) and carry on.
    ```
 
 `check.py run <validator> --delegation <id> [--timeout <seconds>]` needs the
-delegation open. `check.py tree` prints the current tree hash.
+delegation open. Set a timeout for long validators, and put it in the brief's `run` line.
+`check.py tree` prints the current tree hash.
 
 ## 4. Starting a tier on this host
 
@@ -146,4 +147,4 @@ your session to another provider. Subagents can't survive that switch, so:
 - **The host lacks the generated tier definitions:** follow this host's
   fallback in `reference/hosts.md`.
 - **`check.py` exits 2:** read stderr. It refuses rather than guesses; don't work
-  around a refusal by editing `.agents/delegation/`.
+  around a refusal by editing `.delegation/`.

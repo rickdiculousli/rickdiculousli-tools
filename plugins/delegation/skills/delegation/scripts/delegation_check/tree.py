@@ -34,7 +34,7 @@ def repo_root(start: Path) -> Path:
 
 
 def state_dir(root: Path) -> Path:
-    directory = root / ".agents" / "delegation"
+    directory = root / ".delegation"
     directory.mkdir(parents=True, exist_ok=True)
     ignore = directory / ".gitignore"
     if not ignore.exists():
