@@ -263,3 +263,16 @@ your session to another provider. Subagents can't survive that switch, so:
   fallback in `reference/hosts.md`.
 - **`check.py` exits 2:** read stderr. It refuses rather than guesses; don't work
   around a refusal by editing `.delegation/`.
+
+## Composition with long-horizon
+
+Use `long-horizon:setup`, `long-horizon:resume` and `long-horizon:checkpoint` for
+goals spanning sessions; delegation alone suits one-session bulk work. Combine
+them when batches need workers or registered validator evidence. Reuse the first
+survey's notes and validator names; do not ask the same questions or copy validator
+commands into a second overlay. Long-horizon prepares scoped evidence, then
+records exact-tree registered results through this checker before roadmap edits.
+Later docs-only edits retain historical scoped evidence, not a new current-tree
+checked result. Delegation owns workers, pending handback, locks, ledger and tree
+hash; long-horizon owns selection, durable acceptance and authorized batch closure.
+The optional quota plugin sizes one bounded batch with at most one opt-in read.

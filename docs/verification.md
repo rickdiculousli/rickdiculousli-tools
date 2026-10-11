@@ -411,3 +411,33 @@ generated host manifests. Unrelated plugins were left alone. The local suite of
 restarted; new sessions are needed to load refreshed plugin content. No live
 provider reads, transcription, model-driven execution, or Windows checks were
 performed during this rollout.
+
+## Long-horizon 0.1.0 (2026-10-11)
+
+Checked on Linux x86_64 with Python 3.14.4 and Python 3.10.22. Published content
+adds long-horizon 0.1.0 and updates delegation composition guidance to 0.6.3;
+quota remains 0.1.1.
+
+- `python3 scripts/sync_marketplaces.py --check`: passed.
+- `python3 -m unittest discover -s tests -v`: 297 tests passed on Python 3.14.4.
+- `uv run --no-project --python 3.10 -m unittest discover -s tests -v`:
+  297 tests passed on Python 3.10.22.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  passed at 2026-10-11T21:27:20Z on Codex 0.162.1 and Claude Code 2.1.296.
+  All seven plugins installed into disposable profiles, matched their portable
+  sources, exposed expected inventory, uninstalled, and removed their marketplace.
+  Both hosts reported no cleanup errors. Normal profiles were untouched.
+- The installed-copy test ran CLI evidence preparation from a plugin path with
+  spaces without writing bytecode, locks or runtime state into that installation.
+- Disposable Git repositories, linked worktrees and local bare remotes exercised
+  durable evidence recovery, archive gates, rejected push/retry and sync recovery.
+  Real POSIX process contention and mocked POSIX/Windows locking paths passed.
+- [Behavioral pilots](long-horizon-pilots.md): 30 final host/scenario cells passed
+  manual inspection across 35 actual model runs, plus one corrected fixture
+  preflight failure. [Curated results](long-horizon-pilot-results.json) retain all
+  attempts, content/trace hashes and the corrected initially misleading passes.
+
+Native Windows contention/atomic replacement, GUI behavior, live quota savings
+and real hosted remote closure remain untested. Local fixture remote observations
+are not proof of current server state. game-decomp adoption was not applied; it remains
+a separately authorized consuming-repository follow-on.

@@ -13,6 +13,7 @@ the current user. Author and marketplace names are shared package identity.
 | --- | --- |
 | `hello-world`, `repository-info` | Claude Code or Codex with plugin support |
 | `visual-audit` | Supported host and Python 3.10+ |
+| `long-horizon` | Supported host, Git, Python 3.10+; optional declared delegation/quota scripts |
 | `delegation` | Supported host with subagents, Git, Python 3.10+, and repository-specific setup |
 | `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
@@ -33,6 +34,7 @@ See [verification evidence and scope](docs/verification.md).
 | --- | --- |
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
+| `long-horizon` | Shared setup/resume/checkpoint skills and deterministic scoped acceptance across sessions |
 | `repository-info` | Informational stub describing this layout |
 | `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
@@ -334,3 +336,70 @@ and any cleanup failures. Temporary profiles are deleted afterward.
 
 Contributor instructions live in [AGENTS.md](AGENTS.md); Claude Code imports
 that same file through [CLAUDE.md](CLAUDE.md).
+
+## Long-horizon
+
+`long-horizon` 0.1.0 provides `long-horizon:setup`, `long-horizon:resume` and
+`long-horizon:checkpoint` for bounded progress across sessions. Setup can create
+or adopt goals, update policy, add a goal or wind down; it shows concrete drafts
+and a selected-task dry run before applying them. Quick setup asks at most five
+questions and accepts “you decide” defaults. See the
+[cheat sheet](plugins/long-horizon/skills/setup/reference/cheatsheet.md),
+[overlay format](plugins/long-horizon/skills/resume/reference/overlay.md) and
+[observed pilot scope](docs/long-horizon-pilots.md).
+
+Install through the already-registered marketplace:
+
+```sh
+claude plugin install long-horizon@rickdiculousli-tools
+codex plugin add long-horizon@rickdiculousli-tools
+```
+
+Use `/long-horizon:setup`, `/long-horizon:resume` or `/long-horizon:checkpoint` in
+Claude Code; ask Codex for those plugin-qualified skills. “Where are we?” is
+read-only status; “continue” selects one eligible task or blocker resolution.
+Readiness describes prepared inputs; it never supplies validator acceptance.
+A newly done task needs evidence, a milestone needs its whole acceptance checks,
+and goal completion requires the configured sign-off and a durable archive.
+
+The same Python 3.10+ standard-library CLI ships on both hosts. From this checkout:
+
+```sh
+python3 plugins/long-horizon/skills/resume/scripts/lh.py status --brief
+python3 plugins/long-horizon/skills/resume/scripts/lh.py lint
+python3 plugins/long-horizon/skills/resume/scripts/lh.py state gc --json
+```
+
+Consumers declare `LONG_HORIZON_SCRIPT` or an explicit script path pointing at
+an installed skill's resume/scripts/lh.py or any checkout's
+plugins/long-horizon/skills/resume/scripts/lh.py. Quote paths with spaces; never
+glob a versioned plugin cache. Setup/checkpoint resolve the sibling resume script.
+
+| Project | Composition |
+| --- | --- |
+| Goal spans sessions, solo work | long-horizon |
+| Goal spans sessions, batches need workers/registered validators | long-horizon + delegation |
+| Bulk task fits one session | delegation alone |
+| Optional capacity-aware smaller batch | one opt-in quota read, never blocking |
+
+One survey feeds both setups. Check names refer to registered validators rather
+than duplicating their commands. Solo checkpoint prepares a scope snapshot, runs
+an authorized check, records its actual outcome and reviews the proposed durable
+JSON/trailer. Combined checkpoint records an exact-tree delegation result before
+roadmap edits. Later docs-only changes may reuse scoped historical acceptance;
+they do not invent a current-tree ledger result. See
+[standalone and combined walkthroughs](plugins/long-horizon/skills/checkpoint/SKILL.md).
+
+No validators or Git integration operations are launched by the CLI. Skills
+perform only actually authorized operations. Commit, merge, push and host sync
+have separate observed/verified closure steps; rejected push/sync preserves earlier
+success and offers the exact remaining step. Remote containment is explicitly
+qualified as a local remote-ref observation, not server-present-state proof.
+
+Runtime state follows [XDG retention](plugins/long-horizon/skills/resume/reference/state.md):
+one fixed root lock, repository/worktree SHA-256 keys, weekly opportunistic cleanup,
+a seven-day confirmed-deleted-worktree recovery window, and 30-day unreferenced
+snapshot/draft expiry. Existing worktrees retain unfinished work. Read-only
+inspection creates no state. Approved wind-down clears only the displayed current
+payload; durable Git evidence and other plugins survive. Manual `state gc` works
+outside Git. No scheduler, hooks, background workers or consumer build are needed.

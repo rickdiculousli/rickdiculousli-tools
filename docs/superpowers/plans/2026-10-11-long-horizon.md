@@ -1,9 +1,11 @@
 # Long-horizon implementation plan
 
-**Status:** ready for implementation. This is a plan, not an installed plugin or a
-claim of completed validation. All design decisions needed for v1 are resolved
-below; project-specific interview answers remain inputs to consuming-repository
-setup, not unanswered implementation questions.
+**Status:** implemented and validated on 2026-10-11. Deterministic suites,
+disposable native lifecycles and 30 inspected host/scenario pilot cells passed;
+see [verification](../../verification.md) and [behavioral evidence](../../long-horizon-pilots.md).
+Native Windows process checks are explicitly untested. The implementation
+session reports the actual final commit/push closure; this tracked plan does not
+require a follow-up commit solely to claim the preceding push.
 
 **Goal:** ship `long-horizon` 0.1.0 with shared setup, resume and checkpoint skills,
 a deterministic Python CLI, durable acceptance, repeatable setup and honest batch
@@ -532,15 +534,15 @@ policy digest. Existing false structural claims are still lint errors.
 `plugins/long-horizon/skills/checkpoint/reference/evidence.md`,
 `tests/long_horizon_support.py` and `tests/fixtures/long_horizon/`.
 
-- [ ] Fold the ten resolved contracts above into the spec. Keep the original
+- [x] Fold the ten resolved contracts above into the spec. Keep the original
   purpose/boundaries and label changes as planning clarifications, not execution.
-- [ ] Document full overlay keys/types/defaults and an actual quick/full example,
+- [x] Document full overlay keys/types/defaults and an actual quick/full example,
   grammar, JSON outputs, archive metadata, readiness and trailer formats. Provide
   examples with spaces, explicit/implicit goals and terminal/awaiting-signoff states.
-- [ ] Build fixture helpers for disposable Git repos, local bare remotes, linked
+- [x] Build fixture helpers for disposable Git repos, local bare remotes, linked
   worktrees, XDG directories, draft directories and a controllable stub checker.
   Set local Git identity; never use normal user profiles or network remotes.
-- [ ] Encode golden expected selection/freshness/gate/closure outputs from the
+- [x] Encode golden expected selection/freshness/gate/closure outputs from the
   spec. Check fixture expectations against the resolved contracts before code.
 
 **Done when:** every ambiguous implementation choice in the spec points to a
@@ -552,22 +554,22 @@ concrete format or policy here; fixtures cover both normal and recovery flows.
 cli,git,state,overlay}.py`; `tests/test_long_horizon_overlay.py`,
 `tests/test_long_horizon_state.py`.
 
-- [ ] Implement frozen data models, typed findings and CLI error handling.
-- [ ] Discover main/linked worktrees, branch, dirty paths, common dir and default
+- [x] Implement frozen data models, typed findings and CLI error handling.
+- [x] Discover main/linked worktrees, branch, dirty paths, common dir and default
   branch. Prefer configured target, local remote HEAD, then an unambiguous
   main/master branch; ambiguity asks for configuration, with no network request.
   Handle detached HEAD, unborn repos, paths with spaces and subdirectories.
-- [ ] Implement XDG resolution, portable POSIX/Windows locks, atomic records
+- [x] Implement XDG resolution, portable POSIX/Windows locks, atomic records
   and read-only discovery. Close temporary replacement-file handles before
   `os.replace` so atomic writes also work on Windows.
-- [ ] Implement identity metadata, a fixed root lock, throttled opportunistic
+- [x] Implement identity metadata, a fixed root lock, throttled opportunistic
   collection and `state gc` preview/apply. Persist/recheck missing-since and
   retention independently of file mtimes; distinguish deleted, still registered,
   inaccessible and recreated worktrees. No per-worktree lock files.
-- [ ] Parse overlays/defaults and validate path confinement and literal/env
+- [x] Parse overlays/defaults and validate path confinement and literal/env
   script resolution. Report referenced files missing; optional nonexistent
   readiness/archive outputs have warnings/recovery rather than setup dead ends.
-- [ ] Add draft-root/path overrides and a valid no-overlay status response.
+- [x] Add draft-root/path overrides and a valid no-overlay status response.
 
 **Validate:** `python3 -m unittest discover -s tests -p 'test_long_horizon_overlay.py' -v`
 and the corresponding state test file. Verify real index/branch/unrelated bytes
@@ -593,14 +595,14 @@ cannot authorize dependent actions; inspection creates no runtime state.
 **Files:** modules `goals.py`, `readiness.py`; tests
 `test_long_horizon_goals.py`, `test_long_horizon_status.py`.
 
-- [ ] Parse hierarchy/markers/IDs/criteria/context/parked/evidence/sign-off/archive
+- [x] Parse hierarchy/markers/IDs/criteria/context/parked/evidence/sign-off/archive
   metadata with line locations and tolerant prose preservation.
-- [ ] Enforce consistency, including completed archive summaries and terminal
+- [x] Enforce consistency, including completed archive summaries and terminal
   earlier goals. Distinguish unparseable-manual from parsed-inconsistent.
-- [ ] Parse readiness and select the first eligible unblocked task in the first
+- [x] Parse readiness and select the first eligible unblocked task in the first
   incomplete milestone of the first active goal, without skipping milestones.
-- [ ] Implement awaiting-signoff, dormant, no-active-goal and all-blocked states.
-- [ ] Emit full status and brief goal/milestone/task progress and **Needs you**:
+- [x] Implement awaiting-signoff, dormant, no-active-goal and all-blocked states.
+- [x] Emit full status and brief goal/milestone/task progress and **Needs you**:
   pending decisions, sign-off, human-only steps, missing inputs, unfinished closure.
   Output only the current section/context links; do not print the full history.
 
@@ -616,20 +618,20 @@ status never runs startup/tests/quota or mutates goals.
 **Files:** `handoff.py`, `lint.py`; tests `test_long_horizon_handoff.py`,
 `test_long_horizon_lint.py`.
 
-- [ ] Parse Blockers by task ID/reason/recovery/date, pending decisions, parked
+- [x] Parse Blockers by task ID/reason/recovery/date, pending decisions, parked
   ideas, overrides and durable context links. Unknown task references warn.
-- [ ] Compute staleness from the last handoff commit, relevant later commits,
+- [x] Compute staleness from the last handoff commit, relevant later commits,
   goals changes and current dirty handoff. An uncommitted/missing handoff is
   explicitly new/missing, not deceptively current. Non-code-only unrelated
   commits do not create a stale-code finding.
-- [ ] Check pointer reachability from AGENTS and CLAUDE, including `@AGENTS.md`
+- [x] Check pointer reachability from AGENTS and CLAUDE, including `@AGENTS.md`
   and bounded recursive relative imports; detect missing imports/cycles.
   Require pointers only for an active installed setup; dormant and explicit
   draft checks do not fail because their activation has not been written.
-- [ ] Enforce no credential-shaped values or live agent IDs in the handoff with
+- [x] Enforce no credential-shaped values or live agent IDs in the handoff with
   narrow documented patterns; allow durable delegation result IDs. Diagnostics
   redact matches and do not repeat sensitive strings.
-- [ ] Implement warning budgets/template gaps and diff-only mechanical repair.
+- [x] Implement warning budgets/template gaps and diff-only mechanical repair.
   Approved apply checks original digests and is idempotent.
 
 **Validate:** focused suites for merge histories, dirty handoff, pointer cycles,
@@ -643,14 +645,14 @@ acceptance errors, and repairs preserve unrelated content.
 **Files:** `scope.py`, `evidence.py`; tests `test_long_horizon_scope.py`,
 `test_long_horizon_evidence.py`.
 
-- [ ] Implement Git pathspec matching and content/mode/deletion snapshots without
+- [x] Implement Git pathspec matching and content/mode/deletion snapshots without
   temporary real-index writes. Fingerprint acceptance policy separately.
-- [ ] Implement authorized bounded input probes and unverifiable freshness.
-- [ ] Implement prepare/record/find, pending immutable records and canonical
+- [x] Implement authorized bounded input probes and unverifiable freshness.
+- [x] Implement prepare/record/find, pending immutable records and canonical
   trailers/detail proposals, strict parsing and ID deduplication.
-- [ ] Preserve observed FAIL/SKIP/unstable/domain-limited results without treating
+- [x] Preserve observed FAIL/SKIP/unstable/domain-limited results without treating
   them as PASS. Validate persistent log/detail recovery routes.
-- [ ] Search reachable history rather than unrelated branches for trailers;
+- [x] Search reachable history rather than unrelated branches for trailers;
   newest FAIL at an identical check/scope/domain/policy supersedes an older PASS.
   Use ancestry order, not author dates; incomparable conflicting branch results
   are a finding requiring a new reviewed run. Re-recording an old attempt's
@@ -672,13 +674,13 @@ changed proof cannot be fresh. Re-recording identical evidence is a no-op.
 
 **Files:** `delegation.py`; tests `test_long_horizon_delegation.py`.
 
-- [ ] Implement configured checker calls, timeouts, text tree/lint and JSON
+- [x] Implement configured checker calls, timeouts, text tree/lint and JSON
   pending/query decoding. Commands contain argv paths, not shell interpolation.
-- [ ] Validate exact-tree registered results at record time, without running
+- [x] Validate exact-tree registered results at record time, without running
   validators, creating a ledger or importing checker internals.
-- [ ] Reuse committed scoped evidence as historical provenance after non-code
+- [x] Reuse committed scoped evidence as historical provenance after non-code
   edits, keeping current exact-tree checked claims distinct.
-- [ ] Handle pending workers, corrupt output, missing checker/environment paths
+- [x] Handle pending workers, corrupt output, missing checker/environment paths
   and absent delegation explicitly. Solo use needs no checker at all.
 
 **Validate:** controllable stub tests plus one disposable integration test using
@@ -694,13 +696,13 @@ ledger, tree hash or agent lifecycle implementation.
 **Files:** `gate.py`; tests `test_long_horizon_gate.py`,
 `test_long_horizon_lifecycle.py`.
 
-- [ ] Compare proposed goals with HEAD or explicit base and check newly completed
+- [x] Compare proposed goals with HEAD or explicit base and check newly completed
   tasks, milestones, goals, ownership changes and each required check/domain.
-- [ ] Resolve pending and committed references, policy-scoped explicit accepted
+- [x] Resolve pending and committed references, policy-scoped explicit accepted
   exceptions and allowed skips. Missing free-text proof fails with repair choices.
-- [ ] Validate milestone whole-call requirements, completion records, summaries,
+- [x] Validate milestone whole-call requirements, completion records, summaries,
   goal evidence/sign-off and archival compression without losing obligations.
-- [ ] Model milestone progression, coarse next-milestone refinement, parked
+- [x] Model milestone progression, coarse next-milestone refinement, parked
   triage, waiting sign-off, rejection/reopening, shelve/drop/unshelve and dormant
   reactivation. File edits remain skill operations, not automatic gate mutations.
 
@@ -717,12 +719,12 @@ with concrete run-check/task-only/user-exception remedies.
 
 **Files:** `closure.py`; tests `test_long_horizon_closure.py`.
 
-- [ ] Implement record/verify and make status show unfinished steps.
-- [ ] Check batch commit ownership/content, target ancestry and remote-ref
+- [x] Implement record/verify and make status show unfinished steps.
+- [x] Check batch commit ownership/content, target ancestry and remote-ref
   containment independently; preserve push/sync observations separately.
-- [ ] Preserve ordered successful steps on failure, reject conflicting batch
+- [x] Preserve ordered successful steps on failure, reject conflicting batch
   identities and offer the next exact authorized operation.
-- [ ] Support fast-forward/merge, explicit squash mappings, stale/missing refs,
+- [x] Support fast-forward/merge, explicit squash mappings, stale/missing refs,
   detached/unborn branches, changed policy and unavailable/dirty target worktree.
 
 **Validate:** disposable bare remotes and two worktrees; commit then merge then
@@ -739,27 +741,27 @@ and a retry does not repeat already completed integration.
 `goals-template.md`, `handoff-template.md`, `cheatsheet.md`;
 `resume/SKILL.md`, `checkpoint/SKILL.md`; existing format references.
 
-- [ ] Write quick/full setup with plain-language concepts, at most about five
+- [x] Write quick/full setup with plain-language concepts, at most about five
   quick questions, “you decide” defaults, one read-only survey and all modes:
   new/adopt/update/add-goal/wind-down. Reuse established answers and policy.
-- [ ] Show owned-file drafts, dry-run status, selected task, sample session,
+- [x] Show owned-file drafts, dry-run status, selected task, sample session,
   closure recommendation/alternatives, pointer locations, missing inputs and
   optional delegation suggestion together. Approval is the final step before
   applying those concrete drafts. An already authorized identical rerun is a no-op.
-- [ ] Preserve existing roadmap text/order/evidence, unrelated dirty work,
+- [x] Preserve existing roadmap text/order/evidence, unrelated dirty work,
   branch overlays and host policy. No tools installed or startup run implicitly.
-- [ ] Write resume flow: status, staleness reconciliation, authorized startup,
+- [x] Write resume flow: status, staleness reconciliation, authorized startup,
   readiness/status, blockers/selection, optional single quota read, three-line
   brief and work. “Where are we?” is status only; overrides/off-goal/park/pause
   do what the spec says without additional ceremony.
-- [ ] Include throttled state collection in setup/resume/checkpoint, explain
+- [x] Include throttled state collection in setup/resume/checkpoint, explain
   retention and explicit recovery during the seven-day deleted-worktree window,
   and document `state gc` for cleanup after abandoned/deleted daily worktrees.
-- [ ] Write checkpoint flow: delegation pending, prepare/check/record/reuse,
+- [x] Write checkpoint flow: delegation pending, prepare/check/record/reuse,
   proportional acceptance, owned goal/handoff edits, gate/lint, lifecycle record,
   authorized closure/recovery, concise result and fresh-session recommendation.
   Include standalone and combined concrete command walkthroughs.
-- [ ] Cover one-line small-batch handoffs, durable findings during work,
+- [x] Cover one-line small-batch handoffs, durable findings during work,
   shared-section regeneration after merge conflict, milestone-boundary parked
   triage/refinement, sign-off rejection and retention during wind-down.
 
@@ -778,13 +780,13 @@ and every flow has a concrete next action and accurate acceptance boundary.
 marketplaces; `README.md`; delegation skill/setup composition references and
 `plugins/delegation/plugin.json`; `tests/test_sync_marketplaces.py` as needed.
 
-- [ ] Add long-horizon identity 0.1.0 and generate metadata. Keep all source and
+- [x] Add long-horizon identity 0.1.0 and generate metadata. Keep all source and
   generated changes together; no manual generated edits.
-- [ ] Document install/use commands, script override, quick setup, cheat sheet,
+- [x] Document install/use commands, script override, quick setup, cheat sheet,
   composition table, standalone/combined session and state/closure semantics.
-- [ ] Add the same composition guidance to delegation, reuse survey notes and
+- [x] Add the same composition guidance to delegation, reuse survey notes and
   validator names without commands, and bump its release version appropriately.
-- [ ] Assert all three skills/resources/scripts are installed identically by
+- [x] Assert all three skills/resources/scripts are installed identically by
   both hosts. Extend lifecycle inventory expectations only where needed; current
   catalog-driven discovery should pick up the seventh plugin automatically.
 
@@ -801,23 +803,23 @@ portable content, with actual versions/results recorded rather than assumed.
 **Files:** `tests/fixtures/long_horizon/pilots/`,
 `docs/long-horizon-pilots.md`, `docs/verification.md`.
 
-- [ ] Create copyright-free tiny projects: vague aim in linked worktree, existing
+- [x] Create copyright-free tiny projects: vague aim in linked worktree, existing
   roadmap in main with unrelated dirty files, existing branch overlay, blocked
   capabilities, scoped validator with external input, and local bare remote.
   Create stable prompts, starting trees, expected actions and output inspection
   criteria; keep generated transcripts/logs in XDG unless deliberately curated
   for durable documentation. Use disposable host profiles and explicit pilot
   credentials/settings, never normal plugin configuration.
-- [ ] Run model-driven setup/resume/checkpoint on **both supported hosts** and
+- [x] Run model-driven setup/resume/checkpoint on **both supported hosts** and
   inspect actual tool calls and final files. Installation/unit tests cannot
   establish interview quality, command use or honest claims by a model.
-- [ ] Cover every scenario in the matrix below; combine scenarios in one pilot
+- [x] Cover every scenario in the matrix below; combine scenarios in one pilot
   when the starting state and assertions remain explicit. Quota uses a stub for
   deterministic call counting; a live read is optional, separately labeled.
-- [ ] Record host/Python/plugin versions, commit/tree, prompts, scenario results,
+- [x] Record host/Python/plugin versions, commit/tree, prompts, scenario results,
   actions, evidence locations and failures. Fix failures and rerun only affected
   scenarios, then required packaging checks after final content changes.
-- [ ] If a host/model is unavailable, label those scenarios untested and leave
+- [x] If a host/model is unavailable, label those scenarios untested and leave
   the v1 behavioral release gate open. Do not substitute a source citation,
   CLI installation result or an assertion that it should work.
 
@@ -827,14 +829,14 @@ results or a plainly documented release blocker. No token savings claim.
 
 ### Task 12: Final review and release handoff
 
-- [ ] Re-read the spec/plan coverage matrix, CLI examples, reference links and
+- [x] Re-read the spec/plan coverage matrix, CLI examples, reference links and
   README against the final implementation; remove inconsistent old state paths.
-- [ ] Run all required checks, record actual verification, and inspect the final
+- [x] Run all required checks, record actual verification, and inspect the final
   diff for hardcoded paths, generated drift, credentials and unowned edits.
-- [ ] Commit owned source/generated/docs changes together and integrate only
+- Commit owned source/generated/docs changes together and integrate only
   under the implementation session's authorization. Report exact commit/closure
   and any release blockers; do not claim an unperformed push or host pilot.
-- [ ] Leave game-decomp adoption as a separately authorized consuming-repo change.
+- [x] Leave game-decomp adoption as a separately authorized consuming-repo change.
   Its concrete checklist is adopt existing goals/handoff, preserve ownership and
   host policy, add readiness output to `tools/resume.py`, replace cache globbing
   with a declared checker path, move standing policy out of handoff, dry-run
@@ -917,7 +919,20 @@ not results. Record actual pass/fail/untested in the pilot report.
 The planning deliverable is complete when every spec section and acceptance
 scenario maps to an implementation task and proof, the contracts above resolve
 all open design choices, and the plan is committed and pushed as requested.
-Implementation completion is distinct: the unchecked tasks and release evidence
-above must actually be performed. Remaining decisions about a consuming
+Implementation completion is distinct: the checked tasks above refer to observed
+work, with actual proof and scope limits in the linked verification/pilot reports. Remaining decisions about a consuming
 project's goal, acceptance authority, external bytes and remote authorization
 are intentionally collected by setup; the plugin cannot choose them globally.
+
+## Implemented CLI clarifications
+
+The entry point disables bytecode writes before importing the package, so a
+read-only installed plugin gains no runtime files. Status also exposes the
+resolved cache_directory for correctly namespaced setup drafts. New explicit
+commands finish the reviewed lifecycle: evidence cleanup --commit REV --id ID
+(repeated IDs; exact durable carrying proof required), state clear --root ROOT
+--state-directory PATH (only the displayed identity-matching current payload),
+and closure record --new-batch (only after previous Git facts verify complete;
+preserve prior closure snapshot). Canonical records preserve normalized criterion
+summaries so archived proof cannot be swapped to different prose. These extend
+the public command contract without running validators or Git integration.

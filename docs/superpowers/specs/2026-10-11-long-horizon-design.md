@@ -9,7 +9,7 @@ This document does not add an installed plugin or change any consuming repositor
 The [implementation plan](../plans/2026-10-11-long-horizon.md) resolves the
 implementation contracts. The
 [XDG state and locks addendum](2026-10-11-xdg-state-and-locks-addendum.md)
-supersedes the worktree-local state paths below and specifies separately
+defines the runtime XDG state paths and specifies separately
 reviewable delegation migration work and the shared weekly cleanup convention.
 
 ## Purpose and success
@@ -201,7 +201,7 @@ default text output is compact enough to paste into a session.
 | `status` | Checkout identity (main or linked worktree, branch, default branch, dirty paths); current goal, current milestone and its `Done when`; next eligible task for this host and tasks skipped for capability; open blockers; handoff staleness; unfinished closure steps; readiness levels from the startup report; delegation pending state. Prints only the current milestone's section and context links, not the whole roadmap. With no active goal or a dormant overlay it prints one line saying so. `--brief` is the user-facing view: goal and milestone progress (`Goal: port · milestone 3/9 · task 3.2`), the next task, and a **Needs you** list of sign-offs, pending decisions, human-only steps and missing inputs. |
 | `evidence record` / `evidence find <check>` | Writes or reads commit trailers (below) and reports whether each item is fresh for the current checkout. |
 | `gate [--base REV]` | Compares goals with the base revision. Every newly checked milestone needs, for each check its `Done when` names, a fresh passing evidence reference or an accepted exception; every newly checked task needs a cited evidence ID or commit; a newly completed goal additionally needs all its milestones done, its own `Done when` evidence and a `Signed-off:` line when the overlay reserves goal completion for the user. Edits to order, scope or criteria are flagged for the ownership policy. On failure it lists the options from Rules and friction. |
-| `closure verify` | Verifies the Git-checkable closure claims in `.long-horizon/closure.json`: committed, merged into the target branch, and pushed as of the last fetch (no fetch is performed). Host sync remains a recorded claim. |
+| `closure verify` | Verifies the Git-checkable closure claims in `the resolved XDG worktree payload’s closure.json`: committed, merged into the target branch, and pushed as of the last fetch (no fetch is performed). Host sync remains a recorded claim. |
 
 Goal consistency, enforced by `lint` and `status`: goals and milestones are
 each ordered; at most one goal and one milestone in it are marked current, and
@@ -433,7 +433,7 @@ Show in chat:
    session and say *continue*. I'll do 3.1, run the tests, merge, push, and tell
    you to start fresh."
 5. The pointer line and where it goes (`AGENTS.md`, plus `CLAUDE.md` if it does
-   not import `AGENTS.md`), an ignore rule for `.long-horizon/`, and ignore
+   not import `AGENTS.md`), XDG state/retention instructions, and ignore
    suggestions for churning files.
 6. The delegation suggestion, when the survey produced one, with what it would
    add for this project.
@@ -537,7 +537,7 @@ rules instead of creating another findings stream.
    checkbox unchanged. When a milestone or goal completes, follow Goal lifecycle.
 5. Perform the overlay's closure sequence (by default validation, commit, merge
    to the default branch, push), recording each step in
-   `.long-horizon/closure.json`, then run `lh.py closure verify`. Committed,
+   `the resolved XDG worktree payload’s closure.json`, then run `lh.py closure verify`. Committed,
    merged, pushed and host-synced are separate claims. On failure, preserve
    completed steps and state the exact remaining operation; do not force a merge,
    rewrite history or restart successful steps unnecessarily. With no recorded
@@ -598,7 +598,7 @@ setup's *wind down* mode, with a draft shown and approved like any setup:
   setup's *add a goal* mode instead of a fresh survey.
 - Replace the handoff with a short closing note linking the completion records,
   or remove it if the user prefers.
-- Delete ignored long-horizon state (`.long-horizon/`) in this worktree.
+- Clear only the approved resolved XDG long-horizon worktree payload under the fixed root lock.
 - Keep everything durable: goals file and archive, findings, evidence trailers,
   startup helpers and readiness reports.
 - Leave delegation untouched; mention that its own setup can remove or keep it.
@@ -731,3 +731,506 @@ milestone ownership and host policies, add the readiness report to
 and move standing policy out of the handoff. Those changes need a separately
 authorized adoption change. This spec alone changes neither game-decomp nor the
 delegation plugin.
+
+## Consolidated planning clarifications (2026-10-11)
+
+The following resolved contracts supersede earlier conflicting examples. They
+are design requirements, not claims of executed checks.
+
+
+These decisions complete the specification. Fold these clarifications into its
+relevant sections during Task 1 so implementation has one consistent contract.
+
+### 1. Layout, versions and compatibility
+
+Use the spec's plugin layout, plus a small `long_horizon` package next to
+`resume/scripts/lh.py`. The entry point only imports `long_horizon.cli.main`.
+Modules are `model`, `overlay`, `goals`, `git`, `state`, `readiness`, `handoff`,
+`scope`, `delegation`, `evidence`, `gate`, `closure`, `lint` and `cli`; combine
+small modules if doing so keeps responsibilities clear. Everything ships inside
+`plugins/long-horizon/`. Setup/checkpoint locate the entry point relative to
+their installed skill directory (`../resume/scripts/lh.py`), quoting paths.
+Consumers may declare `LONG_HORIZON_SCRIPT` or a script path; never search a
+versioned cache or assume this checkout. Names are plugin-qualified in guidance
+so `long-horizon:setup` cannot be confused with `delegation:setup`.
+
+Append `plugins/long-horizon` to `catalog.json`, preserving existing order.
+Initial version is `0.1.0`. Generate both manifests and marketplaces through the
+existing generator; it needs no new host adapter. Change delegation's composition
+guidance only, with its current version bumped from `0.6.2` to `0.6.3` if still
+current at implementation time. Re-read that version before editing. Quota
+content remains unchanged. Both hosts receive the same files.
+
+### 2. Runtime state follows the repository's XDG rule
+
+The spec's worktree-local `.long-horizon/closure.json` conflicts with contributor
+guidance requiring plugin state under XDG. Use:
+
+```text
+${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/long-horizon/
+  state.lock
+  gc.json
+  <sha256(canonical-git-common-dir)>/worktrees/<sha256(canonical-worktree-root)>/
+    identity.json
+    closure.json
+    evidence/<content-id>.json
+    snapshots/<content-id>.json
+    trailers.txt
+```
+
+Those files belong to one worktree and contain no live agent mappings. No cache
+is needed initially. `status --json` exposes the resolved state directory and
+`closure verify` accepts `--state PATH` for importing a specifically chosen
+closure record. Do not discover/import another worktree's state automatically.
+Replace `.long-horizon/` instructions in the spec/templates with this contract;
+do not add a repository ignore rule for a directory we do not create. Legacy
+`.long-horizon/` state may be reported with a migration instruction, but never
+silently moved or deleted. Wind-down clears only this plugin's resolved worktree
+state after showing its path; durable files and delegation state survive.
+
+**Daily worktree churn is normal; automatic cleanup runs weekly.** On the first
+state mutation or setup/resume/checkpoint at least seven days (168 hours) after
+the previous sweep, run best-effort local garbage collection. Resume
+invokes `state gc --apply --if-due` explicitly; `status`, `lint`, `find`, `gate`
+and `closure verify` remain read-only. A manual `state gc` previews removals;
+`state gc --apply` runs them immediately. No daemon, hook or network call.
+
+Each worktree's `identity.json` records version, canonical worktree/common-dir/
+git-dir paths, directory file identities (device/inode and stable birth time
+where available), containing-volume identity, creation time, last mutation and
+first confirmed missing time. A volume mismatch is unknown, not deletion.
+Compare those identities with local Git registration, without pruning Git's
+worktree records. Treat a worktree as deleted only when its directory and its
+Git registration are both absent. If the common directory is itself gone,
+require its recorded worktree and git directory also to be absent. An unavailable
+mount, permission error, still-registered missing worktree or identity mismatch
+is unknown and retained with a diagnostic. A newly recreated worktree at the
+same path must match the recorded directory file identities to reuse state;
+new directories must not inherit old state. If those identities cannot be
+established reliably, retain the old payload as unknown rather than reuse it;
+quarantine the old payload under a unique retired-generation name for the same
+retention window.
+
+Delete confirmed-deleted worktree state seven days after its first confirmed
+missing observation, including scratch snapshots, pending records and closure
+bookkeeping. The grace period permits explicit recovery/import, and status/gc
+lists any pending evidence or unfinished closure scheduled for removal. Deleting
+the worktree abandons its disposable bookkeeping; committed evidence, goals,
+archives and user files are never touched. Do not infer closure success from
+cleanup. Still-existing/registered worktrees keep pending evidence, its referenced
+snapshots and unfinished closure regardless of age. Within them, delete
+unreferenced snapshots and setup drafts after 30 days without use; remove
+committed pending copies and their unreferenced snapshots immediately once
+durable evidence is verified. Record last use of an attempt on state mutations.
+Expired entries are removed on the next weekly sweep, so expiration does not
+promise immediate deletion. The seven-day deleted-worktree recovery window
+starts at its first confirmed missing observation, independently of sweep cadence.
+Successful wind-down clears the current worktree payload immediately. Remove
+empty repository directories afterward. When the plugin is never used again,
+automatic cleanup cannot run; the manual command can sweep all its XDG state.
+
+**One permanent lock, no lock per abandoned worktree.** All short state
+transactions and garbage collection acquire the same root `state.lock`. Never
+hold it during validators, input probes, startup or integration operations.
+Never unlink or replace this lock file: doing so could let two processes lock
+different inodes. Holding it while collecting prevents a writer from recreating
+or changing a payload being removed. The root's tiny lock and GC timestamp are
+the only permanent housekeeping files; per-worktree locks cannot accumulate.
+Collection rechecks eligibility under the lock, skips symlinks/unknown files,
+confines removal to recognized plugin-owned payloads and tolerates partial
+deletion. A second run is a no-op. Cleanup errors are warnings and must not
+block authorized work or silently remove protected state.
+
+Readers never create state. Writers use an exclusive lock, atomic replacement
+in the same directory and restrictive file modes where supported. Use the same
+stdlib locking pattern as delegation's `file_lock.py`: `fcntl.flock` on POSIX
+and `msvcrt.locking` on Windows, locking one fixed byte at offset zero with a
+nonblocking attempt and a bounded retry loop. Always unlock and close the same
+handle, including on exceptions; distinguish contention from other I/O errors.
+Bundle the small lock helper inside long-horizon rather than importing an
+installed delegation package. POSIX and Windows support state writes; report
+an unsupported-lock diagnostic only when neither backend is available. Failed
+writes leave the old record valid.
+No consumer state is written beside installed scripts.
+
+### 3. Overlay grammar and defaults
+
+Keep a human-readable Markdown overlay; no YAML parser. An optional
+`## Schema` contains `1`. Under the spec's named headings, each nonblank line is
+`key: <JSON value>` with an optional leading `- `. Paths and commands are JSON
+strings, maps/arrays are JSON values, booleans are JSON booleans. Normalize
+heading case, CRLF and surrounding whitespace, preserve value case, reject
+duplicate headings/keys and wrong value types. A title and blank lines are
+allowed; comments are full lines starting `<!--` and ending `-->`. Unknown keys
+or headings are errors with a suggested spelling. Missing optional sections use
+defaults, so the quick setup can be this small:
+
+```markdown
+# Long-horizon
+## Goals and ownership
+path: "docs/goals.md"
+## Integration
+steps: ["validate", "commit", "merge", "push"]
+target: "main"
+remote: "origin"
+authorization: "User approved standing batch closure on 2026-10-11."
+```
+
+That integration example is written only after approval. With no recorded
+integration section, commit/merge/push/sync remain unauthorized. Omitted state
+means `active`; omitted sign-off means `user`. Other defaults: handoff
+`docs/handoff.md`, archive `docs/goals-archive`, handoff budget 80 lines, one task
+or one blocker resolution per batch, quota off, readiness absent, no capability
+requirements for `any`, agent task refinement/completion and milestone completion,
+user milestone order/scope/criteria and goal sign-off. Non-code defaults are the
+actual configured goals, handoff, findings and archive paths, not every Markdown
+file. Evidence policy, overlays and activation instructions are not implicitly
+excluded from acceptance-policy freshness.
+
+Reference documentation defines every key and type. Ownership keys separate
+`milestone-policy`, `task-refinement`, `task-completion`, `milestone-completion`
+and `goal-signoff`. Integration defines `steps`, `target`, `remote`, optional
+`sync`, `stop-conditions` and an authorization description. Evidence defines
+`checks`, each with `scope`, `inputs`, `domain`, `allowed-skips` and optional
+`validator`; input definitions contain an authorized cheap read-only command,
+a timeout and recovery route. Delegation and quota script paths may be literal
+or named environment variables; an explicitly configured missing value is a
+finding, never a reason to guess a cache path. Startup's command and permitted
+effects are descriptive authorization for the skill, not a command `status`
+executes. Allow external context/recovery links, but managed goals/handoff/archive
+paths must stay inside the current checkout, including through symlinks.
+
+### 4. Goals grammar, manual fallback and ownership
+
+Parse only headings and task lines outside fenced code. Support the spec's
+explicit `# Goal:` headings and a single implicit goal for legacy roadmaps.
+Milestones are numbered level-2 headings; `## Parked` is never a milestone.
+Retain original text/line locations for diagnostics and surgical edits. Marker
+customization is an explicit mapping in `Goals format`; regex injection is not
+supported. Terminal siblings are done, shelved or dropped; a later goal can
+therefore be current after shelving an earlier one. Milestones only use
+current/done/open. IDs are unique across the goals file; missing task IDs use
+`<milestone-number>-<first-12-sha256-of-normalized-task-text>` with a warning and
+collision detection. Capability tags are comma-separated trailing parentheses;
+all listed tags and all mapped levels must be satisfied. Unknown tags are
+ineligible with a fix, never treated as `any`.
+
+Add parseable `Checks: ["validator:unit", "observation:review"]` after `Done when`
+when prose contains requirements not already expressed as named check tokens.
+All named tokens in `Done when` are also required; `Checks` cannot weaken them.
+Free-text acceptance without a named check is displayed but cannot auto-pass a
+gate. Setup asks for check annotations without rewording adopted criteria.
+Completion citations are adjacent `Evidence: <task-id>=<evidence-id-or-commit>`
+lines; multiple references are comma-separated. A commit citation must resolve to
+an ancestor of HEAD or the proposed batch commit and have an inspectable change;
+it is task evidence, not an automatic milestone PASS.
+
+An unparseable roadmap produces a warning, `selection.mode=manual`, and no
+automatic selection. It must not strand independent work. A gate needing that
+roadmap fails with the exact annotation needed; a malformed overlay or parsed
+inconsistent hierarchy is an error. Current markers are optional; when absent,
+selection infers the first incomplete eligible hierarchy. Two current markers,
+duplicate IDs, checked milestones with open tasks and out-of-order completion
+are errors. An archived done goal may have no inline children only when its
+record validates the completed milestone summary and evidence.
+
+Selection overrides let agents do requested work immediately and log `Override:`.
+They do not silently permit false acceptance or change ownership. Off-milestone
+work can record evidence while the later milestone stays open. Authorized scope,
+order or criteria changes have an adjacent `Policy-Approval:` entry identifying
+who approved what; `gate --base` reports them and checks the overlay's ownership
+setting. Text cannot authenticate a person: skills must obtain actual user
+approval when reserved to the user. Lint/gate verify the record exists and is
+consistent, not the user's identity. Sign-offs and exceptions have the same limit.
+
+### 5. Readiness and preparation stay distinct from acceptance
+
+Readiness JSON follows the spec's version-1 format; accept `exists`, `size`,
+`sha256` and `probed` strengths. Add optional `checkout` and `generated_at` fields;
+when checkout is supplied it must match this worktree. Missing/malformed reports
+make required capabilities unknown, with recovery instructions. `ready: true`
+satisfies only its named preparation level, never a validator. Map tags to named
+levels, independent of machine nicknames. With no helper/report, untagged/`any`
+tasks remain selectable; tags requiring readiness do not.
+
+`lh.py` never launches startup or quota. Resume runs an authorized helper, then
+calls status again. It makes at most one quota call when enabled and a declared
+script is available. A missing plugin or failed quota read is informational and
+uses the default batch; it never blocks. Default batching stays one task/blocker
+resolution; low remaining usage shrinks work, higher usage alone does not expand
+it beyond recorded policy. Readiness generation and human recovery remain
+consuming-repository responsibilities.
+
+### 6. Evidence lifecycle closes the pre-commit gap
+
+A gate must inspect acceptance before committing, and an evidence ID cannot
+contain the hash of the commit carrying it. Add `evidence prepare <check>` to
+capture a content-addressed before-snapshot; it does not run the check. The skill
+runs the authorized validator/command, then invokes `evidence record <check>
+--snapshot <id>` with its outcome and provenance. Record recomputes the scope,
+policy and external inputs, refuses PASS if they changed, and emits a canonical
+trailer plus a pending immutable evidence document. Record does not commit,
+stage, amend or create a second validator ledger. Snapshot/record are
+idempotent for identical content; an existing ID with conflicting content is an
+error. Pending records carry no live agent IDs.
+
+Each canonical record includes check name, outcome, scope digest, acceptance
+policy digest, all input digests, domain, claim class, observed command or
+validator name, delegation result ID/tree when applicable, log recovery route
+and result/log digest. Its ID is SHA-256 of canonical sorted-key JSON, excluding
+the carrying commit, presentation timestamp and derived detail-file location.
+The record does not hash its own ID or a path containing that ID. Log routes
+must be independent of the evidence ID; copied logs may be named by their own
+log-content digest. Trailers retain the spec's
+fields and add `id`, `policy`, `claim` and `detail`:
+
+```text
+Accepted-Check: id=<sha256> name=unit outcome=PASS scope=<sha256> policy=<sha256> inputs=none domain=unit-v1 ledger=none claim=observed detail=docs/evidence/<id>.json log=docs/evidence/<id>.log
+```
+
+Use `shlex` quoting for trailer values, including paths with spaces. Repeated
+fields or malformed values fail parsing. Detail records are durable tracked
+JSON (default `docs/evidence/<id>.json`, configurable), with compact logs or a
+specific persistent retrieval/regeneration route. The record command outputs
+these files for review and writes only its XDG pending copy; the checkpoint
+skill writes the proposed durable files. Exclude this configured evidence sink
+from default code scope to avoid self-invalidation, but include acceptance
+policy in the separate policy digest. No scratch log path alone qualifies.
+
+`gate` and `evidence find` read reachable commit trailers plus explicit pending
+records for this batch. Commit message assembly uses `--trailers-file` (output
+from record) and `git commit --file <message>`; no amend or automatic empty
+commit. After committing, checkpoint resolves each pending ID in that exact
+commit before removing the pending copy. An interrupted cleanup is harmless:
+deduplicate by ID. A fresh clone needs only committed trailers/detail records.
+If a task/goal changes its status without code edits, its normal documentation
+commit can carry trailers. Pending acceptance is reported as pending, never
+already committed.
+
+An allowed skip is only acceptable within its declared domain/condition; it
+never becomes PASS. An explicit accepted exception is separately recorded:
+`Accepted-Exception: id=<id> check=<name> target=<goal-or-milestone-id>
+reason=<quoted-text> by=<user> policy=<digest>`. Require a reason, target and
+matching criteria revision. It covers only that check/target, is listed in the
+completion record, and cannot waive sign-off or authorize remote operations.
+Non-delegation results are observations, not forged `checked` results. Human
+judgment uses `observation:<name>` and an explicit dated reviewer record.
+
+### 7. Scope and inputs are deterministic without changing Git
+
+Enumerate tracked files plus untracked non-ignored files with NUL-delimited Git
+commands. Include deletions, executable mode, symlink target and submodule commit;
+refuse fresh evidence for a dirty/unavailable submodule unless its contents are
+explicitly modeled as inputs. Hash the canonical sorted path/mode/blob-ID list
+with SHA-256. Blob IDs use Git's object format and `hash-object --stdin` without
+`-w`; neither the real index nor object database changes. A tracked deletion is
+a missing entry in the current snapshot, so deletion changes the digest.
+Unreadable files and unresolved index conflicts fail closed.
+
+Use Git pathspec matching for includes/excludes, with repository-relative paths;
+never shell globbing. Default scope is everything except declared non-code and
+evidence-sink paths. Scope policy changes, required checks, domains, allowed
+skips, input definitions and the referenced validator policy change a separate
+canonical policy digest even if code scope stays identical. Documentation edits
+outside those policy definitions do not invalidate an expensive check.
+
+The per-check policy digest includes its normalized required criteria text and
+check list, but excludes checkboxes, current/done markers, sign-off dates, task
+refinement text and archive-link presentation. Moving unchanged accepted
+criteria into the archive preserves that digest. Changing criteria, domain or
+input definitions does not. Checkpoint status edits therefore do not make their
+own evidence stale. Closing a goal preserves the historical evidence accepted
+at each milestone; only the goal's own required checks must be fresh again,
+unless its criteria explicitly require revalidating earlier milestones.
+
+External input commands return one lowercase SHA-256 token; reject failures,
+timeouts, extra output and undeclared inputs. They are executed only with
+`--probe-inputs` on prepare/record/find/gate under existing authorization.
+Default status/lint perform no probes and show external freshness as unknown.
+Before/after probes are required for externally dependent PASS. Empty inputs
+are `none`; required inputs cannot be omitted. Snapshot output cached in XDG is
+not proof of current external state. Every unknown/stale/missing distinction
+appears in text and JSON with a recovery command.
+
+### 8. Delegation adapter uses the actual 0.6.2 interface
+
+The current checker supplies `tree`, `lint`, `pending --json`, and `query
+--delegation <id> --tree current --json`. `tree` and `lint` are text output;
+do not assume nonexistent JSON flags or a global query. Call them through an
+argv list using `sys.executable <configured-check.py> --root <root> ...`.
+Import no code from its installation and copy no ledger implementation.
+`evidence record --delegation <id> --result <result-id>` queries that delegation
+and requires the named registered validator, stable true, ok true, exit 0,
+no timeout and the checker-provided current tree. The prepare snapshot carries
+the checker tree too. Preserve the result/log hash and host/domain limits.
+An arbitrary `check.py exec` observation has no registered validator name and
+cannot satisfy `validator:<name>`.
+
+Immediately turn the stable current result into scoped durable evidence before
+checkpoint changes the goals/handoff. Later docs-only edits can reuse that
+durable scoped acceptance, clearly labeled historical provenance; they are not
+a new current-tree delegation PASS. Current claims explicitly requesting a
+checked delegation result still use the checker's exact-tree query. A missing
+ledger does not erase verifiable committed scoped acceptance, and it cannot
+recreate a current checked result. Wrong/malformed/unavailable checker output
+is a finding. Pending workers block checkpoint closure until delegation hands
+them back; the plugin never closes or resets them itself.
+
+### 9. Closure is a resumable record, not an automation engine
+
+`closure record --batch <id> --step <name> ...` is an added local bookkeeping
+command. It records policy fingerprint, branch/remote, exact batch commit,
+intended ordered steps and separately observed outcomes, with version 1.
+`closure verify` never commits, merges, fetches, pushes or syncs. Skills perform
+only authorized operations, update records after observing their outcomes and
+use the verifier before a retry. A batch ID derives from its evidence IDs and
+changed-path/content-digest manifest; retries reuse it. A changed policy/target or different
+batch needs an explicit new record, not overwriting successful prior steps.
+
+Committed means the exact batch commit exists and is reachable from the local
+batch history; record its changed paths and check they include the intended
+owned changes. Merged means it is an ancestor of the configured local target
+branch, whether by fast-forward or merge commit. Squash integration requires a
+new explicit integrated-commit mapping and review of the mapped content; never
+infer equivalence from a commit message. Pushed means the integrated commit is
+contained in the configured remote-tracking target ref, qualified **as of the
+local remote-ref observation**. Report the last observed ref OID and observation
+time; Git alone cannot establish the server's present state or last fetch time.
+Missing/stale refs are unknown, not successful remote closure. A successful push
+with its recorded result is distinct from this local ancestry verification.
+Host sync is an observed claim and stays unverified by Git.
+
+The skill preserves unrelated dirty files, stages only owned paths and does
+not switch branches/worktrees, rewrite history or force a merge/push. If the
+target checkout is dirty/unavailable, merging is a remaining operation with a
+precise remedy. Retry from the first unfinished step; already merged commits
+and identical records are no-ops. Post-commit push/sync results live in XDG and
+chat, avoiding a recursive follow-up commit to claim the previous push. Another
+host can reconstruct committed/merged/ref facts; unfinished sync or unsaved
+local closure cannot be invented. Setup's closure choice supplies standing
+authorization only for the named operations and stop conditions.
+
+### 10. Goal lifecycle and mechanical repair
+
+Archive names use UTC date and a normalized goal slug; existing records for the
+same goal are updated rather than duplicated. Distinct same-slug goals add their
+stable goal-ID suffix. Add `ID:` to explicit goal metadata during approved setup;
+legacy implicit goals derive an ID from heading content with a warning. Records
+have a version-1 JSON metadata fence plus readable outcome, per-milestone
+criteria/evidence/exceptions, limitations, refuted approaches and follow-ups.
+A record in progress does not prove completion. Gate checks all expected
+milestones and the goal's own criteria against it before archival compression.
+Default sign-off keeps the goal current and selects no new goal work when all
+milestones are done; brief lists **Needs you: sign off**. After actual approval,
+add `Signed-off: <who>, <UTC-date>`, mark done and retain the ID/sign-off/archive
+link. The archive metadata preserves children removed from the roadmap.
+
+Shelving/dropping requires actual user instruction, a reason and a record of
+where work stopped; it claims no completion. Unshelving reopens preserved work,
+not a fresh survey. Wind-down/add-goal/update are repeatable surgical changes:
+one pointer, one import, one overlay, no duplicate archive/parked entries.
+Replace or remove the handoff only as approved. Never remove unrelated sections
+from `AGENTS.md`/`CLAUDE.md` or delegation. Setup discovers overlays on default
+and other local branches/worktrees without fetching; prefer current checkout,
+then default branch, then a unique other version. Multiple different candidates
+become one explicit choice in the draft; never silently choose an arbitrary log
+entry. Already-approved identical setup is a no-op, not another interview loop.
+
+`lint --fix` prints a diff; `--fix --apply` is the explicit approval to apply
+only unambiguous mechanical changes. Missing markers/IDs/headings can be added;
+conflicting current markers, ownership changes and destructive edits require
+manual repair. Never repair accepted task text/criteria or infer missing PASS.
+Check the input file digest before application, preserve line endings and
+unrelated prose, and make a second run produce an empty diff.
+
+## Public CLI and result contract
+
+Every subcommand supports `--root`, `--overlay` and `--json` in the documented
+position after the subcommand. Paths resolve from the Git worktree root, except
+an explicit draft overlay's managed relative paths resolve from that draft's
+base directory with `--draft-root`. This lets setup put its entire draft in an
+XDG draft directory and dry-run it without writing the repository. Git identity
+always comes from the actual checkout. `--goals` and `--handoff` can override
+only those input paths for a dry-run. Never treat a draft as active policy.
+
+Commands:
+
+```text
+lh.py lint [--fix [--apply]]
+lh.py status [--brief]
+lh.py evidence prepare <check> [--probe-inputs]
+lh.py evidence record <check> --snapshot <id> --outcome <outcome> ...
+lh.py evidence find [<check>] [--probe-inputs]
+lh.py gate [--base REV] [--probe-inputs] [--pending <id> ...]
+lh.py closure record --batch <id> --step <step> ...
+lh.py closure verify [--state PATH]
+lh.py state gc [--apply] [--if-due]
+```
+
+Additional argument contracts:
+
+- `state gc` works outside a Git checkout and scans only this plugin's XDG
+  state root. It reports deleted-worktree, old-unreferenced and protected/unknown
+  entries with reasons, retention deadlines and pending/unfinished summaries.
+  `--apply` authorizes only the eligibility rules above; `--if-due` limits an
+  applied sweep to once per seven days. There is no force flag that discards live
+  pending state. A missing state root is an empty successful result, not created
+  by preview. Wind-down may explicitly clear its own approved payload using the
+  same locked removal helper. GC's own writes do not refresh payload ages.
+- `evidence prepare` accepts `--attempt <identifier>`, defaulting to a generated
+  identifier it prints for reuse. Preparing with that same identifier and
+  unchanged scope/inputs reuses the snapshot; changed contents under that
+  identifier are an error. A genuinely new validator execution gets a new
+  attempt. Record includes that attempt in its canonical content, distinguishing
+  a new run from a repeated invocation to save an existing result.
+- `evidence record` accepts `--outcome PASS|FAIL|SKIP|UNSTABLE`, `--domain`,
+  `--log <recovery-route>`, `--detail <tracked-path>`, `--probe-inputs` and
+  `--trailers-file <output-path>`. Domain/detail default to overlay settings;
+  log is required. Solo provenance requires `--command <observed-command>` and
+  `--exit <integer>`; PASS requires exit 0. Delegated provenance instead requires
+  `--delegation <id> --result <id>` and derives command/exit from checker output.
+  Human observations instead use `--reviewer <name> --review-note <tracked-path>`;
+  the skill confirms the actual review. These three provenance modes are
+  mutually exclusive. External checks require `--probe-inputs` on both prepare
+  and record. Explicit trailer-file output is atomic and idempotent; no write
+  to Git's commit message or index occurs.
+- Accepted exceptions use `evidence record <check> --exception --target <id>
+  --reason <text> --by <user>`, after actual user acceptance. This mode emits
+  an exception trailer/detail instead of PASS and needs no validator snapshot;
+  it fingerprints the target's current criteria and carries no check result.
+- `closure record` accepts `--step validate|commit|merge|push|sync`,
+  `--outcome success|failed|pending`, `--commit <oid>`, optional
+  `--integrated-commit <oid>`, `--observation <text>` and
+  `--manifest <reviewed-paths-and-digests.json>`. The first record requires the
+  manifest and derives target/remote/steps from approved policy. Success for a
+  Git step requires its relevant OID; sync requires an observation. Verify
+  derives Git facts again rather than trusting success strings. Validation
+  references accepted evidence IDs in the manifest rather than running checks.
+- `gate --pending <id>` repeats for each explicitly included pending check or
+  exception; it never silently accepts every worktree scratch record.
+
+The archive metadata fence has `version`, `goal_id`, `status`, `outcome`,
+`milestones` (ordered IDs, criteria, evidence IDs and exceptions), `goal_checks`,
+`signoff`, `limitations`, `refuted` and `followups`. Shelved/dropped records also
+retain their original roadmap section and `reason`, so resumption can restore
+it without synthesizing tasks. The batch manifest has `version`, `base`,
+`paths` (relative path, content digest or deletion), and `evidence_ids`.
+
+JSON uses `version: 1`, `command`, `ok`, `findings` with severity/code/path/line/
+message/remedy, and command-specific structured data. Exit 0 means successful
+inspection/no blocking findings, even with warnings, no eligible task, no active
+goal or no evidence. Exit 1 means blocking consistency/gate/freshness findings
+or unverified required closure. Exit 2 means invalid usage/environment. Missing
+evidence is data in `find`, but a required missing item fails `gate`. All
+exceptions become concise diagnostics; no traceback for normal user errors.
+`--json` prints only JSON to stdout; stderr is for invocation/environment errors.
+Text is compact, with commands/sentences that fix every finding.
+
+`gate --base` defaults to HEAD, comparing the working proposed goals to the
+committed version. CI/integration passes the explicit pre-batch base so already
+committed changes are checked. On an unborn branch use an empty base and treat
+adopted completion as needing explicit existing evidence/limitations; setup
+must not manufacture retrospective PASS. Gate checks newly completed tasks,
+milestones and goals, completion records and owned policy changes, not every
+legacy checkbox on every invocation. Criteria edits invalidate evidence via
+policy digest. Existing false structural claims are still lint errors.
