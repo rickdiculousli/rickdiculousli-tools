@@ -1,5 +1,10 @@
 # Delegation: pods of judge, execute and routine agents (2026-10-09)
 
+The [XDG state and locks addendum](2026-10-11-xdg-state-and-locks-addendum.md)
+specifies the next state/cache/resource-lock layout and an explicit migration
+from the released layout described below. It takes precedence for that side
+work; this documentation change does not migrate installed delegation state.
+
 What a design session on 2026-10-09 (run from `coordinator`) settled. A thread writing the plan or building any part of this hasn't seen that session; this file is its context.
 
 ## Why

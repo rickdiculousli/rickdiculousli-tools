@@ -3,8 +3,14 @@
 Status: proposed specification, based on Rick's approval to generalize the
 game-decomp workflow. Revised after written-spec review to add deterministic
 checks, an interview-led setup flow, default session closure, the goal
-lifecycle and friction controls. Implementation planning remains next.
+lifecycle and friction controls. Implementation planning is linked below.
 This document does not add an installed plugin or change any consuming repository.
+
+The [implementation plan](../plans/2026-10-11-long-horizon.md) resolves the
+implementation contracts. The
+[XDG state and locks addendum](2026-10-11-xdg-state-and-locks-addendum.md)
+supersedes the worktree-local state paths below and specifies separately
+reviewable delegation migration work and the shared weekly cleanup convention.
 
 ## Purpose and success
 

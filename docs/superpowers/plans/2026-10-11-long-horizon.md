@@ -11,6 +11,13 @@ closure on Claude Code and Codex.
 
 **Spec:** [Long-horizon design](../specs/2026-10-11-long-horizon-design.md).
 
+**Side work:** [Unified XDG state and locks addendum](../specs/2026-10-11-xdg-state-and-locks-addendum.md)
+specifies a separate delegation migration release. It governs the shared path,
+lock and retention conventions here but does not make that release a prerequisite
+for long-horizon. Legacy delegation's checker remains usable. If the migration
+lands first, composition edits bump its then-current patch version rather than
+resetting it to the `0.6.3` version anticipated below.
+
 **Implementation:** Python 3.10+ standard library, Git and Markdown. Implement the
 numbered tasks in order, using focused disposable-repository tests. No worker
 agents, host hooks, scheduler, network client, runtime dependency or consumer
@@ -51,7 +58,7 @@ guidance requiring plugin state under XDG. Use:
 ${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/long-horizon/
   state.lock
   gc.json
-  <sha256(canonical-git-common-dir)>/<sha256(canonical-worktree-root)>/
+  <sha256(canonical-git-common-dir)>/worktrees/<sha256(canonical-worktree-root)>/
     identity.json
     closure.json
     evidence/<content-id>.json
