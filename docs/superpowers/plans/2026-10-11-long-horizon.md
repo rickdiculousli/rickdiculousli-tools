@@ -69,8 +69,9 @@ do not add a repository ignore rule for a directory we do not create. Legacy
 silently moved or deleted. Wind-down clears only this plugin's resolved worktree
 state after showing its path; durable files and delegation state survive.
 
-**Daily worktree churn is normal.** On the first state mutation or setup/resume/
-checkpoint in a 24-hour period, run best-effort local garbage collection. Resume
+**Daily worktree churn is normal; automatic cleanup runs weekly.** On the first
+state mutation or setup/resume/checkpoint at least seven days (168 hours) after
+the previous sweep, run best-effort local garbage collection. Resume
 invokes `state gc --apply --if-due` explicitly; `status`, `lint`, `find`, `gate`
 and `closure verify` remain read-only. A manual `state gc` previews removals;
 `state gc --apply` runs them immediately. No daemon, hook or network call.
@@ -102,6 +103,9 @@ snapshots and unfinished closure regardless of age. Within them, delete
 unreferenced snapshots and setup drafts after 30 days without use; remove
 committed pending copies and their unreferenced snapshots immediately once
 durable evidence is verified. Record last use of an attempt on state mutations.
+Expired entries are removed on the next weekly sweep, so expiration does not
+promise immediate deletion. The seven-day deleted-worktree recovery window
+starts at its first confirmed missing observation, independently of sweep cadence.
 Successful wind-down clears the current worktree payload immediately. Remove
 empty repository directories afterward. When the plugin is never used again,
 automatic cleanup cannot run; the manual command can sweep all its XDG state.
@@ -450,7 +454,7 @@ Additional argument contracts:
   state root. It reports deleted-worktree, old-unreferenced and protected/unknown
   entries with reasons, retention deadlines and pending/unfinished summaries.
   `--apply` authorizes only the eligibility rules above; `--if-due` limits an
-  applied sweep to once per 24 hours. There is no force flag that discards live
+  applied sweep to once per seven days. There is no force flag that discards live
   pending state. A missing state root is an empty successful result, not created
   by preview. Wind-down may explicitly clear its own approved payload using the
   same locked removal helper. GC's own writes do not refresh payload ages.
@@ -567,7 +571,7 @@ process-contention/atomic-replacement checks when a Windows runner is available;
 record them as untested if unavailable, without disabling Windows writes or
 presenting mocked coverage as native Windows validation.
 Use an injected clock to test seven-day deleted-worktree retention, 30-day
-unreferenced snapshot/draft retention and the 24-hour throttle. Cover daily
+unreferenced snapshot/draft retention and the seven-day sweep throttle. Cover daily
 create/delete churn, pending/unfinished grace-period diagnostics, existing
 worktree protection, missing mounts, stale Git registrations, recreated paths,
 symlink confinement, concurrent collector/writer serialization and interrupted
