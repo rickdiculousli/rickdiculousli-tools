@@ -10,8 +10,8 @@ from scripts.verify_lifecycle import compare_tree, missing_inventory, plugin_age
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MARKETPLACE = "rickdiculousli-plugins"
-PLUGIN_ID = "hello-world@rickdiculousli-plugins"
+MARKETPLACE = "rickdiculousli-tools"
+PLUGIN_ID = "hello-world@rickdiculousli-tools"
 
 
 class LifecycleTests(unittest.TestCase):
@@ -30,7 +30,7 @@ class LifecycleTests(unittest.TestCase):
             output = "codex-cli 0.160.1"
         elif flags[:3] == ["plugin", "marketplace", "add"]:
             self.registered = True
-            (self.profile / "config.toml").write_text('[marketplaces.rickdiculousli-plugins]\nsource_type = "local"\n')
+            (self.profile / "config.toml").write_text('[marketplaces.rickdiculousli-tools]\nsource_type = "local"\n')
             output = {"marketplaceName": MARKETPLACE, "installedRoot": str(ROOT), "alreadyAdded": False}
         elif flags[:3] == ["plugin", "marketplace", "list"]:
             output = {"marketplaces": [{"name": MARKETPLACE, "root": str(ROOT)}] if self.registered else []}

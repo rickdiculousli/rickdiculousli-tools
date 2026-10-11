@@ -1,5 +1,5 @@
 {
-  "name": "rickdiculousli-plugins",
+  "name": "rickdiculousli-tools",
   "plugins": [
     {
       "name": "hello-world",
@@ -42,6 +42,30 @@
       "source": {
         "source": "local",
         "path": "./plugins/delegation"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "quota",
+      "source": {
+        "source": "local",
+        "path": "./plugins/quota"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "yt-transcript",
+      "source": {
+        "source": "local",
+        "path": "./plugins/yt-transcript"
       },
       "policy": {
         "installation": "AVAILABLE",

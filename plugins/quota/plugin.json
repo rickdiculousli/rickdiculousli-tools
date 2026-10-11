@@ -1,0 +1,8 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "quota",
+  "version": "0.1.0",
+  "description": "Read Claude and Codex subscription usage: windows, resets, weekly pace and projected unused quota.",
+  "author": { "name": "Rick Li" },
+  "keywords": ["quota", "usage", "claude", "codex"]
+}

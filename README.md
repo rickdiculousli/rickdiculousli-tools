@@ -1,11 +1,11 @@
-# Rickdiculousli personal plugins
+# rickdiculousli-tools
 
-A personal plugin repository for Claude Code and Codex. Each plugin contains one
+Rick Li's shared tools, packaged as plugins for Claude Code and Codex. Each plugin contains one
 portable manifest and one set of skills. A small generator produces the host
 compatibility manifests and marketplaces; consumers install directly from the
 committed repository without a build step.
 
-All four plugins have been installed, byte-compared, and uninstalled through the
+The plugins have been installed, byte-compared, and uninstalled through the
 real native marketplaces on Codex **0.162.1** and Claude Code **2.1.296**.
 See [verification evidence and scope](docs/verification.md).
 
@@ -14,6 +14,8 @@ See [verification evidence and scope](docs/verification.md).
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
 | `repository-info` | Informational stub describing this layout |
+| `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
+| `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
 | `delegation` | `setup` skill prepares a repo; `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. |
 
 ## Visual audit reports
@@ -76,13 +78,28 @@ python3 plugins/delegation/skills/delegation/scripts/check.py exec --help
 Install and remove it like the other plugins:
 
 ```sh
-claude plugin install delegation@rickdiculousli-plugins
-codex plugin add delegation@rickdiculousli-plugins
-claude plugin uninstall delegation@rickdiculousli-plugins
-codex plugin remove delegation@rickdiculousli-plugins
+claude plugin install delegation@rickdiculousli-tools
+codex plugin add delegation@rickdiculousli-tools
+claude plugin uninstall delegation@rickdiculousli-tools
+codex plugin remove delegation@rickdiculousli-tools
 ```
 
 Routing quality has not been evaluated; that is for a pilot.
+
+## Quota and YouTube transcripts
+
+Both are PEP 723 scripts run with `uv run --script`. `quota.py` has no dependencies;
+`yt_transcript.py` resolves `yt-dlp` and the Whisper backend for the platform on
+first run and needs `ffmpeg`. Scripts that call them use the checkout path, so
+every box that runs such a caller clones this repo to `~/repos/rickdiculousli-tools`:
+
+```sh
+uv run --script plugins/quota/skills/quota/scripts/quota.py --json
+uv run --script plugins/yt-transcript/skills/yt-transcript/scripts/yt_transcript.py <url>
+```
+
+Quota readings are logged to `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/quota/usage.jsonl`;
+transcripts go to `${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/youtube/<id>/`.
 
 ## Install from this checkout
 
@@ -93,10 +110,12 @@ and install the plugins in your normal user profile.
 
 ```sh
 claude plugin marketplace add "$PWD"
-claude plugin install visual-audit@rickdiculousli-plugins
-claude plugin install hello-world@rickdiculousli-plugins
-claude plugin install repository-info@rickdiculousli-plugins
-claude plugin install delegation@rickdiculousli-plugins
+claude plugin install visual-audit@rickdiculousli-tools
+claude plugin install hello-world@rickdiculousli-tools
+claude plugin install repository-info@rickdiculousli-tools
+claude plugin install delegation@rickdiculousli-tools
+claude plugin install quota@rickdiculousli-tools
+claude plugin install yt-transcript@rickdiculousli-tools
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
@@ -108,11 +127,13 @@ In a new Claude Code session, invoke `/visual-audit:audit-report`,
 
 ```sh
 codex plugin marketplace add "$PWD"
-codex plugin add visual-audit@rickdiculousli-plugins
-codex plugin add hello-world@rickdiculousli-plugins
-codex plugin add repository-info@rickdiculousli-plugins
-codex plugin add delegation@rickdiculousli-plugins
-codex plugin list --marketplace rickdiculousli-plugins --available --json
+codex plugin add visual-audit@rickdiculousli-tools
+codex plugin add hello-world@rickdiculousli-tools
+codex plugin add repository-info@rickdiculousli-tools
+codex plugin add delegation@rickdiculousli-tools
+codex plugin add quota@rickdiculousli-tools
+codex plugin add yt-transcript@rickdiculousli-tools
+codex plugin list --marketplace rickdiculousli-tools --available --json
 ```
 
 In a new Codex session, ask it to use the `audit-report` skill from
@@ -122,17 +143,21 @@ In a new Codex session, ask it to use the `audit-report` skill from
 ### Uninstall
 
 ```sh
-claude plugin uninstall visual-audit@rickdiculousli-plugins
-claude plugin uninstall hello-world@rickdiculousli-plugins
-claude plugin uninstall repository-info@rickdiculousli-plugins
-claude plugin uninstall delegation@rickdiculousli-plugins
-claude plugin marketplace remove rickdiculousli-plugins
+claude plugin uninstall visual-audit@rickdiculousli-tools
+claude plugin uninstall hello-world@rickdiculousli-tools
+claude plugin uninstall repository-info@rickdiculousli-tools
+claude plugin uninstall delegation@rickdiculousli-tools
+claude plugin uninstall quota@rickdiculousli-tools
+claude plugin uninstall yt-transcript@rickdiculousli-tools
+claude plugin marketplace remove rickdiculousli-tools
 
-codex plugin remove visual-audit@rickdiculousli-plugins
-codex plugin remove hello-world@rickdiculousli-plugins
-codex plugin remove repository-info@rickdiculousli-plugins
-codex plugin remove delegation@rickdiculousli-plugins
-codex plugin marketplace remove rickdiculousli-plugins
+codex plugin remove visual-audit@rickdiculousli-tools
+codex plugin remove hello-world@rickdiculousli-tools
+codex plugin remove repository-info@rickdiculousli-tools
+codex plugin remove delegation@rickdiculousli-tools
+codex plugin remove quota@rickdiculousli-tools
+codex plugin remove yt-transcript@rickdiculousli-tools
+codex plugin marketplace remove rickdiculousli-tools
 ```
 
 Once this repository is hosted in Git, both marketplace `add` commands also
@@ -159,7 +184,7 @@ tests/                               # generator, verifier, and renderer tests
 ```
 
 `visual-audit` ships its renderer, templates, and references inside its skill
-folder. `hello-world` and `repository-info` are stubs. None of them need
+folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way. `hello-world` and `repository-info` are stubs. None of them need
 credentials or external services. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.
 

@@ -1,6 +1,6 @@
 # Native lifecycle verification
 
-Last verified on October 10, 2026 (report timestamp 2026-10-10T18:22:16Z, UTC),
+Last verified on October 10, 2026 (report timestamp 2026-10-11T01:27:25Z, UTC),
 using the real locally installed CLIs, with a fresh temporary configuration
 profile for each host. Evidence labels: `checked` (observed running), `cited`
 (source or documentation reading), `asserted`.
@@ -11,21 +11,21 @@ profile for each host. Evidence labels: `checked` (observed running), `cited`
 | Native manifest and skill validation | Discovery/install accepted manifests | `claude plugin validate` passed |
 | Empty isolated profile confirmed | Passed | Passed |
 | Repository marketplace registered and listed | Passed | Passed |
-| All four plugins discoverable | Passed | Passed |
-| All four plugins installed and enabled | Passed | Passed |
+| All six plugins discoverable | Passed | Passed |
+| All six plugins installed and enabled | Passed | Passed |
 | Installed portable manifests match source | Passed | Passed |
 | Every committed plugin file matches its installed copy byte for byte; no extra files | Passed | Passed |
 | Native component inventory | Installed files inspected | `plugin details` lists each plugin's skills and, for `delegation`, agents `execute` and `routine` |
-| All four plugins uninstalled; absent from installed list | Passed | Passed |
+| All six plugins uninstalled; absent from installed list | Passed | Passed |
 | Marketplace removed; absent from marketplace list | Passed | Passed |
 
-All results above are `checked`. The unit suite (201 tests) passed on Python 3.14
+All results above are `checked`. The unit suite (206 tests) passed on Python 3.14
 and on 3.10 (`uv run --no-project --python 3.10 -m unittest discover -s tests`).
 
-The marketplace is `rickdiculousli-plugins`. The tested plugins are
-`visual-audit`, `hello-world`, `repository-info`, and `delegation` (all
-`@rickdiculousli-plugins`, `delegation` at version `0.4.0`, the others at `0.1.0`). File comparison covers every file tracked by Git in each plugin
-directory except generated host manifests, so `visual-audit`'s renderer scripts,
+The marketplace is `rickdiculousli-tools`. The tested plugins are
+`visual-audit`, `hello-world`, `repository-info`, `delegation`, `quota` and
+`yt-transcript` (all `@rickdiculousli-tools`, `delegation` at version `0.4.0`, the others at `0.1.0`). File comparison covers every file tracked by Git in each plugin
+directory except generated host manifests, so the bundled `quota.py` and `yt_transcript.py`, `visual-audit`'s renderer scripts,
 templates, and references are included. Both hosts installed identical skill content:
 
 | Skill | SHA-256 |
@@ -35,8 +35,10 @@ templates, and references are included. Both hosts installed identical skill con
 | `about` | `764ab249ba09f27a645b7fe4b60ab60e33b7b569bc189d158f7e139a46ec1434` |
 | `delegation` | `4699be37857b43c68df06e61110147fa373e30ba54c0b1f008ce3dd9b7874ec0` |
 | `setup` (delegation) | `e8bed6693c3e9252548e016ca7a30a23645df62bd64bd88e28c68ef07dea2990` |
+| `quota` | `dcd9ed6fa96ca51c21c45ecfb3c5af6c857da31f0795f6bb550fb01ffa7c2a05` |
+| `yt-transcript` | `6c9d671ae62b4deca2a924573bd2e10bcd0d0c05c9cbc6810dc2f71a0417c7a6` |
 
-All five hashes match the 2026-10-10 lifecycle report (`/tmp/plugin-verification.json`),
+All seven hashes match the 2026-10-11T01:27Z lifecycle report (`/tmp/plugin-verification.json`),
 re-run after delegation 0.4.0: validator attributes `cheap`, `timeout=<seconds>`
 and `lock=<name>`; `## Locks` with slots, a wait limit and the
 `DELEGATION_LOCK_<NAME>` override (flock on slot files under `/tmp`, keyed by
@@ -51,6 +53,23 @@ prints, `brief --with-instructions` (so Codex and the Claude fallback pass one l
 too), and the stderr note from an empty `query`. These are covered by the unit
 suite (201 tests). Neither the `setup` skill nor the 0.3.0 and 0.4.0 changes
 have been exercised by a model yet.
+
+## Quota and YouTube transcript scripts
+
+Date: 2026-10-10 (Mac) and 2026-10-11 UTC (linux). Evidence: `checked`.
+
+- `quota`: 5 unit tests, ported from coordinator, mock Claude's usage page and
+  Codex's `account/rateLimits/read`; they pass on 3.14 and 3.10. Live
+  `uv run --script plugins/quota/skills/quota/scripts/quota.py` printed both providers
+  and exited 0 on the Mac (macOS, Apple Silicon) and on linux (Ubuntu 26.04, x86_64),
+  appending to `~/.local/state/rickdiculousli-tools/quota/usage.jsonl` on each.
+- `yt-transcript`, on both boxes: `dQw4w9WgXcQ` with `--whisper never` wrote a
+  transcript with engine `human captions`; `jNQXAC9IVRw` with `--whisper always`
+  wrote a timestamped transcript with engine `mlx_whisper mlx-community/whisper-large-v3-turbo`
+  on the Mac and `faster_whisper large-v3-turbo` on linux (19 s wall, 1.7 GB peak RSS).
+  The linux run first failed in `av.open()` (`metadata_errors`) with PyAV 19.0.1 and
+  faster-whisper 1.2.1, so the script pins `av<19` off macOS; 16, 17 and 18 decode.
+  The linux runs used a copy of the script in `/tmp` before the repository had a remote.
 
 ## Visual audit renderer
 

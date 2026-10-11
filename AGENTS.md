@@ -10,6 +10,12 @@
   Commit generated output alongside its sources.
 - Keep development scripts on Python 3.10+ standard library; consumer installation
   must not require a build or extra dependencies.
+- Plugin scripts may be PEP 723 scripts run with `uv run --script`; `uv` is
+  expected on every host. Scripts that other scripts call are reached at the
+  checkout path `~/repos/rickdiculousli-tools/plugins/<plugin>/skills/<skill>/scripts/<script>`,
+  not the versioned plugin cache. Plugin scripts write state and caches under
+  `XDG_STATE_HOME`/`XDG_CACHE_HOME` (`rickdiculousli-tools/<plugin>`), never
+  next to themselves.
 - After packaging changes run:
 
   ```sh

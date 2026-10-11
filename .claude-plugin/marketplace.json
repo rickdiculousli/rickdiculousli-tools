@@ -1,5 +1,5 @@
 {
-  "name": "rickdiculousli-plugins",
+  "name": "rickdiculousli-tools",
   "owner": {
     "name": "Rick Li"
   },
@@ -58,6 +58,35 @@
         "evidence"
       ],
       "source": "./plugins/delegation"
+    },
+    {
+      "name": "quota",
+      "version": "0.1.0",
+      "description": "Read Claude and Codex subscription usage: windows, resets, weekly pace and projected unused quota.",
+      "author": {
+        "name": "Rick Li"
+      },
+      "keywords": [
+        "quota",
+        "usage",
+        "claude",
+        "codex"
+      ],
+      "source": "./plugins/quota"
+    },
+    {
+      "name": "yt-transcript",
+      "version": "0.1.0",
+      "description": "Fetch a YouTube video's timestamped transcript: captions first, then auto-captions, then Whisper.",
+      "author": {
+        "name": "Rick Li"
+      },
+      "keywords": [
+        "youtube",
+        "transcript",
+        "whisper"
+      ],
+      "source": "./plugins/yt-transcript"
     }
   ]
 }

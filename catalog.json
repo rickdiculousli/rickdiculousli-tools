@@ -1,11 +1,13 @@
 {
-  "name": "rickdiculousli-plugins",
+  "name": "rickdiculousli-tools",
   "owner": { "name": "Rick Li" },
   "description": "Rick Li's personal, portable agent plugins.",
   "plugins": [
     "plugins/hello-world",
     "plugins/repository-info",
     "plugins/visual-audit",
-    "plugins/delegation"
+    "plugins/delegation",
+    "plugins/quota",
+    "plugins/yt-transcript"
   ]
 }
