@@ -102,7 +102,7 @@ evidence to the caller. `exec` records `validator=null`; its observations must b
 cited or asserted rather than accepted as checked registered-validator results.
 A lock covers the full foreground process lifetime. Never detach launches; one
 command owns one slot, so multiple jobs need a slot per child or serialization.
-Windows locks still lack `flock` protection. Host peer support is checked before
+Windows uses standard-library byte locks; macOS/Linux use `flock`. Host peer support is checked before
 use, with judge relay as the fallback.
 
 Setup proposes deterministic repository helpers but writes scripts only with

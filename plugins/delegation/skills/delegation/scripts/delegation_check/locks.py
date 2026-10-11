@@ -1,9 +1,8 @@
-"""Counting locks shared by every worktree of a repository, built on flock.
+"""Counting locks shared by every worktree of a repository.
 
 A lock with N slots is N files, `<name>.<slot>.lock`, in a directory under /tmp
-keyed by git's common directory. Holding a slot means holding an exclusive flock
-on its file, so the kernel releases it when the holder exits, however it exits.
-The holder writes who it is into the file; `check.py locks` reads that back.
+keyed by git's common directory. Each slot has a native process lock. Windows
+holder details use a sidecar so readers never access the byte-locked region.
 """
 
 from __future__ import annotations
@@ -15,16 +14,12 @@ import os
 from pathlib import Path
 import sys
 import time
-from typing import IO, Iterator
+from typing import BinaryIO, Iterator
 
 from . import DelegationError
+from .file_lock import release, try_acquire
 from .overlay import Lock
 from .tree import lock_dir
-
-try:
-    import fcntl
-except ImportError:  # pragma: no cover - not available on Windows
-    fcntl = None  # type: ignore[assignment]
 
 POLL_S = 0.2
 ANNOUNCE_GRACE_S = 1.0
@@ -48,19 +43,18 @@ def _slot_path(root: Path, name: str, slot: int) -> Path:
     return lock_dir(root) / f"{name}.{slot}.lock"
 
 
-def _try(path: Path) -> IO[str] | None:
-    handle = path.open("a+", encoding="utf-8")
-    try:
-        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        handle.close()
-        return None
-    return handle
+def _try(path: Path) -> BinaryIO | None:
+    return try_acquire(path)
+
+
+def _metadata_path(path: Path) -> Path:
+    # Keep the POSIX layout compatible with sessions using older versions.
+    return path.with_suffix(".json") if os.name == "nt" else path
 
 
 def _read(path: Path) -> dict | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return json.loads(_metadata_path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
@@ -74,18 +68,14 @@ def _describe(holder: dict | None) -> str:
 
 def status(root: Path, name: str, lock: Lock) -> list[str]:
     """One line per slot: free, or who holds it."""
-    if fcntl is None:
-        return [f"{name}: locking is not available on this platform"]
     lines = []
     for slot in range(slots(name, lock)):
         path = _slot_path(root, name, slot)
-        with path.open("a+", encoding="utf-8") as handle:
-            try:
-                fcntl.flock(handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
-            except BlockingIOError:
-                lines.append(f"{name}.{slot} {_describe(_read(path))}")
-                continue
-            fcntl.flock(handle, fcntl.LOCK_UN)
+        handle = _try(path)
+        if handle is None:
+            lines.append(f"{name}.{slot} {_describe(_read(path))}")
+            continue
+        release(handle)
         lines.append(f"{name}.{slot} free")
     return lines
 
@@ -95,11 +85,8 @@ def hold(root: Path, name: str, lock: Lock, holder: dict) -> Iterator[dict]:
     """Wait for a free slot, then hold it for the block.
 
     Yields {"slot", "wait_s"}. Refuses (DelegationError) when the lock's wait
-    limit passes first. On Windows there is no flock, so this holds nothing.
+    limit passes first. Both POSIX and Windows use native process locks.
     """
-    if fcntl is None:
-        yield {"slot": None, "wait_s": 0.0}
-        return
     count = slots(name, lock)
     paths = [_slot_path(root, name, slot) for slot in range(count)]
     started = time.monotonic()
@@ -130,14 +117,21 @@ def hold(root: Path, name: str, lock: Lock, holder: dict) -> Iterator[dict]:
             "worktree": str(root),
             "since": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         }
-        handle.seek(0)
-        handle.truncate()
-        handle.write(json.dumps(record) + "\n")
-        handle.flush()
-        yield {"slot": slot, "wait_s": wait_s}
-    finally:
-        with contextlib.suppress(OSError):
+        if os.name == "nt":
+            _metadata_path(path).write_text(json.dumps(record) + "\n", encoding="utf-8")
+        else:
             handle.seek(0)
             handle.truncate()
-        fcntl.flock(handle, fcntl.LOCK_UN)
-        handle.close()
+            handle.write((json.dumps(record) + "\n").encode("utf-8"))
+            handle.flush()
+        yield {"slot": slot, "wait_s": wait_s}
+    finally:
+        try:
+            with contextlib.suppress(OSError):
+                if os.name == "nt":
+                    _metadata_path(path).unlink()
+                else:
+                    handle.seek(0)
+                    handle.truncate()
+        finally:
+            release(handle)

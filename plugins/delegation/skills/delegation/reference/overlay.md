@@ -79,10 +79,13 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
     every session on the machine: each session uses only the slots it knows of.
   - `check.py locks` lists each lock's slots and who holds them.
   - How it works: each slot is a file under `/tmp/delegation-locks-<hash of
-    git's common directory>/`, held with `flock`. The kernel releases a slot
+    git's common directory>/`, held with `flock` on macOS/Linux or `msvcrt.locking` on Windows. The kernel releases a slot
     when its holder exits, even on a crash, so there is no server to start and
     no stale lock to clear. Sandboxes that keep `.git` read-only still allow
-    `/tmp`. Windows has no `flock`; there, locks hold nothing.
+    `/tmp`. Windows slot files live in the system temporary directory instead of `/tmp`.
+    Holder details are stored in separate `.json` files so inspection does not
+    read the byte-locked region. Stale metadata alone never marks a slot busy;
+    the native lock determines whether it is held.
 - **`validator:<name>` references.** Anywhere in the file, `validator:<name>`
   must name a registered validator, or lint reports `unregistered validator`.
   Use it in `## Oracle` or `## Tier hints` to tie prose to a check.

@@ -8,6 +8,7 @@ from pathlib import Path
 import secrets
 import shutil
 import subprocess
+import tempfile
 from typing import Sequence
 
 from . import DelegationError
@@ -45,13 +46,15 @@ def state_dir(root: Path) -> Path:
 def lock_dir(root: Path) -> Path:
     """Locks shared by every worktree of the repository.
 
-    They live under /tmp, keyed by git's common directory, because sandboxes
+    They live under /tmp (the system temp directory on Windows), keyed by
+    git's common directory, because sandboxes
     (Codex's workspace mode) leave `.git` read-only but /tmp writable.
     """
     common = Path(_git(root, ["rev-parse", "--git-common-dir"]).strip())
     common = (common if common.is_absolute() else root / common).resolve()
-    key = hashlib.sha256(str(common).encode("utf-8")).hexdigest()[:16]
-    directory = Path("/tmp") / f"delegation-locks-{key}"
+    key = hashlib.sha256(os.path.normcase(str(common)).encode("utf-8")).hexdigest()[:16]
+    temporary_root = Path(tempfile.gettempdir()) if os.name == "nt" else Path("/tmp")
+    directory = temporary_root / f"delegation-locks-{key}"
     directory.mkdir(parents=True, exist_ok=True)
     return directory
 

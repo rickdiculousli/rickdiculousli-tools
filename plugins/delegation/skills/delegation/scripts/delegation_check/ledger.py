@@ -14,17 +14,13 @@ import signal
 import subprocess
 import sys
 import time
-from typing import Iterator, Sequence
+from typing import Sequence
 
 from . import DelegationError
 from . import locks
+from .file_lock import exclusive
 from .overlay import Lock, Role, Validator
 from .tree import state_dir, tree_hash
-
-try:
-    import fcntl
-except ImportError:  # pragma: no cover - not available on Windows
-    fcntl = None  # type: ignore[assignment]
 
 SCHEMA = 1
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
@@ -46,29 +42,22 @@ def _context_hashes(root: Path, brief: bytes) -> dict[str, str]:
     return hashes
 
 
-@contextlib.contextmanager
-def _exclusive(path: Path) -> Iterator[None]:
-    """Hold an exclusive lock on path for the duration of the block."""
-    if fcntl is None:
-        yield
-        return
-    with path.open("a") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
-
-
 def ledger_path(root: Path) -> Path:
     return state_dir(root) / "ledger.jsonl"
 
 
 def ledger_lock(root: Path) -> contextlib.AbstractContextManager[None]:
-    return _exclusive(state_dir(root) / "ledger.lock")
+    return exclusive(state_dir(root) / "ledger.lock")
 
 
 def read_events(root: Path) -> list[dict]:
+    """Read a complete ledger snapshot, serialized with appends."""
+    with ledger_lock(root):
+        return _read_events_unlocked(root)
+
+
+def _read_events_unlocked(root: Path) -> list[dict]:
+    """Read the ledger; the caller must already hold ledger_lock."""
     path = ledger_path(root)
     if not path.exists():
         return []
@@ -144,7 +133,7 @@ def open_delegation(
     context = _context_hashes(root, brief_bytes)
     tree = tree_hash(root, extra_inputs)
     with ledger_lock(root):
-        events = read_events(root)
+        events = _read_events_unlocked(root)
         if any(e.get("event") == "open" and e.get("delegation") == delegation for e in events):
             raise DelegationError(f"delegation id already used: {delegation}")
         active = _pending(events)
@@ -234,7 +223,7 @@ def close_delegation(root: Path, delegation: str, outcome: str, note: str | None
     if outcome not in OUTCOMES:
         raise DelegationError(f"outcome must be one of {', '.join(OUTCOMES)}, got {outcome!r}")
     with ledger_lock(root):
-        if delegation not in {e["delegation"] for e in _pending(read_events(root))}:
+        if delegation not in {e["delegation"] for e in _pending(_read_events_unlocked(root))}:
             raise DelegationError(f"delegation is not open: {delegation}")
         return _append(
             root,
@@ -312,7 +301,7 @@ def run_validator(
     text = output.decode("utf-8", errors="replace")
     tail = "\n".join(text.splitlines()[-TAIL_LINES:])[-TAIL_CHARS:]
     with ledger_lock(root):
-        events = read_events(root)
+        events = _read_events_unlocked(root)
         if delegation not in {e["delegation"] for e in _pending(events)}:
             raise DelegationError(f"delegation closed while the validator ran: {delegation}")
         count = sum(

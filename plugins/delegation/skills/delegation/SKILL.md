@@ -217,7 +217,8 @@ fewer than the overlay's slots, set `DELEGATION_LOCK_<NAME>` for the session
 resources, for example `games: slots=6, wait=3600`. `exec` holds a slot for the
 complete foreground process lifetime; never detach a launch. One command owns
 one slot: multiple jobs must acquire a slot per child or serialize, otherwise
-they oversubscribe the resource. Windows still has no `flock` protection.
+they oversubscribe the resource. Windows uses native byte locks; macOS/Linux use
+`flock`. Ledger reads and appends use the same native lock to prevent partial reads.
 `exec` requires both `--lock` and `--timeout`. With a delegation id its ledger
 results have `validator=null`: cite command observations or mark them `asserted`;
 they cannot count as `checked` registered-validator acceptance.

@@ -341,3 +341,17 @@ No end-to-end model-driven setup survey, reusable-role runbook refresh, or nativ
 game permission-prompt workflow was run. Those remain suitable for a repository
 pilot; the live model check above is limited to peer communication. No publication,
 tag, push or normal-profile installation was performed.
+
+## Delegation 0.6.1: Windows locking implementation (unverified)
+
+Applied native Windows byte locking with `msvcrt.locking`, retaining POSIX
+`fcntl.flock`, through a shared standard-library helper. Ledger readers now
+serialize with appends; internal reads under an existing lock avoid nested
+acquisition. Windows resource slots use separate holder-metadata files and the
+system temporary directory. Nonblocking acquisition uses explicit retry loops
+and the configured slot wait limit.
+
+Tests, compilation checks, metadata consistency checks, lifecycle verification,
+and live Windows execution were deliberately not run, as requested by the user.
+Generated manifests and marketplace metadata were regenerated from their sources.
+The earlier 0.6.0 passing results do not verify this change.
