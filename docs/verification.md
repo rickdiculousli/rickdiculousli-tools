@@ -392,3 +392,22 @@ Windows was deliberately not verified, at the user's request. The first real
 Windows run will determine any remaining host-specific issues. Passing macOS
 tests also exercise the current POSIX delegation implementation; they do not
 verify the Windows locking branch added in 0.6.1. No Intel Mac execution was run.
+
+## Normal-profile rollout (2026-10-11)
+
+At the user's explicit request, portability commit `ae9474d` was pushed to
+`origin/main` and applied to the local Apple Silicon Mac and linux (Ubuntu x86_64).
+Both machines used Claude Code 2.1.296 and Codex 0.162.1 with their existing
+local-checkout marketplaces and normal user profiles. The clean linux checkout
+was fast-forwarded to the pushed commit.
+
+Claude's native plugin update command refreshed the three changed plugins;
+Codex's native remove/add commands refreshed their caches. On both hosts on both
+machines, the final plugin lists showed `delegation` 0.6.2, `quota` 0.1.1, and
+`yt-transcript` 0.1.1 enabled. All tracked portable files matched the checkout
+byte for byte: 19 for delegation and 3 each for quota and yt-transcript, excluding
+generated host manifests. Unrelated plugins were left alone. The local suite of
+235 tests passed again before committing. Existing model sessions were not
+restarted; new sessions are needed to load refreshed plugin content. No live
+provider reads, transcription, model-driven execution, or Windows checks were
+performed during this rollout.
