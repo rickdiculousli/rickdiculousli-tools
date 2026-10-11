@@ -1,6 +1,6 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.14"
+# requires-python = ">=3.10"
 # dependencies = []
 # ///
 """How much of the Claude and Codex subscriptions is left, and how much will go unused at the reset.
@@ -74,26 +74,46 @@ def _iso(ts: float | None) -> str | None:
 
 CLAUDE_URL = "https://api.anthropic.com/api/oauth/usage"
 KEYCHAIN = "Claude Code-credentials"                          # macOS
-CREDENTIALS = Path.home() / ".claude" / ".credentials.json"   # Linux
 
 
 def _claude_token() -> str:
+    explicit_file = os.environ.get("QUOTA_CLAUDE_CREDENTIALS_FILE")
+    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if token and not explicit_file:
+        return token
+    config = os.environ.get("CLAUDE_CONFIG_DIR")
+    credentials = (Path(explicit_file).expanduser() if explicit_file else
+                   (Path(config).expanduser() if config else Path.home() / ".claude")
+                   / ".credentials.json")
+    service = os.environ.get("QUOTA_CLAUDE_KEYCHAIN_SERVICE")
     raw = None
-    if sys.platform == "darwin":
-        p = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN, "-w"],
-                           capture_output=True, text=True)
-        raw = p.stdout if p.returncode == 0 else None
-    if raw is None and CREDENTIALS.exists():
-        raw = CREDENTIALS.read_text()
+    if sys.platform == "darwin" and not explicit_file and (service or not config):
+        try:
+            p = subprocess.run(["security", "find-generic-password", "-s", service or KEYCHAIN, "-w"],
+                               capture_output=True, text=True, timeout=15)
+        except (OSError, subprocess.TimeoutExpired):
+            p = None
+        raw = p.stdout if p is not None and p.returncode == 0 else None
+    if service and not explicit_file and raw is None:
+        raise Unknown("cannot read the selected Claude Keychain service; set "
+                      "QUOTA_CLAUDE_CREDENTIALS_FILE for a file-based login")
     if raw is None:
-        raise Unknown("no Claude Code login found (keychain or ~/.claude/.credentials.json)")
+        try:
+            raw = credentials.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            raise Unknown("cannot read Claude credentials at the selected location; log in there or set "
+                          "QUOTA_CLAUDE_CREDENTIALS_FILE or QUOTA_CLAUDE_KEYCHAIN_SERVICE") from None
     try:
         o = json.loads(raw)["claudeAiOauth"]
-    except (ValueError, KeyError):
+        expires = float(o.get("expiresAt", 0)) / 1000
+        token = o["accessToken"]
+        if not isinstance(token, str) or not token:
+            raise ValueError("missing token")
+    except (ValueError, KeyError, TypeError, AttributeError):
         raise Unknown("the stored Claude Code login isn't in the expected shape") from None
-    if o.get("expiresAt", 0) / 1000 < time.time():
+    if expires < time.time():
         raise Unknown("the Claude Code login has expired; opening Claude Code once refreshes it")
-    return o["accessToken"]
+    return token
 
 
 def read_claude() -> Reading:
@@ -213,18 +233,18 @@ READERS = {"claude": read_claude, "codex": read_codex}
 
 def record(r: Reading) -> None:
     LOG.parent.mkdir(parents=True, exist_ok=True)
-    with LOG.open("a") as f:
+    with LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps({**asdict(r), "pid": os.getpid()}) + "\n")
 
 
 def _ts(iso: str | None) -> float | None:
-    return datetime.fromisoformat(iso).timestamp() if iso else None
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() if iso else None
 
 
 def local(iso: str | None) -> str:
     if not iso:
         return "unknown"
-    t = datetime.fromisoformat(iso).astimezone()
+    t = datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone()
     return t.strftime("%H:%M today") if t.date() == datetime.now().date() else t.strftime("%a %m-%d %H:%M")
 
 

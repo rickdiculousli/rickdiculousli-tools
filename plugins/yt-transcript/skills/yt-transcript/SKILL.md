@@ -12,10 +12,16 @@ it prints the path of:
 uv run --script <skill-dir>/scripts/yt_transcript.py <url> [<url> ...]
 ```
 
+`<skill-dir>` is the directory containing this SKILL.md; quote the resolved script
+path and URLs. No fixed checkout location is required. Python 3.10+ is required;
+`uv` resolves the interpreter and downloads the script's dependencies on first run.
+
 It tries human captions first, then YouTube's auto-captions (json3, one retry after
 an HTTP 429), and falls back to transcribing the audio with Whisper when captions are
 missing or rate-limited: `mlx-whisper` on Apple Silicon, `faster-whisper` on CPU
-elsewhere (slower, about 2 GB of RAM). It needs `ffmpeg` on PATH.
+elsewhere, including Intel Macs (slower, about 2 GB of RAM). It needs `ffmpeg` on PATH,
+internet access to YouTube, and access to download the Whisper model on first audio
+transcription. Windows execution has not been verified; report first-run failures.
 
 Flags:
 

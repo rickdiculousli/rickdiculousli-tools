@@ -1,11 +1,11 @@
 #!/usr/bin/env -S uv run --script
 # /// script
-# requires-python = ">=3.14"
+# requires-python = ">=3.10"
 # dependencies = [
 #     "yt-dlp[default]",
 #     "mlx-whisper; sys_platform == 'darwin' and platform_machine == 'arm64'",
-#     "faster-whisper; sys_platform != 'darwin'",
-#     "av<19; sys_platform != 'darwin'",  # faster-whisper 1.2.1 passes metadata_errors, which av 19 removed
+#     "faster-whisper; sys_platform != 'darwin' or platform_machine != 'arm64'",
+#     "av<19; sys_platform != 'darwin' or platform_machine != 'arm64'",  # faster-whisper needs the older PyAV API
 # ]
 # ///
 """Fetch a YouTube video's transcript as timestamped markdown.
@@ -97,7 +97,7 @@ def fetch_captions(url: str, workdir: Path, lang: str, meta: dict) -> tuple[Path
 
 
 def json3_segments(path: Path) -> list[tuple[float, str]]:
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     segs = []
     for ev in data.get("events", []):
         if "segs" not in ev:
@@ -173,7 +173,7 @@ def transcribe(url: str, out_root: Path, whisper: str, lang: str) -> Path:
     workdir = out_root / vid
     workdir.mkdir(parents=True, exist_ok=True)
     keep = ("id", "title", "channel", "uploader", "upload_date", "duration", "webpage_url", "description")
-    (workdir / "metadata.json").write_text(json.dumps({k: meta.get(k) for k in keep}, indent=2))
+    (workdir / "metadata.json").write_text(json.dumps({k: meta.get(k) for k in keep}, indent=2), encoding="utf-8")
     print(f"{vid}: {meta.get('title')}", file=sys.stderr)
 
     caps = None if whisper == "always" else fetch_captions(url, workdir, lang, meta)
@@ -204,7 +204,7 @@ def transcribe(url: str, out_root: Path, whisper: str, lang: str) -> Path:
         "",
     ]
     path = workdir / "transcript.md"
-    path.write_text("\n".join(header) + "\n" + "\n\n".join(blocks) + "\n")
+    path.write_text("\n".join(header) + "\n" + "\n\n".join(blocks) + "\n", encoding="utf-8")
     return path
 
 

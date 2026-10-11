@@ -5,6 +5,26 @@ portable manifest and one set of skills. A small generator produces the host
 compatibility manifests and marketplaces; consumers install directly from the
 committed repository without a build step.
 
+Clone this repository wherever you like and install only the plugins you need.
+Paths resolve from the checkout or installed skill, and runtime data belongs to
+the current user. Author and marketplace names are shared package identity.
+
+| Plugin | Runtime requirements |
+| --- | --- |
+| `hello-world`, `repository-info` | Claude Code or Codex with plugin support |
+| `visual-audit` | Supported host and Python 3.10+ |
+| `delegation` | Supported host with subagents, Git, Python 3.10+, and repository-specific setup |
+| `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
+| `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
+
+Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
+Intel Mac Whisper dependency selection is covered by a metadata regression test;
+actual Intel Mac execution has not been checked. Windows support remains unverified;
+the first real Windows run will determine what needs adjustment. See
+[verification scope](docs/verification.md). Shell examples below use POSIX syntax;
+in PowerShell use `python` if `python3` is unavailable and pass `(Get-Location).Path`
+instead of `"$PWD"` to the marketplace registration command. Quote paths with spaces.
+
 The plugins have been installed, byte-compared, and uninstalled through the
 real native marketplaces on Codex **0.162.1** and Claude Code **2.1.296**.
 See [verification evidence and scope](docs/verification.md).
@@ -45,6 +65,16 @@ The `delegation` skill makes the main session the judge: it routes bulk work to
 git tree hash. Claude Code gets generated `delegation:execute` and
 `delegation:routine` agents; Codex has no plugin agent definitions, so the skill
 spawns its default subagent with the tier's model and effort.
+
+Claude tiers use the `opus`, `sonnet`, and `haiku` family aliases, so the host
+selects the corresponding model for your account/provider; see
+[Claude model configuration](https://code.claude.com/docs/en/model-config).
+Codex model preferences are in `plugins/delegation/tiers.json`; unavailable model
+overrides fall back to the host's default subagent. A host without subagent tools
+can use the other plugins; delegation requires that capability. Repository
+validator commands must fit the host's shell (`/bin/sh` on POSIX, `cmd.exe` on
+Windows), or invoke the intended shell explicitly. The overlay's `requires`
+attribute can limit validators to specific platforms.
 
 To set a repository up, open a session there and run `/delegation:setup` in Claude Code
 (or ask Codex to use the `setup` skill from `delegation`). It surveys the repo, drafts the
@@ -130,8 +160,8 @@ Routing quality has not been evaluated; that is for a pilot.
 
 Both are PEP 723 scripts run with `uv run --script`. `quota.py` has no dependencies;
 `yt_transcript.py` resolves `yt-dlp` and the Whisper backend for the platform on
-first run and needs `ffmpeg`. Scripts that call them use the checkout path, so
-every box that runs such a caller clones this repo to `~/repos/rickdiculousli-tools`:
+first run and needs `ffmpeg`. Apple Silicon uses MLX; Intel Macs and other systems
+use faster-whisper on CPU. Run these commands from any checkout location:
 
 ```sh
 uv run --script plugins/quota/skills/quota/scripts/quota.py --json
@@ -140,6 +170,21 @@ uv run --script plugins/yt-transcript/skills/yt-transcript/scripts/yt_transcript
 
 Quota readings are logged to `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/quota/usage.jsonl`;
 transcripts go to `${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/youtube/<id>/`.
+
+Installed skills run their bundled scripts directly. Other scripts should accept
+a configurable path to the installed script or to a checkout's
+`plugins/<plugin>/skills/<skill>/scripts/<script>`; no `~/repos` layout is required.
+Both data locations are resolved with the current user's home directory and can
+be overridden with the XDG environment variables. Transcript output also accepts
+`--out <dir>`.
+
+Quota reads the current user's login, never the author's. Claude supports
+`CLAUDE_CONFIG_DIR`, an explicit `QUOTA_CLAUDE_CREDENTIALS_FILE`, or
+`CLAUDE_CODE_OAUTH_TOKEN`. On macOS the default profile uses Keychain; a custom
+Keychain entry can be selected with `QUOTA_CLAUDE_KEYCHAIN_SERVICE`. Custom profiles
+do not fall back to the default account. Codex's app server inherits `CODEX_HOME`.
+These subscription interfaces are undocumented and may report a provider as
+unknown; API-key-only accounts do not supply subscription quota.
 
 ## Install from this checkout
 
@@ -224,8 +269,10 @@ tests/                               # generator, verifier, and renderer tests
 ```
 
 `visual-audit` ships its renderer, templates, and references inside its skill
-folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way. `hello-world` and `repository-info` are stubs. None of them need
-credentials or external services. The adapters share identity and content, while translating the hosts'
+folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
+without credentials or external services. Quota uses provider logins/services;
+transcripts download from YouTube and model/package hosts. Delegation uses the
+host's authenticated model service. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.
 
 ## Add or change a plugin

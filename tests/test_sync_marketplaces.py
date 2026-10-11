@@ -165,6 +165,15 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
         self.assertEqual(instructions["tiers"], {"execute": "Follow the brief.\nStop when stuck.", "routine": "Follow the brief."})
         self.assertTrue(sync(self.root, check=True))
 
+    def test_claude_family_aliases_generate_installable_agents(self):
+        for name, alias in (("judge", "opus"), ("execute", "sonnet"), ("routine", "haiku")):
+            self.tiers["tiers"][name]["hosts"]["claude"]["model"] = alias
+        self.save_tiers()
+        self.assertTrue(sync(self.root))
+        self.assertIn("model: sonnet\n", (self.plugin / "agents/execute.md").read_text())
+        self.assertIn("model: haiku\n", (self.plugin / "agents/routine.md").read_text())
+        self.assertTrue(sync(self.root, check=True))
+
     def test_hosts_reference_lists_every_tier_and_route(self):
         sync(self.root)
         text = self.hosts_text()

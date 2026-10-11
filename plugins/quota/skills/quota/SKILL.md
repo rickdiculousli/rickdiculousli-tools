@@ -17,9 +17,21 @@ uv run --script <skill-dir>/scripts/quota.py --provider codex   # claude | codex
 uv run --script <skill-dir>/scripts/quota.py --json             # for agents
 ```
 
-From another script, call the checkout path instead, since the plugin cache path
-changes with each version:
-`~/repos/rickdiculousli-tools/plugins/quota/skills/quota/scripts/quota.py`.
+`<skill-dir>` is the directory containing this SKILL.md. Quote the resolved script
+path when it contains spaces. From another script, accept the script path as a
+configuration value; use the installed skill path or any checkout's
+`plugins/quota/skills/quota/scripts/quota.py`. Do not assume a username, clone
+location, or versioned plugin cache path.
+
+The script requires Python 3.10+; `uv` resolves a suitable interpreter. It uses
+your own subscription login. Claude credential selection is, in order:
+`QUOTA_CLAUDE_CREDENTIALS_FILE`, `CLAUDE_CODE_OAUTH_TOKEN`, then the selected
+profile. `CLAUDE_CONFIG_DIR` selects a profile's `.credentials.json`; otherwise
+macOS uses the default Keychain service and falls back to `~/.claude/.credentials.json`.
+For a custom macOS Keychain entry, set `QUOTA_CLAUDE_KEYCHAIN_SERVICE` to its exact
+service name. A custom profile never silently falls back to the default account.
+Codex inherits `CODEX_HOME` and other host environment settings through its app
+server. API-key-only accounts do not provide these subscription readings.
 
 ## Reading it
 

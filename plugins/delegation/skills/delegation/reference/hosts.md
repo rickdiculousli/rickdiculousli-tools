@@ -4,9 +4,9 @@
 
 | Tier | Role | Claude Code | Codex |
 |---|---|---|---|
-| `judge` | plan, rule, review, diagnose | `claude-opus-5-5`, effort `medium` | `gpt-6.1-sol`, effort `medium` |
-| `execute` | bulk reading, work pinned by a spec or oracle | `claude-sonnet-5-5`, default effort | `gpt-6.1-sol`, effort `low` |
-| `routine` | run, triage, summarise, mechanical edits | `claude-haiku-5-5`, default effort | `gpt-6-luna`, default effort |
+| `judge` | plan, rule, review, diagnose | `opus`, effort `medium` | `gpt-6.1-sol`, effort `medium` |
+| `execute` | bulk reading, work pinned by a spec or oracle | `sonnet`, default effort | `gpt-6.1-sol`, effort `low` |
+| `routine` | run, triage, summarise, mechanical edits | `haiku`, default effort | `gpt-6-luna`, default effort |
 
 `judge` is the main session: no definition, never spawned. Its row is the
 expected setting for the session, which the skill can't set.

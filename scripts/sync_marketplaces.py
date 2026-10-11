@@ -195,6 +195,8 @@ def _codex_start(plugin: str, route: str, subagents: list[tuple[str, dict]]) -> 
 
 def _claude_alias(model_id: str) -> str:
     """Agent tool `model` alias for a Claude model id: the word after `claude-`."""
+    if model_id in {"opus", "sonnet", "haiku", "fable"}:
+        return model_id
     match = re.match(r"claude-(opus|sonnet|haiku|fable)-", model_id)
     if not match:
         raise ValueError(f"cannot derive a Claude model alias from {model_id!r}")

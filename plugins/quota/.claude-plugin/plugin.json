@@ -1,6 +1,6 @@
 {
   "name": "quota",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Read Claude and Codex subscription usage: windows, resets, weekly pace and projected unused quota.",
   "author": {
     "name": "Rick Li"

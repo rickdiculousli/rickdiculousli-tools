@@ -355,3 +355,40 @@ Tests, compilation checks, metadata consistency checks, lifecycle verification,
 and live Windows execution were deliberately not run, as requested by the user.
 Generated manifests and marketplace metadata were regenerated from their sources.
 The earlier 0.6.0 passing results do not verify this change.
+
+## Sharing and portability updates (2026-10-11)
+
+Versions: `quota` 0.1.1, `yt-transcript` 0.1.1, `delegation` 0.6.2.
+Checked on Apple Silicon macOS:
+
+- `python3 scripts/sync_marketplaces.py --check`: passed.
+- Full standard-library unit suite: 235 tests passed on Python 3.14.7 and
+  Python 3.10.22 (`UV_CACHE_DIR=/tmp/portability-uv-cache uv run --offline
+  --no-project --python 3.10 -m unittest discover -s tests -v`).
+- Native lifecycle verifier: passed on Codex 0.162.1 and Claude Code 2.1.296,
+  using disposable profiles for all six plugins, including byte comparison,
+  uninstall, and marketplace cleanup. No cleanup errors. Report:
+  `/tmp/plugin-verification.json`. Normal profiles were untouched.
+- Quota PEP 723 invocation via `uv run --offline --script .../quota.py --help`:
+  passed without provider requests.
+- Both scripts' `--help` commands ran directly under Python 3.10.22, without
+  provider requests, video downloads, or Whisper dependency imports.
+- Regression cases demonstrated failures before fixes: custom Claude profile
+  ignored, explicit credential file bypassed, OAuth environment token ignored,
+  selected Keychain failure falling back to the default account, invalid UTF-8
+  credentials raising an uncaught error, Intel Mac selecting no Whisper backend,
+  family aliases rejected by the marketplace generator, and UTC `Z` reset
+  timestamps rejected by Python 3.10's date parser. These cases now pass.
+
+The dependency-selection test evaluates the script's metadata for Apple Silicon,
+Intel macOS, and Linux x86_64/aarch64. It does not install those dependencies or
+run Whisper on those platforms. Both scripts now request Python 3.10+; transcript
+dependency resolution and transcription on that minimum interpreter were not run.
+The earlier live Mac/Ubuntu observations remain historical evidence, not live
+checks of these new versions. No live quota reads, remote installation, or
+model-driven skill/delegation execution was performed for this update.
+
+Windows was deliberately not verified, at the user's request. The first real
+Windows run will determine any remaining host-specific issues. Passing macOS
+tests also exercise the current POSIX delegation implementation; they do not
+verify the Windows locking branch added in 0.6.1. No Intel Mac execution was run.

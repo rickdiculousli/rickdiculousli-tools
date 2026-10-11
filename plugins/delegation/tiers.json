@@ -11,7 +11,7 @@
       "role": "plan, rule, review, diagnose",
       "hosts": {
         "claude": {
-          "model": "claude-opus-5-5",
+          "model": "opus",
           "effort": "medium"
         },
         "codex": {
@@ -40,7 +40,7 @@
       ],
       "hosts": {
         "claude": {
-          "model": "claude-sonnet-5-5"
+          "model": "sonnet"
         },
         "codex": {
           "model": "gpt-6.1-sol",
@@ -68,7 +68,7 @@
       ],
       "hosts": {
         "claude": {
-          "model": "claude-haiku-5-5"
+          "model": "haiku"
         },
         "codex": {
           "model": "gpt-6-luna"
