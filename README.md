@@ -56,7 +56,7 @@ Delegation: follow the delegation skill; this repo's overlay is .agents/delegati
 ```
 
 The overlay at `.agents/delegation.md` holds that repository's validators (with
-optional `cheap`, `timeout` and `lock` attributes), locks that cap heavy
+optional `cheap`, `timeout`, `lock` and `requires` attributes), locks that cap heavy
 commands across every worktree (`check.py exec --lock`, `check.py locks`), tier
 hints, findings sink and parallel limit. Its state, including each validator run's full
 output, lives in `.delegation/`,

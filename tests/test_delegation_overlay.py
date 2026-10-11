@@ -70,6 +70,8 @@ class OverlayTests(unittest.TestCase):
             "lint [cheap]: cargo clippy -- -D warnings\n"
             "test [timeout=1800, lock=cargo]: cargo test --workspace\n"
             "fmt []: cargo fmt --check\n"
+            "probes [requires=darwin]: xcrun probe\n"
+            "either [requires=darwin|linux, cheap]: true\n"
             "## Oracle\nvalidator:test\n"
             "## Locks\ncargo: slots=2, wait=600\nmem:\n"
         )
@@ -80,6 +82,8 @@ class OverlayTests(unittest.TestCase):
             "lint": Validator("cargo clippy -- -D warnings", cheap=True),
             "test": Validator("cargo test --workspace", timeout=1800.0, lock="cargo"),
             "fmt": Validator("cargo fmt --check"),
+            "probes": Validator("xcrun probe", requires=("darwin",)),
+            "either": Validator("true", cheap=True, requires=("darwin", "linux")),
         })
         self.assertEqual(o.locks, {"cargo": Lock(2, 600.0), "mem": Lock(1, None)})
 
@@ -93,6 +97,9 @@ class OverlayTests(unittest.TestCase):
             "e [cheap, cheap]: x\n"
             "f [cheap=yes]: x\n"
             "g [cheap: x\n"
+            "h [requires=Mac OS]: x\n"
+            "i [requires=]: x\n"
+            "j [requires=darwin|]: x\n"
         )
         write_overlay(self.root, text)
         o = load_overlay(self.root)
@@ -105,6 +112,9 @@ class OverlayTests(unittest.TestCase):
             'line 6: duplicate validator attribute "cheap"',
             'line 7: unknown validator attribute "cheap=yes"',
             'line 8: expected "name: command"',
+            'line 9: requires needs platform names like darwin or linux, separated by |, got "Mac OS"',
+            'line 10: requires needs platform names like darwin or linux, separated by |, got ""',
+            'line 11: requires needs platform names like darwin or linux, separated by |, got "darwin|"',
         ):
             self.assertIn(needle, problems)
         self.assertNotIn("g", o.validators)

@@ -8,9 +8,11 @@ import hashlib
 import json
 from pathlib import Path
 import os
+import platform
 import re
 import signal
 import subprocess
+import sys
 import time
 from typing import Iterator, Sequence
 
@@ -251,6 +253,11 @@ def run_validator(
 ) -> dict:
     if delegation not in {e["delegation"] for e in pending(root)}:
         raise DelegationError(f"delegation is not open: {delegation}")
+    if validator.requires and sys.platform not in validator.requires:
+        raise DelegationError(
+            f'validator "{name}" requires {"|".join(validator.requires)}; this host is {sys.platform}. '
+            "Nothing was recorded; leave it to a session on a matching host."
+        )
     timeout = timeout if timeout is not None else validator.timeout
     held = (
         locks.hold(root, validator.lock, lock or Lock(), {"delegation": delegation, "command": name})
@@ -296,6 +303,7 @@ def run_validator(
                 "lock_wait_s": slot["wait_s"],
                 "tree": before,
                 "stable": before == after,
+                "host": {"platform": sys.platform, "machine": platform.machine(), "node": platform.node()},
                 "output_sha256": hashlib.sha256(output).hexdigest(),
                 "output_tail": tail,
                 "log": log.relative_to(root).as_posix(),

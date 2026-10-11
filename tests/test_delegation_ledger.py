@@ -106,6 +106,15 @@ class LedgerTests(unittest.TestCase):
         self.assertIn("Order: run the cheap validators (fmt, lint) while you work", r.stdout)
         self.assertNotIn("Locks:", r.stdout)
 
+    def test_brief_footer_names_validators_other_hosts_must_run(self):
+        write_overlay(self.root, "## Validators\nunit: x\nprobes [requires=plan9]: y\nsweep [requires=plan9|beos]: z\n")
+        self.open("d1")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertIn(f"Not on this host ({sys.platform}): probes (plan9), sweep (plan9|beos).", r.stdout)
+        write_overlay(self.root, f"## Validators\nunit [requires={sys.platform}]: x\n")
+        r = run_cli(self.root, "brief", "--delegation", "d1")
+        self.assertNotIn("Not on this host", r.stdout)
+
     def test_brief_footer_explains_locks(self):
         write_overlay(self.root, "## Locks\ncargo: slots=2\nmem:\n")
         self.open("d1")

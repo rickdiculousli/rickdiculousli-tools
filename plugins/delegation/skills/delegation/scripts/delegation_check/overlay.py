@@ -27,6 +27,7 @@ _NAME = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
 _VALIDATOR = re.compile(r"([^\s\[]+)\s*(?:\[([^\]]*)\])?\Z")
 _REFERENCE = re.compile(r"validator:([A-Za-z0-9][A-Za-z0-9_-]*)")
 _LEADING_INT = re.compile(r"(\d+)")
+_PLATFORMS = re.compile(r"[a-z0-9]+(?:\|[a-z0-9]+)*\Z")
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ class Validator:
     cheap: bool = False
     timeout: float | None = None
     lock: str | None = None
+    requires: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -78,8 +80,8 @@ def _read_int(heading: str, lines: list[tuple[int, str]], default: int, problems
 
 
 def _validator(number: int, command: str, attributes: str | None, problems: list[str]) -> Validator:
-    """Parse `[cheap, timeout=<seconds>, lock=<name>]`; bad attributes are lint problems."""
-    cheap, timeout, lock = False, None, None
+    """Parse `[cheap, timeout=<seconds>, lock=<name>, requires=<platform>|...]`; bad attributes are lint problems."""
+    cheap, timeout, lock, requires = False, None, None, ()
     seen: set[str] = set()
     for item in filter(None, (part.strip() for part in (attributes or "").split(","))):
         key, eq, value = (part.strip() for part in item.partition("="))
@@ -96,9 +98,16 @@ def _validator(number: int, command: str, attributes: str | None, problems: list
                 lock = value
             else:
                 problems.append(f'line {number}: lock name must match [a-z0-9][a-z0-9_-]*, got "{value}"')
+        elif key == "requires" and eq:
+            if _PLATFORMS.match(value):
+                requires = tuple(value.split("|"))
+            else:
+                problems.append(
+                    f'line {number}: requires needs platform names like darwin or linux, separated by |, got "{value}"'
+                )
         else:
             problems.append(f'line {number}: unknown validator attribute "{item}"')
-    return Validator(command, cheap, timeout, lock)
+    return Validator(command, cheap, timeout, lock, requires)
 
 
 def _positive(number: int, key: str, value: str, problems: list[str]) -> float | None:

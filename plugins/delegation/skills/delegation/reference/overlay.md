@@ -42,6 +42,12 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
     the command runs. The lock must be declared under `## Locks`, and the
     validator needs a `timeout`, so nothing holds a lock indefinitely. The
     ledger records the lock, the slot and the wait.
+  - `requires=<platform>`: the validator runs only where Python's
+    `sys.platform` matches (`darwin`, `linux`, `win32`); list several as
+    `requires=darwin|linux`. Elsewhere `run` refuses (exit 2, no ledger entry),
+    and briefs written on that host name it as not runnable there, so a check
+    that can't run on a host never shows up as a FAIL. Every result records
+    the host it ran on (`host`: platform, machine, node).
   An unknown or malformed attribute is a lint problem.
 - **`## Locks`.** One `name: slots=<n>, wait=<seconds>` per line; both
   attributes are optional (`name:` alone is one slot, waiting indefinitely).

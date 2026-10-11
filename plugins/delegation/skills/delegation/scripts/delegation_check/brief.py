@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import shlex
+import sys
 
 from . import DelegationError
 from .overlay import Overlay
@@ -47,6 +48,13 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
     run = command(root, "run", "<validator>", "--delegation", delegation)
     fields = overlay.sections.get("Return fields", "").strip() or "none"
     cheap = ", ".join(name for name, v in overlay.validators.items() if v.cheap) or "none"
+    elsewhere = ", ".join(f"{name} ({'|'.join(v.requires)})" for name, v in overlay.validators.items()
+                          if v.requires and sys.platform not in v.requires)
+    hosts = [
+        f"Not on this host ({sys.platform}): {elsewhere}. Don't run these; `run` refuses them",
+        "and records nothing. Report them as not run, for a session on a matching host.",
+        "",
+    ] if elsewhere else []
     locks = []
     if overlay.locks:
         names = ", ".join(f"{name} ({lock.slots} slot{'s' if lock.slots != 1 else ''})"
@@ -76,6 +84,7 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
             "A failed run prints the path of its full output; search or slice it",
             "(grep, tail -n) rather than reading it whole, and don't rerun to see it.",
             "",
+            *hosts,
             *locks,
             "Return format:",
             "",

@@ -17,9 +17,11 @@ edit: echo x >> a.txt
 slow: sleep 0.2
 hang: sleep 5
 capped [timeout=0.3]: sleep 5
+here [requires=%s]: echo here
+elsewhere [requires=plan9]: echo nope
 ## Parallel limit
 4
-"""
+""" % sys.platform
 
 
 class RunTests(unittest.TestCase):
@@ -78,6 +80,28 @@ class RunTests(unittest.TestCase):
         self.assertEqual(event["tree"], run_cli(self.root, "tree").stdout.strip())
         run_cli(self.root, "run", "ok", "--delegation", "d1")
         self.assertEqual([e["id"] for e in self.results()], ["d1#1", "d1#2"])
+
+    def test_result_records_host(self):
+        self.open()
+        run_cli(self.root, "run", "ok", "--delegation", "d1")
+        (event,) = self.results()
+        self.assertEqual(event["host"]["platform"], sys.platform)
+        self.assertTrue(event["host"]["node"])
+        self.assertTrue(event["host"]["machine"])
+
+    def test_requires_runs_on_a_matching_host(self):
+        self.open()
+        r = run_cli(self.root, "run", "here", "--delegation", "d1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(len(self.results()), 1)
+
+    def test_requires_refuses_other_hosts_without_a_result(self):
+        self.open()
+        r = run_cli(self.root, "run", "elsewhere", "--delegation", "d1")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn(f'validator "elsewhere" requires plan9; this host is {sys.platform}', r.stderr)
+        self.assertEqual(self.results(), [])
+        self.assertFalse((self.root / ".delegation/logs/d1").exists())
 
     def test_failing_validator_exits_1(self):
         self.open()

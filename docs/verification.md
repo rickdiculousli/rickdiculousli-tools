@@ -19,12 +19,12 @@ profile for each host. Evidence labels: `checked` (observed running), `cited`
 | All six plugins uninstalled; absent from installed list | Passed | Passed |
 | Marketplace removed; absent from marketplace list | Passed | Passed |
 
-All results above are `checked`. The unit suite (206 tests) passed on Python 3.14
+All results above are `checked`. The unit suite (210 tests) passed on Python 3.14
 and on 3.10 (`uv run --no-project --python 3.10 -m unittest discover -s tests`).
 
 The marketplace is `rickdiculousli-tools`. The tested plugins are
 `visual-audit`, `hello-world`, `repository-info`, `delegation`, `quota` and
-`yt-transcript` (all `@rickdiculousli-tools`, `delegation` at version `0.4.0`, the others at `0.1.0`). File comparison covers every file tracked by Git in each plugin
+`yt-transcript` (all `@rickdiculousli-tools`, `delegation` at version `0.5.0`, the others at `0.1.0`). File comparison covers every file tracked by Git in each plugin
 directory except generated host manifests, so the bundled `quota.py` and `yt_transcript.py`, `visual-audit`'s renderer scripts,
 templates, and references are included. Both hosts installed identical skill content:
 
@@ -38,8 +38,11 @@ templates, and references are included. Both hosts installed identical skill con
 | `quota` | `dcd9ed6fa96ca51c21c45ecfb3c5af6c857da31f0795f6bb550fb01ffa7c2a05` |
 | `yt-transcript` | `6c9d671ae62b4deca2a924573bd2e10bcd0d0c05c9cbc6810dc2f71a0417c7a6` |
 
-All seven hashes match the 2026-10-11T01:27Z lifecycle report (`/tmp/plugin-verification.json`),
-re-run after delegation 0.4.0: validator attributes `cheap`, `timeout=<seconds>`
+All seven hashes (each skill's `SKILL.md`) match the 2026-10-11T02:45Z lifecycle report
+(`/tmp/plugin-verification.json`), re-run after delegation 0.5.0: the `requires=<platform>`
+validator attribute (`run` refuses other hosts with exit 2 and no ledger entry; the brief
+footer names validators this host can't run), and a `host` record (platform, machine,
+node) on every result. Both hosts' installed files matched the source. Earlier, in 0.4.0: validator attributes `cheap`, `timeout=<seconds>`
 and `lock=<name>`; `## Locks` with slots, a wait limit and the
 `DELEGATION_LOCK_<NAME>` override (flock on slot files under `/tmp`, keyed by
 git's common directory, shared by every worktree), holder details,
@@ -51,7 +54,7 @@ field, read-bound tier instructions, `check.py brief` (appending the fixed brief
 parts and checking brief and context hashes) with the one-line task `open`
 prints, `brief --with-instructions` (so Codex and the Claude fallback pass one line
 too), and the stderr note from an empty `query`. These are covered by the unit
-suite (201 tests). Neither the `setup` skill nor the 0.3.0 and 0.4.0 changes
+suite (210 tests). Neither the `setup` skill nor the 0.3.0, 0.4.0 and 0.5.0 changes
 have been exercised by a model yet.
 
 ## Quota and YouTube transcript scripts
