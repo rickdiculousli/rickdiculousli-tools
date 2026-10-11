@@ -49,12 +49,14 @@ guidance requiring plugin state under XDG. Use:
 
 ```text
 ${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/long-horizon/
+  state.lock
+  gc.json
   <sha256(canonical-git-common-dir)>/<sha256(canonical-worktree-root)>/
+    identity.json
     closure.json
     evidence/<content-id>.json
     snapshots/<content-id>.json
     trailers.txt
-    state.lock
 ```
 
 Those files belong to one worktree and contain no live agent mappings. No cache
@@ -66,6 +68,55 @@ do not add a repository ignore rule for a directory we do not create. Legacy
 `.long-horizon/` state may be reported with a migration instruction, but never
 silently moved or deleted. Wind-down clears only this plugin's resolved worktree
 state after showing its path; durable files and delegation state survive.
+
+**Daily worktree churn is normal.** On the first state mutation or setup/resume/
+checkpoint in a 24-hour period, run best-effort local garbage collection. Resume
+invokes `state gc --apply --if-due` explicitly; `status`, `lint`, `find`, `gate`
+and `closure verify` remain read-only. A manual `state gc` previews removals;
+`state gc --apply` runs them immediately. No daemon, hook or network call.
+
+Each worktree's `identity.json` records version, canonical worktree/common-dir/
+git-dir paths, directory file identities (device/inode and stable birth time
+where available), containing-volume identity, creation time, last mutation and
+first confirmed missing time. A volume mismatch is unknown, not deletion.
+Compare those identities with local Git registration, without pruning Git's
+worktree records. Treat a worktree as deleted only when its directory and its
+Git registration are both absent. If the common directory is itself gone,
+require its recorded worktree and git directory also to be absent. An unavailable
+mount, permission error, still-registered missing worktree or identity mismatch
+is unknown and retained with a diagnostic. A newly recreated worktree at the
+same path must match the recorded directory file identities to reuse state;
+new directories must not inherit old state. If those identities cannot be
+established reliably, retain the old payload as unknown rather than reuse it;
+quarantine the old payload under a unique retired-generation name for the same
+retention window.
+
+Delete confirmed-deleted worktree state seven days after its first confirmed
+missing observation, including scratch snapshots, pending records and closure
+bookkeeping. The grace period permits explicit recovery/import, and status/gc
+lists any pending evidence or unfinished closure scheduled for removal. Deleting
+the worktree abandons its disposable bookkeeping; committed evidence, goals,
+archives and user files are never touched. Do not infer closure success from
+cleanup. Still-existing/registered worktrees keep pending evidence, its referenced
+snapshots and unfinished closure regardless of age. Within them, delete
+unreferenced snapshots and setup drafts after 30 days without use; remove
+committed pending copies and their unreferenced snapshots immediately once
+durable evidence is verified. Record last use of an attempt on state mutations.
+Successful wind-down clears the current worktree payload immediately. Remove
+empty repository directories afterward. When the plugin is never used again,
+automatic cleanup cannot run; the manual command can sweep all its XDG state.
+
+**One permanent lock, no lock per abandoned worktree.** All short state
+transactions and garbage collection acquire the same root `state.lock`. Never
+hold it during validators, input probes, startup or integration operations.
+Never unlink or replace this lock file: doing so could let two processes lock
+different inodes. Holding it while collecting prevents a writer from recreating
+or changing a payload being removed. The root's tiny lock and GC timestamp are
+the only permanent housekeeping files; per-worktree locks cannot accumulate.
+Collection rechecks eligibility under the lock, skips symlinks/unknown files,
+confines removal to recognized plugin-owned payloads and tolerates partial
+deletion. A second run is a no-op. Cleanup errors are warnings and must not
+block authorized work or silently remove protected state.
 
 Readers never create state. Writers use an exclusive lock, atomic replacement
 in the same directory and restrictive file modes where supported. Use the same
@@ -390,10 +441,19 @@ lh.py evidence find [<check>] [--probe-inputs]
 lh.py gate [--base REV] [--probe-inputs] [--pending <id> ...]
 lh.py closure record --batch <id> --step <step> ...
 lh.py closure verify [--state PATH]
+lh.py state gc [--apply] [--if-due]
 ```
 
 Additional argument contracts:
 
+- `state gc` works outside a Git checkout and scans only this plugin's XDG
+  state root. It reports deleted-worktree, old-unreferenced and protected/unknown
+  entries with reasons, retention deadlines and pending/unfinished summaries.
+  `--apply` authorizes only the eligibility rules above; `--if-due` limits an
+  applied sweep to once per 24 hours. There is no force flag that discards live
+  pending state. A missing state root is an empty successful result, not created
+  by preview. Wind-down may explicitly clear its own approved payload using the
+  same locked removal helper. GC's own writes do not refresh payload ages.
 - `evidence prepare` accepts `--attempt <identifier>`, defaulting to a generated
   identifier it prints for reuse. Preparing with that same identifier and
   unchanged scope/inputs reuses the snapshot; changed contents under that
@@ -489,6 +549,10 @@ cli,git,state,overlay}.py`; `tests/test_long_horizon_overlay.py`,
 - [ ] Implement XDG resolution, portable POSIX/Windows locks, atomic records
   and read-only discovery. Close temporary replacement-file handles before
   `os.replace` so atomic writes also work on Windows.
+- [ ] Implement identity metadata, a fixed root lock, throttled opportunistic
+  collection and `state gc` preview/apply. Persist/recheck missing-since and
+  retention independently of file mtimes; distinguish deleted, still registered,
+  inaccessible and recreated worktrees. No per-worktree lock files.
 - [ ] Parse overlays/defaults and validate path confinement and literal/env
   script resolution. Report referenced files missing; optional nonexistent
   readiness/archive outputs have warnings/recovery rather than setup dead ends.
@@ -502,6 +566,13 @@ timeout, unexpected I/O errors and exception-safe release. Run actual Windows
 process-contention/atomic-replacement checks when a Windows runner is available;
 record them as untested if unavailable, without disabling Windows writes or
 presenting mocked coverage as native Windows validation.
+Use an injected clock to test seven-day deleted-worktree retention, 30-day
+unreferenced snapshot/draft retention and the 24-hour throttle. Cover daily
+create/delete churn, pending/unfinished grace-period diagnostics, existing
+worktree protection, missing mounts, stale Git registrations, recreated paths,
+symlink confinement, concurrent collector/writer serialization and interrupted
+deletion. Repeated collection must converge to payload removal and empty parent
+cleanup while preserving the single root lock and all durable Git evidence.
 
 **Done when:** a minimal/default or full overlay is deterministic and bad policy
 cannot authorize dependent actions; inspection creates no runtime state.
@@ -670,6 +741,9 @@ and a retry does not repeat already completed integration.
   readiness/status, blockers/selection, optional single quota read, three-line
   brief and work. “Where are we?” is status only; overrides/off-goal/park/pause
   do what the spec says without additional ceremony.
+- [ ] Include throttled state collection in setup/resume/checkpoint, explain
+  retention and explicit recovery during the seven-day deleted-worktree window,
+  and document `state gc` for cleanup after abandoned/deleted daily worktrees.
 - [ ] Write checkpoint flow: delegation pending, prepare/check/record/reuse,
   proportional acceptance, owned goal/handoff edits, gate/lint, lifecycle record,
   authorized closure/recovery, concise result and fresh-session recommendation.
@@ -823,6 +897,7 @@ not results. Record actual pass/fail/untested in the pilot report.
 | Commit/merge/push/sync are separate claims | 8 | U local bare remote |
 | Durable findings, recovery routes, pinned context | 5, 6, 9 | U, C, D |
 | Idempotent setup/record/repair/archive/closure/reactivation | 2, 4, 5, 7, 8, 9 | U, C, D |
+| Daily worktree churn, retention, GC/writer races, fixed root lock | 2, 9 | U injected clock/processes |
 | Deferred claims, scheduling and generic cost measurement | 1, 12 | Scope review; no v1 implementation |
 | game-decomp adoption separately authorized | 12 | Explicit follow-on checklist |
 
