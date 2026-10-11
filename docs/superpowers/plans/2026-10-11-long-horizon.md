@@ -68,9 +68,15 @@ silently moved or deleted. Wind-down clears only this plugin's resolved worktree
 state after showing its path; durable files and delegation state survive.
 
 Readers never create state. Writers use an exclusive lock, atomic replacement
-in the same directory and restrictive file modes. Use stdlib POSIX locking on
-macOS/Linux; other platforms get a clear unsupported-write diagnostic while
-read-only operations remain available. Failed writes leave the old record valid.
+in the same directory and restrictive file modes where supported. Use the same
+stdlib locking pattern as delegation's `file_lock.py`: `fcntl.flock` on POSIX
+and `msvcrt.locking` on Windows, locking one fixed byte at offset zero with a
+nonblocking attempt and a bounded retry loop. Always unlock and close the same
+handle, including on exceptions; distinguish contention from other I/O errors.
+Bundle the small lock helper inside long-horizon rather than importing an
+installed delegation package. POSIX and Windows support state writes; report
+an unsupported-lock diagnostic only when neither backend is available. Failed
+writes leave the old record valid.
 No consumer state is written beside installed scripts.
 
 ### 3. Overlay grammar and defaults
@@ -480,7 +486,9 @@ cli,git,state,overlay}.py`; `tests/test_long_horizon_overlay.py`,
   branch. Prefer configured target, local remote HEAD, then an unambiguous
   main/master branch; ambiguity asks for configuration, with no network request.
   Handle detached HEAD, unborn repos, paths with spaces and subdirectories.
-- [ ] Implement XDG resolution, locks, atomic records and read-only discovery.
+- [ ] Implement XDG resolution, portable POSIX/Windows locks, atomic records
+  and read-only discovery. Close temporary replacement-file handles before
+  `os.replace` so atomic writes also work on Windows.
 - [ ] Parse overlays/defaults and validate path confinement and literal/env
   script resolution. Report referenced files missing; optional nonexistent
   readiness/archive outputs have warnings/recovery rather than setup dead ends.
@@ -489,6 +497,11 @@ cli,git,state,overlay}.py`; `tests/test_long_horizon_overlay.py`,
 **Validate:** `python3 -m unittest discover -s tests -p 'test_long_horizon_overlay.py' -v`
 and the corresponding state test file. Verify real index/branch/unrelated bytes
 are unchanged; simultaneous writes serialize, and interrupted writes recover.
+Exercise both lock backend branches with mocks for acquisition, contention,
+timeout, unexpected I/O errors and exception-safe release. Run actual Windows
+process-contention/atomic-replacement checks when a Windows runner is available;
+record them as untested if unavailable, without disabling Windows writes or
+presenting mocked coverage as native Windows validation.
 
 **Done when:** a minimal/default or full overlay is deterministic and bad policy
 cannot authorize dependent actions; inspection creates no runtime state.
