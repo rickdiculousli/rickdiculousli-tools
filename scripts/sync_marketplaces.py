@@ -110,6 +110,8 @@ def load_tiers(plugin_dir: Path) -> dict | None:
     if routes["codex"] not in CODEX_ROUTES:
         raise ValueError(f"{where}: routes.codex must be one of {', '.join(CODEX_ROUTES)}, got {routes['codex']!r}")
     tiers = data.get("tiers")
+    if "coordination" in data:
+        data["coordination"] = _nonempty_text(data["coordination"], f"{where}: coordination")
     if not isinstance(tiers, dict) or not tiers:
         raise ValueError(f"{where}: tiers must be a nonempty object")
     for name, tier in tiers.items():
@@ -259,6 +261,7 @@ def render_tiers(plugin_path: Path, tiers: dict) -> dict[Path, str]:
         *[f"- `{name}`: `model` = `{_claude_alias(tier['hosts']['claude']['model'])}`" for name, tier in subagents],
         "", f"### Codex (route: {tiers['routes']['codex']})", "",
         *_codex_start(plugin, tiers["routes"]["codex"], subagents),
+        *(["", "## Role reuse and peer requests", "", tiers["coordination"]] if "coordination" in tiers else []),
         "", "## Tier instructions", "",
         "Each tier's generated instructions, verbatim. A Claude Code tier agent already has them;",
         "`brief --with-instructions` prints them for any other subagent, before the brief.",

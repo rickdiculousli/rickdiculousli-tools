@@ -73,7 +73,11 @@ or change an overlay, use the `setup` skill from this plugin.
    `## Single writer` resources. Only you apply them.
 10. **Write findings as they happen** to the overlay's `## Findings` sink (else the
     execution log): id, date, claim, status (including `refuted`), evidence. Do it
-    when a discovery or dead end is established, not at handoff; if the sink is
+    when a discovery or dead end is established, not at handoff. On the second
+    similar brief, or at handoff, record a concrete script or reusable-role
+    proposal in the repo findings/handoff sink (fallback: execution log), rather
+    than only in session memory. Use `name: command; what it replaces` for
+    deterministic rote scripts; writing repository scripts needs explicit approval; if the sink is
     tracked and delegations are open, see the hold in section 3, step 5.
 11. **Check; don't redo.** Review ledger results and the diff. Read raw material
     only to dig into a specific doubt. A failed result keeps its full output in
@@ -148,13 +152,75 @@ delegation open. It uses the overlay's timeout for that validator unless
 and keeps the full output in `.delegation/logs/<id>/<n>.log`; a failed run
 prints that path. `check.py tree` prints the current tree hash.
 
+### Reusable roles and continuations
+
+The optional `## Roles` section registers a tier, runbook and at least one reuse
+cap. Open a first use with `open --delegation <new-id> --tier execute --role capture --brief
+.delegation/briefs/<new-id>.md`; continue it with `open --delegation <new-id> --tier execute
+--continue <prior-id> --brief .delegation/briefs/<new-id>.md`. The prior use must
+be closed, the tier stays the same, and the role session cannot have another open
+brief. `--tier` remains required; a role validates it rather than selecting it.
+Use a new delegation id and brief each time. Counters include the first
+brief and all ancestor branches; every use records fresh brief/runbook hashes.
+The byte cap accumulates supplied brief/context file sizes per use, excluding
+outputs, rather than measuring actual model context. Prefer a use-count cap.
+
+`open` prints a follow-up loader for Claude `SendMessage` or Codex
+`collaboration.followup_task`. The judge maintains the mapping from delegation
+ids to host agent ids; the checker does not know it. Preserve the original
+tracked-file write permissions. Proactively refresh the runbook during the final
+allowed use, after work and checks complete and before close. That change
+invalidates the current brief's recorded hash; do not reload it afterward.
+
+A cap refusal happens after the prior use is already closed. Open a separate
+short refresh delegation without `--role` or `--continue`, granting `May write`
+only for the already-authorized runbook. Send its loader to the existing host
+agent solely to refresh, close the refresh delegation, then start a fresh role
+session. Do not reuse the capped agent for more task work or reload an old closed
+brief. Refreshing grants no additional tracked-file permissions.
+
+### Asynchronous peer role calls
+
+A caller brief names both the peer host id and caller delegation id. The peer
+runs caller commands with `run ... --delegation <caller-id>` or
+`exec --lock <name> --timeout <seconds> --delegation <caller-id> -- <command>`,
+so the caller receives the ledger evidence. Keep the caller open through peer
+completion. Serialize the role agent's actual execution; callers and the judge
+may do independent work asynchronously while waiting. The judge receives stop
+handbacks and resolves failures or required human action.
+
+Claude peer messaging supplied and verified by the user supports `SendMessage`
+ids that do not appear in `ListAgents`; stopped peers resume. See [host guidance](reference/hosts.md) and the repository
+verification documentation for observed host evidence. Codex uses canonical agent
+paths. `collaboration.send_message` does not
+trigger an idle agent's turn; the judge uses `collaboration.followup_task` to
+resume it. Check the current harness's capabilities before promising peer calls;
+fall back to judge relay when unavailable. This observation does not guarantee
+peer behavior on every Codex harness.
+
+Brief footers give agent instructions for commit policy, committed prose, and
+host-side isolation. They do not enforce filesystem access. A nonempty
+`## Host side effects` section appends its prohibited changes to those instructions.
+
+A registered validator marked `needs-human`, or a tier hint such as
+`execute [needs-human]: native launches require human action`, requires the judge
+to notify the user before work and early while the user is present. Stop
+for needed human action; do not retry indefinitely.
+
 **Locks** (overlay `## Locks`) cap how many heavy commands run at once across
 every worktree of the repo. `check.py exec --lock <name> --timeout <seconds>
 [--delegation <id>] -- <command>` runs any other command under a lock (the brief
 footer shows subagents this command). `check.py locks` shows who holds each
 slot; check it when a subagent reports waiting. If this machine can take more or
 fewer than the overlay's slots, set `DELEGATION_LOCK_<NAME>` for the session
-(see [reference/overlay.md](reference/overlay.md)).
+(see [reference/overlay.md](reference/overlay.md)). Locks also protect physical
+resources, for example `games: slots=6, wait=3600`. `exec` holds a slot for the
+complete foreground process lifetime; never detach a launch. One command owns
+one slot: multiple jobs must acquire a slot per child or serialize, otherwise
+they oversubscribe the resource. Windows still has no `flock` protection.
+`exec` requires both `--lock` and `--timeout`. With a delegation id its ledger
+results have `validator=null`: cite command observations or mark them `asserted`;
+they cannot count as `checked` registered-validator acceptance.
 
 ## 4. Starting a tier on this host
 

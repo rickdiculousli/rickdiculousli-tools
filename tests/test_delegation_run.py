@@ -292,6 +292,7 @@ class RunTests(unittest.TestCase):
 
     def test_exec_holds_lock_and_passes_exit_code(self):
         write_overlay(self.root, "## Locks\nmem:\n")
+        self.open("d9")
         holder = subprocess.Popen(
             [sys.executable, str(SCRIPTS / "check.py"), "exec", "--lock", "mem", "--timeout", "10",
              "--delegation", "d9", "--", "sleep", "1"],

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import sys
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from . import DelegationError
 from .brief import footer, task_line, tier_instructions
 from . import locks
 from .ledger import OUTCOMES, TIERS, close_delegation, execute, load_brief, open_delegation, pending, query, run_validator
-from .overlay import load_overlay
+from .overlay import Validator, load_overlay
 from .tree import repo_root, tree_hash
 
 
@@ -30,14 +31,19 @@ def _lint(root: Path) -> int:
 
 def _open(root: Path, args: argparse.Namespace) -> int:
     overlay = load_overlay(root)
+    if overlay.problems:
+        raise DelegationError('overlay lint problems: ' + '; '.join(overlay.problems))
     event = open_delegation(
         root, args.delegation, args.tier, args.brief, args.writes,
         overlay.parallel_limit, overlay.extra_inputs,
+        args.continued_from, args.role, overlay.roles,
     )
     role = "writer" if args.writes else "reader"
     print(f"opened {args.delegation} ({args.tier}, {role}) at {event['tree'][:12]}")
     print(f"task: {task_line(root, args.delegation)}")
     print(f"task with instructions: {task_line(root, args.delegation, with_instructions=True)}")
+    if args.continued_from:
+        print(f"follow-up: SendMessage (Claude Code) / followup_task (Codex) to the agent mapped to {event['agent_session']}: {task_line(root, args.delegation)}")
     return 0
 
 
@@ -45,6 +51,8 @@ def _brief(root: Path, args: argparse.Namespace) -> int:
     event, data = load_brief(root, args.delegation)
     text = data.decode("utf-8", errors="replace").rstrip("\n")
     head = f"{tier_instructions(event['tier'])}\n\n" if args.with_instructions else ""
+    if event.get('role'):
+        text += '\n\nRole runbook: read ' + event['role_runbook']
     print(f"{head}{text}\n\n{footer(root, args.delegation, load_overlay(root))}", end="")
     return 0
 
@@ -110,6 +118,16 @@ def _exec(root: Path, args: argparse.Namespace) -> int:
     if not command:
         raise DelegationError("exec needs a command after --")
     lock = _declared(root, args.lock)
+    if args.delegation:
+        overlay = load_overlay(root)
+        result = run_validator(root, args.delegation, None,
+                               Validator(shlex.join(command), timeout=args.timeout, lock=args.lock),
+                               lock, overlay.extra_inputs, args.timeout, argv=command)
+        if result['output_tail']:
+            print(result['output_tail'])
+        print(_result_line(result))
+        print(f"full output: {root.resolve() / result['log']}")
+        return 124 if result['timed_out'] else (result['exit'] if result['exit'] is not None else 1)
     holder = {"delegation": args.delegation, "command": " ".join(command)}
     with locks.hold(root, args.lock, lock, holder):
         code, timed_out, _ = execute(root, command, args.timeout, capture=False)
@@ -178,6 +196,8 @@ def build_parser() -> argparse.ArgumentParser:
     opener.add_argument("--tier", required=True, choices=TIERS)
     opener.add_argument("--brief", required=True, type=Path)
     opener.add_argument("--writes", action="store_true", help="The delegation may edit the worktree")
+    opener.add_argument("--role", help="Role declared in the overlay")
+    opener.add_argument("--continue", dest="continued_from", help="Prior role delegation id; reuse its agent")
     loader = commands.add_parser("brief", help="Print an open delegation's brief, checked against its hash")
     loader.add_argument("--delegation", required=True)
     loader.add_argument("--with-instructions", action="store_true",
@@ -193,11 +213,11 @@ def build_parser() -> argparse.ArgumentParser:
     runner.add_argument("--delegation", required=True)
     runner.add_argument("--timeout", type=float, help="Seconds; overrides the overlay's timeout")
     execer = commands.add_parser(
-        "exec", help="Run any command while holding a declared lock (no ledger entry)"
+        "exec", help="Run a command under a lock; --delegation records caller evidence"
     )
     execer.add_argument("--lock", required=True)
     execer.add_argument("--timeout", required=True, type=float, help="Seconds; a lock is never held without one")
-    execer.add_argument("--delegation", help="Shown to other sessions as the lock's holder")
+    execer.add_argument("--delegation", help="Open caller delegation for command evidence and lock holder")
     execer.add_argument("argv", nargs=argparse.REMAINDER, metavar="-- command", help="The command and its arguments")
     commands.add_parser("locks", help="List declared locks and who holds each slot")
     asker = commands.add_parser("query", help="List recorded validator results")

@@ -56,7 +56,7 @@ Delegation: follow the delegation skill; this repo's overlay is .agents/delegati
 ```
 
 The overlay at `.agents/delegation.md` holds that repository's validators (with
-optional `cheap`, `timeout`, `lock` and `requires` attributes), locks that cap heavy
+optional `cheap`, `needs-human`, `timeout`, `lock` and `requires` attributes), locks that cap heavy
 commands across every worktree (`check.py exec --lock`, `check.py locks`), tier
 hints, findings sink and parallel limit. Its state, including each validator run's full
 output, lives in `.delegation/`,
@@ -74,6 +74,46 @@ python3 plugins/delegation/skills/delegation/scripts/check.py brief --help
 python3 plugins/delegation/skills/delegation/scripts/check.py locks
 python3 plugins/delegation/skills/delegation/scripts/check.py exec --help
 ```
+
+Optional overlay sections add script proposals (`name: command; what it
+replaces`), host-side never-write restrictions, and reusable roles:
+
+```text
+## Roles
+capture: tier=execute, runbook=.delegation/context/capture.md, max-uses=8, max-context-bytes=100000
+## Locks
+games: slots=6, wait=3600
+```
+
+Roles require at least one cap; prefer `max-uses`. Counts include the first brief
+and all ancestor branches. Byte caps accumulate brief/context file sizes per use,
+excluding outputs; they do not measure actual model context. Start with
+`check.py open --delegation <id> --tier execute --role capture --brief <path>`; reuse a closed
+prior brief with `open --delegation <new-id> --tier execute --continue <prior-id> --brief <new-path>`.
+`--tier` remains required and must match the role. The tier stays the same and
+each use records new brief/runbook hashes. The judge
+maps delegation ids to host agent ids and uses the printed follow-up loader.
+
+Peer roles can execute caller commands asynchronously while independent work
+continues. The caller brief names the peer host id and caller delegation id, and
+stays open until completion. Use `run ... --delegation <caller-id>` or
+`exec --lock games --timeout 300 --delegation <caller-id> -- <command>` to attribute
+evidence to the caller. `exec` records `validator=null`; its observations must be
+cited or asserted rather than accepted as checked registered-validator results.
+A lock covers the full foreground process lifetime. Never detach launches; one
+command owns one slot, so multiple jobs need a slot per child or serialization.
+Windows locks still lack `flock` protection. Host peer support is checked before
+use, with judge relay as the fallback.
+
+Setup proposes deterministic repository helpers but writes scripts only with
+explicit approval. On a second similar brief or handoff, the judge records a
+script or role proposal in the repository findings/handoff sink, falling back to
+the execution log. `needs-human` checks require user notification before work and
+early while the user is present, without infinite retries. Existing
+overlays remain valid. Brief footers prohibit commits unless explicitly allowed,
+first-person committed text, and host changes named by a nonempty restrictions
+section outside the worktree. These are agent instructions, not filesystem
+enforcement.
 
 Install and remove it like the other plugins:
 

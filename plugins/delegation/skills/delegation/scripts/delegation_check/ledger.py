@@ -18,7 +18,7 @@ from typing import Iterator, Sequence
 
 from . import DelegationError
 from . import locks
-from .overlay import Lock, Validator
+from .overlay import Lock, Role, Validator
 from .tree import state_dir, tree_hash
 
 try:
@@ -123,6 +123,9 @@ def open_delegation(
     writes: bool,
     parallel_limit: int,
     extra_inputs: Sequence[str],
+    continued_from: str | None = None,
+    role_name: str | None = None,
+    roles: dict[str, Role] | None = None,
 ) -> dict:
     if not ID.match(delegation):
         raise DelegationError(f"invalid delegation id: {delegation!r}")
@@ -145,6 +148,39 @@ def open_delegation(
         if any(e.get("event") == "open" and e.get("delegation") == delegation for e in events):
             raise DelegationError(f"delegation id already used: {delegation}")
         active = _pending(events)
+        metadata = {}
+        prior = None
+        if continued_from:
+            prior = next((e for e in events if e.get("event") == "open"
+                          and e.get("delegation") == continued_from), None)
+            if prior is None:
+                raise DelegationError(f"prior delegation not found: {continued_from}")
+            if prior['tier'] != tier or (role_name and role_name != prior.get('role')):
+                raise DelegationError("a continued agent must keep its role and tier")
+            role_name = prior.get('role')
+            if not role_name:
+                raise DelegationError("continue requires a prior role delegation with a reuse cap")
+        if role_name:
+            role = (roles or {}).get(role_name)
+            if role is None or role.tier != tier:
+                raise DelegationError(f"unknown role or wrong tier: {role_name}")
+            target = root_resolved / role.runbook
+            if not target.resolve().is_relative_to(root_resolved / '.delegation/context') or not target.is_file():
+                raise DelegationError(f"role runbook not found or escapes context directory: {role.runbook}")
+            context[role.runbook] = hashlib.sha256(target.read_bytes()).hexdigest()
+            session = prior.get('agent_session', continued_from) if prior else delegation
+            chain = [e for e in events if e.get('event') == 'open' and e.get('agent_session') == session]
+            if any(e.get('agent_session') == session for e in active):
+                raise DelegationError("role agent has an open brief; review and close it before continuing")
+            uses = len(chain) + 1
+            size = len(brief_bytes) + sum((root_resolved / ref).stat().st_size for ref in context)
+            context_bytes = sum(e.get('context_bytes_added', 0) for e in chain) + size
+            if ((role.max_uses is not None and uses > role.max_uses)
+                    or (role.max_context_bytes is not None and context_bytes > role.max_context_bytes)):
+                raise DelegationError(f"reuse cap hit for role {role_name}; have the agent refresh the role runbook first, then start a fresh agent")
+            metadata = {'role': role_name, 'role_runbook': role.runbook,
+                        'agent_session': session, 'continued_from': continued_from,
+                        'uses': uses, 'context_bytes': context_bytes, 'context_bytes_added': size}
         if writes and active:
             raise DelegationError(
                 f"a writer needs the worktree to itself; open: {', '.join(e['delegation'] for e in active)}"
@@ -168,6 +204,7 @@ def open_delegation(
                 "brief_sha256": brief_sha,
                 "context": context,
                 "tree": tree,
+                **metadata,
             },
         )
 
@@ -245,11 +282,12 @@ def log_path(root: Path, result_id: str) -> Path:
 def run_validator(
     root: Path,
     delegation: str,
-    name: str,
+    name: str | None,
     validator: Validator,
     lock: Lock | None,
     extra_inputs: Sequence[str],
     timeout: float | None,
+    argv: Sequence[str] | None = None,
 ) -> dict:
     if delegation not in {e["delegation"] for e in pending(root)}:
         raise DelegationError(f"delegation is not open: {delegation}")
@@ -260,14 +298,15 @@ def run_validator(
         )
     timeout = timeout if timeout is not None else validator.timeout
     held = (
-        locks.hold(root, validator.lock, lock or Lock(), {"delegation": delegation, "command": name})
+        locks.hold(root, validator.lock, lock or Lock(),
+                   {"delegation": delegation, "command": name if name is not None else validator.command})
         if validator.lock
         else contextlib.nullcontext({"slot": None, "wait_s": None})
     )
     with held as slot:
         before = tree_hash(root, extra_inputs)
         started = time.monotonic()
-        code, timed_out, output = execute(root, validator.command, timeout)
+        code, timed_out, output = execute(root, argv if argv is not None else validator.command, timeout)
         duration = round(time.monotonic() - started, 3)
         after = tree_hash(root, extra_inputs)
     text = output.decode("utf-8", errors="replace")

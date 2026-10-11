@@ -18,6 +18,9 @@ KNOWN_HEADINGS: tuple[str, ...] = (
     "Return cap",
     "Extra inputs",
     "Locks",
+    "Roles",
+    "Rote scripts",
+    "Host side effects",
 )
 DEFAULT_PARALLEL_LIMIT = 3
 DEFAULT_RETURN_CAP = 400
@@ -37,6 +40,15 @@ class Validator:
     timeout: float | None = None
     lock: str | None = None
     requires: tuple[str, ...] = ()
+    needs_human: bool = False
+
+
+@dataclass(frozen=True)
+class Role:
+    tier: str
+    runbook: str
+    max_uses: int | None = None
+    max_context_bytes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +68,7 @@ class Overlay:
     parallel_limit: int
     return_cap: int
     problems: tuple[str, ...]
+    roles: dict[str, Role]
 
 
 def overlay_path(root: Path) -> Path:
@@ -81,7 +94,7 @@ def _read_int(heading: str, lines: list[tuple[int, str]], default: int, problems
 
 def _validator(number: int, command: str, attributes: str | None, problems: list[str]) -> Validator:
     """Parse `[cheap, timeout=<seconds>, lock=<name>, requires=<platform>|...]`; bad attributes are lint problems."""
-    cheap, timeout, lock, requires = False, None, None, ()
+    cheap, timeout, lock, requires, needs_human = False, None, None, (), False
     seen: set[str] = set()
     for item in filter(None, (part.strip() for part in (attributes or "").split(","))):
         key, eq, value = (part.strip() for part in item.partition("="))
@@ -91,6 +104,8 @@ def _validator(number: int, command: str, attributes: str | None, problems: list
         seen.add(key)
         if item == "cheap":
             cheap = True
+        elif item == "needs-human":
+            needs_human = True
         elif key == "timeout" and eq:
             timeout = _positive(number, "timeout", value, problems)
         elif key == "lock" and eq:
@@ -107,7 +122,43 @@ def _validator(number: int, command: str, attributes: str | None, problems: list
                 )
         else:
             problems.append(f'line {number}: unknown validator attribute "{item}"')
-    return Validator(command, cheap, timeout, lock, requires)
+    return Validator(command, cheap, timeout, lock, requires, needs_human)
+
+
+def _roles(lines: list[tuple[int, str]], problems: list[str]) -> dict[str, Role]:
+    roles = {}
+    for number, text in lines:
+        name, sep, attributes = (p.strip() for p in text.partition(":"))
+        values = {}
+        for item in attributes.split(","):
+            key, eq, value = (p.strip() for p in item.partition("="))
+            if not eq or key not in {"tier", "runbook", "max-uses", "max-context-bytes"} or key in values:
+                problems.append(f'line {number}: invalid or duplicate role attribute "{item.strip()}"')
+            values[key] = value
+        tier, runbook = values.get("tier", ""), values.get("runbook", "")
+        if not sep or not _NAME.fullmatch(name) or name in roles:
+            problems.append(f'line {number}: invalid or duplicate role name "{name}"')
+        if tier not in {"execute", "routine"}:
+            problems.append(f'line {number}: role tier must be execute or routine')
+        if (_escapes(runbook) or not runbook.startswith(".delegation/context/")
+                or not runbook[len(".delegation/context/"):]):
+            problems.append(f'line {number}: role runbook must be under .delegation/context/')
+        caps = []
+        for key in ("max-uses", "max-context-bytes"):
+            value = values.get(key)
+            try:
+                cap = int(value) if value is not None and value.isascii() and value.isdigit() else None
+            except ValueError:
+                cap = None
+            if value is not None and (cap is None or cap < 1):
+                problems.append(f'line {number}: {key} needs a positive integer')
+                caps.append(None)
+            else:
+                caps.append(cap)
+        if all(cap is None for cap in caps):
+            problems.append(f'line {number}: role needs max-uses and/or max-context-bytes')
+        roles[name] = Role(tier, runbook, *caps)
+    return roles
 
 
 def _positive(number: int, key: str, value: str, problems: list[str]) -> float | None:
@@ -147,7 +198,7 @@ def load_overlay(root: Path) -> Overlay:
     path = overlay_path(root)
     problems: list[str] = []
     if not path.is_file():
-        return Overlay(path, False, {}, {}, (), {}, DEFAULT_PARALLEL_LIMIT, DEFAULT_RETURN_CAP, ())
+        return Overlay(path, False, {}, {}, (), {}, DEFAULT_PARALLEL_LIMIT, DEFAULT_RETURN_CAP, (), {})
 
     raw = path.read_bytes().decode("utf-8", errors="replace")
     bodies: dict[str, list[tuple[int, str]]] = {}
@@ -225,4 +276,9 @@ def load_overlay(root: Path) -> Overlay:
                 problems.append(f'line {number}: unregistered validator "{match.group(1)}"')
 
     sections = {name: "\n".join(text for _, text in lines) for name, lines in bodies.items()}
-    return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems))
+    roles = _roles(bodies.get("Roles", []), problems)
+    for number, text in bodies.get("Rote scripts", []):
+        name, sep, body = (p.strip() for p in text.partition(":"))
+        if not sep or not _NAME.fullmatch(name) or not body:
+            problems.append(f'line {number}: rote script needs "name: command; what it replaces"')
+    return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems), roles)

@@ -11,6 +11,9 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 | `## Validators` | `name [attributes]: command` lines | None; all claims are `cited` or `asserted` |
 | `## Extra inputs` | Ignored paths folded into the tree hash | None |
 | `## Locks` | `name: slots=<n>, wait=<seconds>` lines | None |
+| `## Roles` | Named tier/runbook pairs with reuse caps | None |
+| `## Rote scripts` | `name: command; what it replaces` proposals or approved helpers | None |
+| `## Host side effects` | Prohibited host changes outside the worktree, one per line | None |
 | `## Single writer` | Resources only the judge writes | None |
 | `## Findings` | The findings sink and its schema | The execution log |
 | `## Return fields` | Repo-specific fields for returns | None |
@@ -37,6 +40,9 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
   commas: `test [timeout=1800, lock=cargo]: cargo test --workspace`.
   - `cheap`: fast enough to run while working. Briefs tell subagents to run
     cheap validators first and fix what they report before anything slower.
+  - `needs-human`: requires user notification by the judge before work begins
+    and early while the user is present. Stop for required human action;
+    do not retry indefinitely. This is a bare attribute, without a value.
   - `timeout=<seconds>`: the default for `run`; `--timeout` overrides it.
   - `lock=<name>`: `run` waits for a free slot of this lock and holds it while
     the command runs. The lock must be declared under `## Locks`, and the
@@ -58,8 +64,15 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
   entry); while it waits it prints who holds each slot.
   - Validators take a lock with `lock=<name>`; any other command takes one with
     `check.py exec --lock <name> --timeout <seconds> [--delegation <id>] -- <command>`,
-    which runs it without a ledger entry and exits with its status (124 on
-    timeout).
+    which exits with its status (124 on timeout). With `--delegation`, it
+    records command evidence with `validator=null`; that evidence cannot support
+    `checked` acceptance by a registered validator. Cite command observations or
+    mark them `asserted`. Both `--lock` and `--timeout` are required.
+  - Locks also cover physical resources. For example, `games: slots=6,
+    wait=3600` permits six foreground game processes. `exec` holds its slot for
+    the complete foreground process lifetime: no detached launches. One command
+    owns one slot; a command spawning several jobs must acquire a slot per child
+    or serialize them, otherwise it oversubscribes the resource.
   - Slot counts suit one machine; the environment variable
     `DELEGATION_LOCK_<NAME>` (upper case, `-` as `_`) overrides one for a machine
     or session, for example `DELEGATION_LOCK_CARGO=2`. Set it the same way for
@@ -82,6 +95,38 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 - **`## Parallel limit` and `## Return cap`.** The leading integer of the first
   line, at least 1. Trailing text is allowed, for example
   `3 (ghidra-mcp concurrency unverified)`.
+- **`## Roles`.** One named role per line, for example:
+
+  ```text
+  capture: tier=execute, runbook=.delegation/context/capture.md, max-uses=8, max-context-bytes=100000
+  ```
+
+  `tier` is `execute` or `routine`; `runbook` names a context file inside the
+  worktree. At least one positive cap is required. Prefer `max-uses`: it counts
+  the first brief and every continuation, including all ancestor branches.
+  `max-context-bytes` accumulates the sizes of the brief and context files loaded
+  on every use, including repeated reads across uses. Outputs are excluded; this
+  measures supplied file bytes, not the model's actual context consumption.
+  `open --tier execute --role capture` loads the runbook and validates that
+  the required `--tier` matches the role. Reuse through
+  `open --tier execute --continue <prior-id>` requires a new id and brief, a closed prior
+  delegation, the same tier, and no open brief in the same role session. Each
+  use records fresh brief/runbook hashes. Optional roles leave legacy overlays
+  valid.
+- **`## Rote scripts`.** One `name: body` per line; the parser validates
+  this structure. Use `name: command; what it replaces` for proposals. Record deterministic multi-step rote sequences worth replacing with
+  repository scripts. A proposal does not authorize writing a script: obtain
+  explicit approval before creating or changing repository helpers.
+- **`## Host side effects`.** Free text, one prohibited host change outside the
+  worktree per line (for example, user-wide plugin configuration or live game
+  saves). When the section is nonempty, briefs append these as never-write
+  restrictions with the isolation instruction. These are agent instructions,
+  not filesystem enforcement; worktree write permissions do not authorize host
+  changes.
+- **`## Tier hints`.** Free text may mark human dependencies, for example
+  `execute [needs-human]: native launches require human approval`. The judge
+  notifies the user before such work and early while the user is present;
+  stop for human action rather than retrying indefinitely.
 - All other sections are free text for the judge; `check.py` doesn't interpret
   them.
 

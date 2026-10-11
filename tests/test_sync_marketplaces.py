@@ -129,6 +129,19 @@ class TierGenerationTests(CatalogFixture, unittest.TestCase):
     def hosts_text(self):
         return (self.plugin / "skills/hello/reference/hosts.md").read_text()
 
+    def test_coordination_notes_generated_from_source(self):
+        self.tiers['coordination'] = ['Send an async peer request.', 'Resume an idle role explicitly.']
+        self.save_tiers()
+        self.assertTrue(sync(self.root))
+        self.assertIn('## Role reuse and peer requests\n\nSend an async peer request.\nResume an idle role explicitly.', self.hosts_text())
+        self.assertTrue(sync(self.root, check=True))
+
+    def test_invalid_coordination_notes_rejected(self):
+        self.tiers['coordination'] = []
+        self.save_tiers()
+        with self.assertRaises(ValueError):
+            load_tiers(self.plugin)
+
     def test_load_tiers_absent_returns_none(self):
         (self.plugin / "tiers.json").unlink()
         self.assertIsNone(load_tiers(self.plugin))

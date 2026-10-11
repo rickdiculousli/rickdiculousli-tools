@@ -1,6 +1,6 @@
 # Native lifecycle verification
 
-Last verified on October 10, 2026 (report timestamp 2026-10-11T01:27:25Z, UTC),
+Baseline verified on October 10, 2026 (report timestamp 2026-10-11T01:27:25Z, UTC),
 using the real locally installed CLIs, with a fresh temporary configuration
 profile for each host. Evidence labels: `checked` (observed running), `cited`
 (source or documentation reading), `asserted`.
@@ -294,3 +294,50 @@ lowercase letters, digits and underscores; the generated `hosts.md` says so.
 - [Codex profile environment variables](https://developers.openai.com/codex/environment-variables)
 - [Claude Code marketplaces](https://code.claude.com/docs/en/plugin-marketplaces)
 - [Claude Code profile environment variables](https://code.claude.com/docs/en/env-vars)
+
+## Delegation 0.6.0: role reuse and safety fields
+
+Date: 2026-10-11. Final lifecycle report timestamp: 2026-10-11T16:30:46Z.
+Evidence: `checked` unless otherwise stated.
+
+- `python3 scripts/sync_marketplaces.py --check`: generated metadata current.
+  Shared tier/coordination instructions were changed in `tiers.json` and regenerated,
+  including `hosts.md`, tier instructions, agent definitions and host manifests.
+- `python3 -m unittest discover -s tests -v`: 223 tests passed on Python 3.14.7.
+- `UV_CACHE_DIR=/tmp/delegation-uv-cache uv run --offline --no-project --python 3.10 -m unittest discover -s tests -v`:
+  the same 223 tests passed on Python 3.10.22. A first attempt with the default
+  uv cache was sandbox-denied; the writable temporary cache resolved it.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  Codex 0.162.1 and Claude Code 2.1.296 passed all disposable-profile stages,
+  including install, byte-for-byte source comparison, uninstall and marketplace
+  removal. Delegation version 0.6.0 was installed; normal profiles were untouched.
+- The new CLI regression cases cover optional overlay sections, malformed roles,
+  count and supplied-byte reuse caps, ancestor continuation counters, missing/open
+  prior delegations, unchanged tier, hashed briefs and runbooks, contained runbook
+  paths, writer exclusion, default safety footers, host restriction injection,
+  human markers, and caller-attributed command success/failure/timeout evidence.
+  Unicode caps and command evidence instructions were reproduced failing before
+  their review fixes. Existing cross-worktree lock tests still pass.
+- Live peer probe in the T3 Code Codex harness: parent spawned `/root/peer_receiver`
+  and `/root/peer_sender`. Sender called `collaboration.send_message` directly to
+  receiver with `peer_request_20261011`; receiver replied directly with
+  `peer_ack_20261011`, which sender observed. Both stop handbacks reached the judge.
+  No parent relay or file writes occurred. This checks active sibling messaging;
+  stopped-agent resumption and other Codex harnesses were not tested. The current
+  tool contract says `send_message` does not start an idle turn; use judge
+  `followup_task` for that case.
+- Claude peer messaging is `cited` from the user's game-decomp session report:
+  SendMessage accepts a supplied peer id, stopped peers resume, replies reach the
+  sender, ids are absent from ListAgents, and the judge receives stop handbacks.
+  This session did not repeat that Claude model test.
+
+The byte cap counts accumulated supplied brief/context file bytes, including
+repeated context reads; it excludes command output and does not measure model
+context. Prefer a use-count cap. Host restrictions and human notifications are
+agent instructions, not filesystem enforcement. A recorded command result has
+`validator: null` and cannot establish registered-validator acceptance.
+
+No end-to-end model-driven setup survey, reusable-role runbook refresh, or native
+game permission-prompt workflow was run. Those remain suitable for a repository
+pilot; the live model check above is limited to peer communication. No publication,
+tag, push or normal-profile installation was performed.

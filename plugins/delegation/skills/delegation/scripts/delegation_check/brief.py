@@ -56,6 +56,19 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
         "",
     ] if elsewhere else []
     locks = []
+    safety = ["Do not commit unless the brief says so.", "No first person in committed files.", ""]
+    effects = overlay.sections.get('Host side effects', '').strip()
+    if effects:
+        safety += ["Host side effects — Never write these (even outside the worktree):", effects,
+                   "Use an isolated settings home or a disposable copy; if isolation is unavailable, stop and report.", ""]
+    human = ', '.join(name for name, v in overlay.validators.items() if v.needs_human)
+    hints = overlay.sections.get('Tier hints', '')
+    if human or 'needs-human' in hints:
+        safety += [f"needs-human: {human or 'see tier hints'}. The judge must tell the user before starting",
+                   "and arrange this work early while the user is present. OS prompts may be invisible",
+                   "to agents; report a blocked launch instead of retrying indefinitely.", ""]
+        safety += [line for line in hints.splitlines() if 'needs-human' in line]
+        safety += [""]
     if overlay.locks:
         names = ", ".join(f"{name} ({lock.slots} slot{'s' if lock.slots != 1 else ''})"
                           for name, lock in overlay.locks.items())
@@ -74,6 +87,9 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
             "",
             "Evidence: run validators only with this command, and cite the printed id as",
             f'[checked: {delegation}#<n>] only when it printed PASS and not "unstable".',
+            "Only a registered validator at the reviewed tree supports checked acceptance.",
+            "Attributed exec records command evidence with validator=null, even when it prints PASS;",
+            "cite its observations or mark them asserted, never checked validator acceptance.",
             "The overlay's timeouts apply; add `--timeout <seconds>` when the brief gives another:",
             "",
             f"    {run}",
@@ -86,6 +102,7 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
             "",
             *hosts,
             *locks,
+            *safety,
             "Return format:",
             "",
             "```",

@@ -36,7 +36,10 @@ source in bulk. Collect:
 
 | Overlay heading | Look for |
 |---|---|
-| `## Validators` | Commands that pass or fail mechanically: test suites, linters, type checks, consistency scripts. Each must run from the root, exit 0 on success, not edit tracked files (that makes results `unstable`), and finish in minutes. Prefer offline ones. Mark fast linters and format checks `[cheap]`; give slow suites `[timeout=<seconds>]`; give builds that compete for memory or a device the same `[lock=<name>]`. |
+| `## Validators` | Commands that pass or fail mechanically: test suites, linters, type checks, consistency scripts. Each must run from the root, exit 0 on success, not edit tracked files (that makes results `unstable`), and finish in minutes. Prefer offline ones. Mark fast linters and format checks `[cheap]`; give slow suites `[timeout=<seconds>]`; give builds that compete for memory or a device the same `[lock=<name>]`. Mark checks requiring human action `[needs-human]` and notify the user before work and early while the user is present. |
+| `## Rote scripts` | Deterministic multi-step rote sequences (run N jobs → verify → import → index) that could become repository helpers. Propose `name: command; what it replaces`, with the proposed script path and steps. Ask which repeated sequences the user wants automated; write scripts only with explicit approval. |
+| `## Roles` | Repeated specialist briefs that can share a runbook. Propose tier, runbook path and at least one cap; prefer a use-count cap. |
+| `## Host side effects` | User-wide configuration, live saves and other host paths outside the worktree that delegated work must never change. Record one prohibited change per line. |
 | `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. |
 | `## Oracle` | What ultimately says work is right (golden files, reference traces, a spec suite). Tie prose to checks with `validator:<name>`. |
 | `## Extra inputs` | Git-ignored files the validators depend on: golden traces, built binaries, downloaded fixtures. Only paths inside the repo. |
@@ -60,9 +63,15 @@ Show the user, in chat:
    `Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.`
    and where it goes (`AGENTS.md`, plus `CLAUDE.md` if it doesn't import `AGENTS.md`).
 3. Ignore-rule suggestions from the survey.
-4. Open questions only for what the repo can't tell you: which resources are
-   single-writer, which validators are trustworthy enough to count as `checked`,
-   where findings should go, and the parallel limit for shared tools.
+4. Script and role proposals, including what each script replaces and which
+   runbook each role reads. Confirm explicit approval for writing repository
+   scripts separately from approval to record a proposal in the overlay.
+5. Open questions only for what the repo cannot establish: unknown rote
+   procedures worth scripting; role, runbook and reuse-cap preferences; which
+   resources are single-writer; which validators are trustworthy enough to count
+   as `checked`; where findings should go; physical-resource slot limits (for
+   example, concurrent games) and the parallel limit for shared tools; and host
+   paths or OS permission prompts that require restrictions or human action.
 
 Wait for approval or edits.
 
@@ -72,12 +81,18 @@ Wait for approval or edits.
 - Append the pointer line to `AGENTS.md` (create it with just that line if
   missing), and to `CLAUDE.md` when step 1 found it doesn't import `AGENTS.md`.
 - Apply the ignore rules the user approved.
+- Create repository scripts only when explicitly approved, at the approved paths
+  and scope. Recording `## Rote scripts` proposals alone does not authorize them.
+- Create approved role runbooks with bounded inputs and write permissions; retain
+  existing tracked-file permissions. All new overlay sections are optional.
 - Don't commit unless the user asks.
 
 ## 5. Prove it
 
 1. `check.py lint` must print `Overlay OK`. Fix and repeat.
-2. Run every validator once through the ledger, under one setup delegation:
+2. Notify the user before any `needs-human` validator and early while the
+   user is present; stop for required human action without infinite retries.
+   Run every validator once through the ledger, under one setup delegation:
    - write a short brief to `.delegation/briefs/setup.md` ("Setup: prove each
      validator runs");
    - `check.py open --delegation setup-<YYYYMMDD> --tier routine --brief .delegation/briefs/setup.md`;
