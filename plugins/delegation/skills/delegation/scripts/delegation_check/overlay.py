@@ -45,6 +45,7 @@ class Validator:
     lock: str | None = None
     requires: tuple[str, ...] = ()
     needs_human: bool = False
+    paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -99,8 +100,8 @@ def _read_int(heading: str, lines: list[tuple[int, str]], default: int, problems
 
 
 def _validator(number: int, command: str, attributes: str | None, problems: list[str]) -> Validator:
-    """Parse `[cheap, timeout=<seconds>, lock=<name>, requires=<platform>|...]`; bad attributes are lint problems."""
-    cheap, timeout, lock, requires, needs_human = False, None, None, (), False
+    """Parse `[cheap, timeout=<seconds>, lock=<name>, requires=<platform>|..., paths=<glob>|...]`; bad attributes are lint problems."""
+    cheap, timeout, lock, requires, needs_human, paths = False, None, None, (), False, ()
     seen: set[str] = set()
     for item in filter(None, (part.strip() for part in (attributes or "").split(","))):
         key, eq, value = (part.strip() for part in item.partition("="))
@@ -126,9 +127,15 @@ def _validator(number: int, command: str, attributes: str | None, problems: list
                 problems.append(
                     f'line {number}: requires needs platform names like darwin or linux, separated by |, got "{value}"'
                 )
+        elif key == "paths" and eq:
+            globs = tuple(x.strip() for x in value.split("|"))
+            if all(globs) and not any(x.startswith("/") or ".." in x.split("/") for x in globs):
+                paths = globs
+            else:
+                problems.append(f'line {number}: paths needs repository-relative globs separated by |, got "{value}"')
         else:
             problems.append(f'line {number}: unknown validator attribute "{item}"')
-    return Validator(command, cheap, timeout, lock, requires, needs_human)
+    return Validator(command, cheap, timeout, lock, requires, needs_human, paths)
 
 
 def _roles(lines: list[tuple[int, str]], problems: list[str], warnings: list[str]) -> dict[str, Role]:

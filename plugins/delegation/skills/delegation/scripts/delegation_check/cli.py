@@ -11,8 +11,9 @@ from pathlib import Path
 from . import DelegationError
 from .brief import footer, task_line, tier_instructions
 from . import locks, patterns, state
-from .ledger import OUTCOMES, TIERS, close_delegation, execute, load_brief, open_delegation, pending, query, read_events, run_validator
+from .ledger import OUTCOMES, TIERS, close_delegation, execute, judge_run, load_brief, open_delegation, pending, query, read_events, run_validator
 from .overlay import Validator, load_overlay
+from .suggest import suggest
 from .tree import repo_root, tree_hash
 
 
@@ -119,16 +120,40 @@ def _run(root: Path, args: argparse.Namespace) -> int:
     if validator is None:
         known = ", ".join(sorted(overlay.validators)) or "none"
         raise DelegationError(f'unknown validator "{args.validator}"; registered: {known}')
-    result = run_validator(
-        root, args.delegation, args.validator, validator, overlay.locks.get(validator.lock or ""),
-        overlay.extra_inputs, args.timeout,
-    )
+    if args.judge == bool(args.delegation):
+        raise DelegationError("run needs exactly one of --delegation <id> or --judge")
+    if args.judge:
+        result = judge_run(root, args.validator, validator, overlay.locks.get(validator.lock or ""),
+                           overlay.extra_inputs, args.timeout)
+    else:
+        result = run_validator(
+            root, args.delegation, args.validator, validator, overlay.locks.get(validator.lock or ""),
+            overlay.extra_inputs, args.timeout,
+        )
     print(_result_line(result))
     if not result["ok"]:
         if result["output_tail"]:
             print(result["output_tail"])
         print(f"full output: {state.recorded_path(root, result, 'log')}")
         return 1
+    return 0
+
+
+def _suggest(root: Path, args: argparse.Namespace) -> int:
+    overlay = load_overlay(root)
+    data = suggest(root, overlay, args.base)
+    if args.json:
+        print(json.dumps(data))
+        return 0
+    if not data["changed"]:
+        print(f"No changed paths since {data['base']}.")
+    for item in data["run"]:
+        sample = ", ".join(item["matched"][:3]) + (f" (+{len(item['matched']) - 3} more)" if len(item["matched"]) > 3 else "")
+        print(f"run {item['validator']}: {sample}")
+    for name in data["unscoped"]:
+        print(f"unscoped {name}: no paths= attribute; decide from the overlay's notes")
+    for item in data["not_needed"]:
+        print(f"skip {item['validator']}: nothing changed under {'|'.join(item['paths'])}")
     return 0
 
 
@@ -328,7 +353,9 @@ def build_parser() -> argparse.ArgumentParser:
     lister.add_argument("--json", action="store_true")
     runner = commands.add_parser("run", help="Run a registered validator and record the result")
     runner.add_argument("validator")
-    runner.add_argument("--delegation", required=True)
+    runner.add_argument("--delegation", help="Open delegation that records the result")
+    runner.add_argument("--judge", action="store_true",
+                        help="Run for the judge: records under a judge-* delegation that opens and closes with the run")
     runner.add_argument("--timeout", type=float, help="Seconds; overrides the overlay's timeout")
     execer = commands.add_parser(
         "exec", help="Run a command under a lock; --delegation records caller evidence"
@@ -338,6 +365,9 @@ def build_parser() -> argparse.ArgumentParser:
     execer.add_argument("--delegation", help="Open caller delegation for command evidence and lock holder")
     execer.add_argument("argv", nargs=argparse.REMAINDER, metavar="-- command", help="The command and its arguments")
     commands.add_parser("locks", help="List declared locks and who holds each slot")
+    suggester = commands.add_parser("suggest", help="Map changed paths to the validators whose paths= scope they touch")
+    suggester.add_argument("--base", help="Compare against this commit (default: HEAD)")
+    suggester.add_argument("--json", action="store_true")
     kinds = commands.add_parser("kinds", help="List, merge, rename or mark repository-wide work labels")
     kinds.add_argument("--all", action="store_true", help="Include declined, idle and overflow labels")
     kinds.add_argument("--json", action="store_true")
@@ -402,6 +432,8 @@ def main(argv: list[str] | None = None) -> int:
             return _exec(root, args)
         if args.command == "locks":
             return _locks(root, args)
+        if args.command == "suggest":
+            return _suggest(root, args)
         if args.command == "kinds":
             return _kinds(root, args)
         if args.command == "patterns":

@@ -195,8 +195,17 @@ every worktree and session. Use them when you open delegations (see
    python3 <skill-dir>/scripts/check.py close --delegation <id> --outcome done|stuck|abandoned [--note "<text>"]
    ```
 
+   Close every delegation you open, including your own short ones: open
+   delegations block relay release and long-horizon gates (`check.py pending`).
+
 `check.py run <validator> --delegation <id> [--timeout <seconds>]` needs the
-delegation open. It uses the overlay's timeout for that validator unless
+delegation open. To run a registered validator yourself, without a brief, use
+`check.py run <validator> --judge`: it opens, records and closes a `judge-<UTC
+time>-<hex>` delegation around the run, so nothing stays pending. Cite its
+`judge-…#1` result like any other (`query --delegation judge-…`). It refuses while
+a writer is open. Before choosing which validators to run, `check.py suggest
+[--base <commit>]` lists changed and untracked paths and the validators whose
+`paths=` scope they touch; unscoped validators are listed for your judgment. It uses the overlay's timeout for that validator unless
 `--timeout` is given, waits for the validator's `lock` if the overlay sets one,
 and keeps the full output in `<log-directory>/<id>/<n>.log`; a failed run
 prints that path. `check.py tree` prints the current tree hash.

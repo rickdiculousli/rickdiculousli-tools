@@ -55,6 +55,11 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
     and briefs written on that host name it as not runnable there, so a check
     that can't run on a host never shows up as a FAIL. Every result records
     the host it ran on (`host`: platform, machine, node).
+  - `paths=<glob>|<glob>`: the repository-relative paths whose changes call for
+    this validator, for `check.py suggest`. `**` crosses directories, `*` and `?`
+    stay within one, and a trailing `/` means everything below it:
+    `ghidra-sync [paths=ghidra/**|exports/*.json]: ...`. It is a hint only; `run`
+    never refuses on it. Absolute paths and `..` are lint problems.
   An unknown or malformed attribute is a lint problem.
 - **`## Locks`.** One `name: slots=<n>, wait=<seconds>` per line; both
   attributes are optional (`name:` alone is one slot, waiting indefinitely).

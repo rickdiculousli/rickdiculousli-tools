@@ -483,6 +483,37 @@ def run_validator(
         )
 
 
+def judge_run(
+    root: Path,
+    name: str,
+    validator: Validator,
+    lock: Lock | None,
+    extra_inputs: Sequence[str],
+    timeout: float | None,
+) -> dict:
+    """Run a registered validator for the judge: open, record and close one self-delegation.
+
+    The delegation never outlives the run, so nothing is left pending for a gate or relay.
+    """
+    if validator.requires and sys.platform not in validator.requires:
+        raise DelegationError(
+            f'validator "{name}" requires {"|".join(validator.requires)}; this host is {sys.platform}. '
+            "Nothing was recorded; leave it to a session on a matching host."
+        )
+    delegation = "judge-" + time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + os.urandom(3).hex()
+    tree = tree_hash(root, extra_inputs)
+    with ledger_lock(root, write=True):
+        writers = [e["delegation"] for e in _pending(_read_events_unlocked(root)) if e.get("writes")]
+        if writers:
+            raise DelegationError(f"writer {', '.join(writers)} is open; review and close it before a judge run")
+        _append(root, {"event": "open", "delegation": delegation, "tier": "judge", "writes": False,
+                       "brief": None, "brief_sha256": None, "context": {}, "tree": tree})
+    try:
+        return run_validator(root, delegation, name, validator, lock, extra_inputs, timeout)
+    finally:
+        close_delegation(root, delegation, "done", "judge run")
+
+
 def query(root: Path, delegation: str, tree: str | None) -> list[dict]:
     results = [
         e

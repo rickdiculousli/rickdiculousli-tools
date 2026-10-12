@@ -88,7 +88,7 @@ Delegation: follow the delegation skill; this repo's overlay is .agents/delegati
 ```
 
 The overlay at `.agents/delegation.md` holds that repository's validators (with
-optional `cheap`, `needs-human`, `timeout`, `lock` and `requires` attributes), locks that cap heavy
+optional `cheap`, `needs-human`, `timeout`, `lock`, `requires` and `paths` attributes), locks that cap heavy
 commands across every worktree (`check.py exec --lock`, `check.py locks`), tier
 hints, findings sink and parallel limit. Its state, including each validator run's full
 output, lives under `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/delegation/`,
@@ -108,7 +108,15 @@ python3 plugins/delegation/skills/delegation/scripts/check.py locks
 python3 plugins/delegation/skills/delegation/scripts/check.py exec --help
 python3 plugins/delegation/skills/delegation/scripts/check.py kinds
 python3 plugins/delegation/skills/delegation/scripts/check.py patterns
+python3 plugins/delegation/skills/delegation/scripts/check.py suggest
+python3 plugins/delegation/skills/delegation/scripts/check.py run --help
 ```
+
+Since 0.9.0 the judge runs a registered validator itself with
+`check.py run <name> --judge`: no brief, and the `judge-*` delegation that records
+the result opens and closes with the run, so nothing is left pending. A validator's
+`paths=<glob>|<glob>` attribute says which changes call for it; `check.py suggest
+[--base <commit>]` maps changed and untracked paths to those validators.
 
 Since 0.8.0 the judge labels each delegation with a work kind
 (`open --kind <label>`, or `--kind <label> --new-kind "<description>"` to register
