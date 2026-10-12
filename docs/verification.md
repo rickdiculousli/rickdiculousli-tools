@@ -395,7 +395,7 @@ verify the Windows locking branch added in 0.6.1. No Intel Mac execution was run
 
 ## Normal-profile rollout (2026-10-11)
 
-At the user's explicit request, portability commit `ae9474d` was pushed to
+At the user's explicit request, portability commit `778f56c` was pushed to
 `origin/main` and applied to the local Apple Silicon Mac and a Linux host (Ubuntu x86_64).
 Both machines used Claude Code 2.1.296 and Codex 0.162.1 with their existing
 local-checkout marketplaces and normal user profiles. The clean the Linux host checkout
@@ -567,7 +567,7 @@ Verification on this Mac:
 - The first run with macOS's default `/var/folders/...` TMPDIR failed 12
   assertions because existing fixtures compared noncanonical `/var` paths with
   canonical `/private/var` paths. All failures were reproduced on unchanged base
-  commit `414cf98`: delegation state's `test_migration_open_and_busy_legacy_lock_refused`
+  commit `9ddf9ba`: delegation state's `test_migration_open_and_busy_legacy_lock_refused`
   and `test_xdg_default_empty_relative_and_custom`; long-horizon overlay's
   `test_linked_worktree_and_subdirectory`; Windows defaults'
   `test_empty_relative_xdg_values_use_windows_defaults` (two subcases),
@@ -591,9 +591,9 @@ Normal-profile installation results are recorded separately below after release.
 
 ### Requested normal-profile installation — Mac and Linux
 
-Implementation commit `5caad1a` was installed through the native plugin commands.
+Implementation commit `62eb357` was installed through the native plugin commands.
 Both machines use local-checkout `rickdiculousli-tools` marketplaces. the Linux host's clean
-checkout was fast-forwarded from `414cf98` using a Git bundle transferred over
+checkout was fast-forwarded from `9ddf9ba` using a Git bundle transferred over
 SSH; no push, remote fetch from origin, or consuming-repository migration occurred.
 
 | Machine | Host CLI | Installed long-horizon | Enabled | Source comparison |
@@ -668,11 +668,11 @@ performed for this update. Installation results are recorded below separately.
 
 ### Requested delegation reinstall — Mac and Linux
 
-Release commit `f5f1b50` was installed through native plugin commands in both
+Release commit `c5a4d33` was installed through native plugin commands in both
 machines' normal user profiles. Their existing local-checkout marketplaces were
 updated; delegation alone was uninstalled and reinstalled with Claude's
 `--scope user`, and removed/re-added with Codex. the Linux host's clean plugin checkout was
-fast-forwarded from `11d7b54` through a Git bundle transferred over SSH. No push,
+fast-forwarded from `20fe98e` through a Git bundle transferred over SSH. No push,
 origin fetch, or consuming-repository migration occurred.
 
 | Machine | Host CLI | Delegation | Enabled | Portable source comparison |
@@ -713,7 +713,7 @@ orchestrator (game capture) cancel or time out a game wrapped in
 
 ### Requested push and delegation 0.7.3 reinstall — Mac and Linux
 
-All five pending commits through `1e5aeaf` were pushed to `origin/main`; the Linux host's
+All five pending commits through `1fb03f7` were pushed to `origin/main`; the Linux host's
 clean checkout was fast-forwarded from the remote. Delegation was uninstalled
 and reinstalled through Claude Code (`--scope user`) and Codex native commands
 in both machines' normal profiles after refreshing the local marketplace.
@@ -773,7 +773,7 @@ reinstall was performed.
 
 ### Requested push and delegation 0.8.0 reinstall — Linux only
 
-Commit `077d7b6` was pushed to `origin/main`. On the Linux host, the local-checkout
+Commit `430e70e` was pushed to `origin/main`. On the Linux host, the local-checkout
 marketplace was refreshed and delegation was uninstalled and reinstalled in the
 normal user profiles: Claude Code with `--scope user`, Codex with
 `plugin remove`/`plugin add` (Codex's `marketplace upgrade` reports a local

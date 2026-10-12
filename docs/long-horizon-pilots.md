@@ -13,7 +13,7 @@ default; `gpt-6.1-sol` was confirmed from turn-context metadata in the corrected
 reconstruction session and final quota rerun. Earlier Codex exec event streams did not expose a model
 slug, so their per-run metadata leaves it unknown. No worker agents were spawned.
 
-Pilots ran the in-progress uncommitted implementation based on `b18afff2da9fe726741a28fcb58b57bd549743f6`.
+Pilots ran the in-progress uncommitted implementation based on `928299ca94e28d97e87b2cfc324210f4c90f41f6`.
 Each report records its actual plugin-content digest, prompt/event/tool-call
 hashes, starting Git commit/tree, elapsed time and resulting assertions. Starting
 Git trees cover committed inputs; the runner and fixtures explicitly define dirty
