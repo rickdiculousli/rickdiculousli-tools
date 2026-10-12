@@ -91,8 +91,9 @@ The overlay at `.agents/delegation.md` holds that repository's validators (with
 optional `cheap`, `needs-human`, `timeout`, `lock` and `requires` attributes), locks that cap heavy
 commands across every worktree (`check.py exec --lock`, `check.py locks`), tier
 hints, findings sink and parallel limit. Its state, including each validator run's full
-output, lives in `.delegation/`,
-which the tooling creates with its own `.gitignore`. Check the overlay and the
+output, lives under `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/delegation/`,
+scoped by canonical repository and worktree identities. Scratch indexes/objects use
+`${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/delegation/`. Check the overlay and the
 evidence ledger with the bundled script. These paths exist only in this
 checkout; in a consuming repository the skill resolves the script as
 `<skill-dir>/scripts/check.py`:
@@ -111,8 +112,39 @@ Optional overlay sections add script proposals (`name: command; what it
 replaces`), host-side never-write restrictions, and reusable roles:
 
 ```text
+Delegation 0.7.0 uses `check.py paths --json` (or the text view) to resolve
+`brief_directory`, `context_directory`, `log_directory`, the repository resource
+locks and permanent root mutex. Quote returned paths. Context references in
+briefs, roles and `Extra inputs` use `state:context/<relative-path>`; the checker
+rejects traversal and symlink escapes. Recorded generated paths are state-relative
+with `location: state`; caller brief paths may remain absolute.
+
+For an existing `.delegation/` history, close its open work using the old checker
+and stop every repository checker/validator session. Run `check.py state migrate`
+to review counts, conflicts, unknown files, host restrictions and reference edits;
+then `check.py state migrate --apply`. It preserves original event/log hashes and
+writes a digest receipt, leaving legacy copies and old temporary locks untouched.
+Update the reported overlay/helper references, then restart all sessions with the
+new checker and one shared XDG root. Do not run old/new versions simultaneously.
+Changed legacy files block dependent operations; migration never creates a PASS.
+Logical input renames can make current fingerprints stale, requiring a fresh check.
+
+`check.py state gc` previews local collection and `check.py state gc --apply`
+applies it, even outside a checkout. `--if-due` limits applied sweeps to once per
+168 hours; normal writes do this automatically. Confirmed deleted, unregistered
+worktrees get seven days of recovery before removal. Existing unfinished work,
+ledger-referenced bytes, declared role inputs, live locks and uncertain processes
+are retained. Unreferenced briefs/context expire after 30 days. Hash scratch is
+removed on exit; a weekly sweep removes interrupted attempts only when the owner
+is confirmed gone. No background service runs. Legacy copies require explicit
+review/removal. Durable knowledge and acceptance stay in tracked documents.
+Empty/relative XDG values use home defaults on every platform; unwritable roots
+fail with a diagnostic and never switch lock domains. Workspace sandboxes must
+allow both configured external XDG roots; grant those paths through the host’s
+permission configuration rather than changing roots for individual commands.
+
 ## Roles
-capture: tier=execute, runbook=.delegation/context/capture.md, max-uses=8, max-context-bytes=100000
+capture: tier=execute, runbook=state:context/capture.md, max-uses=8, max-context-bytes=100000
 ## Locks
 games: slots=6, wait=3600
 ```
@@ -293,6 +325,7 @@ python3 scripts/sync_marketplaces.py
 python3 scripts/sync_marketplaces.py --check
 python3 -m unittest discover -s tests -v
 python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
+# For a Codex-only run, add --hosts codex.
 ```
 
 Commit the sources and generated files together. Edit root `plugin.json` and
@@ -324,6 +357,7 @@ the plugin subcommands used above. The tested versions are recorded in
 
 ```sh
 python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
+# For a Codex-only run, add --hosts codex.
 ```
 
 This registers the marketplace, discovers and installs every catalog plugin,
@@ -373,7 +407,14 @@ python3 plugins/long-horizon/skills/resume/scripts/lh.py state gc --json
 Consumers declare `LONG_HORIZON_SCRIPT` or an explicit script path pointing at
 an installed skill's resume/scripts/lh.py or any checkout's
 plugins/long-horizon/skills/resume/scripts/lh.py. Quote paths with spaces; never
-glob a versioned plugin cache. Setup/checkpoint resolve the sibling resume script.
+glob a versioned plugin cache. Setup/checkpoint resolve the sibling resume script. Long-horizon 0.2.0 adds
+`state draft --root "$PROJECT" --json`: it returns an identity-bearing setup
+`draft_directory` under the repository/worktree-scoped XDG cache. Renew recovered
+drafts with `state draft --id <id>` before use. Weekly GC removes unused recognized
+drafts after 30 days and applies the seven-day recovery window to deleted,
+unregistered worktrees; active/uncertain owners, unknown files and symlinks protect
+recovery bytes. Existing plugin-wide drafts remain for explicit review.
+
 
 | Project | Composition |
 | --- | --- |

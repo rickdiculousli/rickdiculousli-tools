@@ -10,7 +10,7 @@ from pathlib import Path
 
 from . import DelegationError
 from .brief import footer, task_line, tier_instructions
-from . import locks
+from . import locks, state
 from .ledger import OUTCOMES, TIERS, close_delegation, execute, load_brief, open_delegation, pending, query, run_validator
 from .overlay import Validator, load_overlay
 from .tree import repo_root, tree_hash
@@ -50,9 +50,12 @@ def _open(root: Path, args: argparse.Namespace) -> int:
 def _brief(root: Path, args: argparse.Namespace) -> int:
     event, data = load_brief(root, args.delegation)
     text = data.decode("utf-8", errors="replace").rstrip("\n")
+    from .ledger import CONTEXT_REF
+    for ref in sorted(set(CONTEXT_REF.findall(text)), key=len, reverse=True):
+        text = text.replace(ref, shlex.quote(str(state.context_path(root, ref))))
     head = f"{tier_instructions(event['tier'])}\n\n" if args.with_instructions else ""
     if event.get('role'):
-        text += '\n\nRole runbook: read ' + event['role_runbook']
+        text += '\n\nRole runbook (' + event['role_runbook'] + '): read ' + shlex.quote(str(state.context_path(root, event['role_runbook'])))
     print(f"{head}{text}\n\n{footer(root, args.delegation, load_overlay(root))}", end="")
     return 0
 
@@ -100,7 +103,7 @@ def _run(root: Path, args: argparse.Namespace) -> int:
     if not result["ok"]:
         if result["output_tail"]:
             print(result["output_tail"])
-        print(f"full output: {root.resolve() / result['log']}")
+        print(f"full output: {state.recorded_path(root, result, 'log')}")
         return 1
     return 0
 
@@ -126,10 +129,11 @@ def _exec(root: Path, args: argparse.Namespace) -> int:
         if result['output_tail']:
             print(result['output_tail'])
         print(_result_line(result))
-        print(f"full output: {root.resolve() / result['log']}")
+        print(f"full output: {state.recorded_path(root, result, 'log')}")
         return 124 if result['timed_out'] else (result['exit'] if result['exit'] is not None else 1)
     holder = {"delegation": args.delegation, "command": " ".join(command)}
-    with locks.hold(root, args.lock, lock, holder):
+    state.opportunistic()
+    with state.activity(root, "exec"), locks.hold(root, args.lock, lock, holder):
         code, timed_out, _ = execute(root, command, args.timeout, capture=False)
     if timed_out:
         print(f"check.py: timed out after {args.timeout:g}s: {holder['command']}", file=sys.stderr)
@@ -191,6 +195,17 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("lint", help="Report overlay problems")
     commands.add_parser("tree", help="Print the current tree hash")
+    paths = commands.add_parser('paths', help='Inspect XDG paths without creating or migrating payloads')
+    paths.add_argument('--json', action='store_true')
+    states = commands.add_parser('state', help='Explicit local collection and coordinated legacy migration')
+    subs = states.add_subparsers(dest='state_command', required=True)
+    collector = subs.add_parser('gc')
+    collector.add_argument('--apply', action='store_true')
+    collector.add_argument('--if-due', action='store_true')
+    collector.add_argument('--json', action='store_true')
+    migration = subs.add_parser('migrate')
+    migration.add_argument('--apply', action='store_true')
+    migration.add_argument('--json', action='store_true')
     opener = commands.add_parser("open", help="Record a delegation as started")
     opener.add_argument("--delegation", required=True)
     opener.add_argument("--tier", required=True, choices=TIERS)
@@ -234,7 +249,17 @@ def _resolve_root(given: Path | None) -> Path:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == 'state' and args.state_command == 'gc':
+            print(json.dumps(state.gc(args.apply, args.if_due), indent=2))
+            return 0
         root = _resolve_root(args.root)
+        if args.command == 'paths':
+            paths = state.Paths(root).json()
+            print(json.dumps(paths) if args.json else '\n'.join(f'{k}: {v}' for k, v in paths.items()))
+            return 0
+        if args.command == 'state':
+            print(json.dumps(state.migrate(root, args.apply), indent=2))
+            return 0
         if args.command == "lint":
             return _lint(root)
         if args.command == "tree":

@@ -120,6 +120,20 @@ def inspect(root, scenario, result, env):
         records = [json.loads(p.read_text()) for p in (root / 'docs/evidence').glob('*.json')]
         checks['checked_result_durable'] = any(x.get('claim') == 'checked' and x.get('result') == 'd1#1' for x in records)
         checks['no_second_ledger'] = not (root / '.long-horizon').exists()
+        checker = ROOT / 'plugins/delegation/skills/delegation/scripts/check.py'
+        paths = run([sys.executable, str(checker), '--root', str(root), 'paths', '--json'], root, env)
+        info = json.loads(paths.stdout) if paths.returncode == 0 else {}
+        checks['fixture_ledger_deleted'] = bool(info) and not (Path(info['worktree_state_directory']) / 'ledger.jsonl').exists()
+        query = run([sys.executable, str(checker), '--root', str(root), 'query', '--delegation', 'd1', '--tree', 'current', '--json'], root, env)
+        checks['current_query_empty_without_identity_error'] = query.returncode == 0 and not json.loads(query.stdout).get('results')
+        prepared = run([sys.executable, str(SCRIPT), 'evidence', 'prepare', 'validator:unit', '--root', str(root), '--json'], root, env)
+        if prepared.returncode == 0:
+            snapshot = json.loads(prepared.stdout)['snapshot']['id']
+            rejected = run([sys.executable, str(SCRIPT), 'evidence', 'record', 'validator:unit', '--root', str(root), '--snapshot', snapshot,
+                            '--outcome', 'PASS', '--delegation', 'd1', '--result', 'd1#1', '--log', 'regenerate:registered unit validator', '--json'], root, env)
+            checks['new_checked_claim_refused_for_missing_result'] = rejected.returncode == 2 and 'Registered result is missing/ambiguous' in rejected.stdout
+        else:
+            checks['new_checked_claim_refused_for_missing_result'] = False
     if scenario == 'closure':
         verified = run([sys.executable, str(SCRIPT), 'closure', 'verify', '--root', str(root), '--json'], root, env)
         checks['closure_complete'] = verified.returncode == 0 and json.loads(verified.stdout).get('state') == 'complete'

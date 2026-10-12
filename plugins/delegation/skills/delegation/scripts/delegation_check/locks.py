@@ -1,137 +1,153 @@
-"""Counting locks shared by every worktree of a repository.
-
-A lock with N slots is N files, `<name>.<slot>.lock`, in a directory under /tmp
-keyed by git's common directory. Each slot has a native process lock. Windows
-holder details use a sidecar so readers never access the byte-locked region.
-"""
-
+"""Counting native locks with root-mutex protected holder/waiter lifecycles."""
 from __future__ import annotations
 
 import contextlib
 from datetime import datetime, timezone
-import json
 import os
 from pathlib import Path
+import re
 import sys
 import time
+import uuid
 from typing import BinaryIO, Iterator
 
-from . import DelegationError
+from . import DelegationError, state
 from .file_lock import release, try_acquire
 from .overlay import Lock
-from .tree import lock_dir
 
 POLL_S = 0.2
 ANNOUNCE_GRACE_S = 1.0
 
 
 def env_name(name: str) -> str:
-    return "DELEGATION_LOCK_" + name.upper().replace("-", "_")
+    return 'DELEGATION_LOCK_' + name.upper().replace('-', '_')
 
 
 def slots(name: str, lock: Lock) -> int:
-    """The overlay's slot count, unless this machine or session overrides it."""
     value = os.environ.get(env_name(name))
     if value is None:
         return lock.slots
     if not value.strip().isdigit() or int(value) < 1:
-        raise DelegationError(f"{env_name(name)} must be a positive integer, got {value!r}")
+        raise DelegationError(f'{env_name(name)} must be a positive integer, got {value!r}')
     return int(value)
-
-
-def _slot_path(root: Path, name: str, slot: int) -> Path:
-    return lock_dir(root) / f"{name}.{slot}.lock"
 
 
 def _try(path: Path) -> BinaryIO | None:
     return try_acquire(path)
 
 
-def _metadata_path(path: Path) -> Path:
-    # Keep the POSIX layout compatible with sessions using older versions.
-    return path.with_suffix(".json") if os.name == "nt" else path
+def _metadata_path(path):
+    return path.with_suffix('.json')
 
 
-def _read(path: Path) -> dict | None:
-    try:
-        return json.loads(_metadata_path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+def _read(path):
+    return state.read(_metadata_path(path), {})
 
 
-def _describe(holder: dict | None) -> str:
+def _describe(metadata):
+    holder = metadata.get('holder') if metadata else None
     if not holder:
-        return "held (no details yet)"
-    who = holder.get("delegation") or "no delegation"
+        return 'held (no details yet)'
+    who = holder.get('delegation') or 'no delegation'
     return f"held by {who} (pid {holder.get('pid')}, since {holder.get('since')}): {holder.get('command')}"
 
 
+def _prune(meta):
+    # Reused PIDs are confirmed different generations, never live old owners.
+    meta['waiters'] = {k: v for k, v in meta.get('waiters', {}).items() if state.alive(v) is not False}
+    if meta.get('holder') and state.alive(meta['holder']) is False:
+        meta['holder'] = None
+    return meta
+
+
 def status(root: Path, name: str, lock: Lock) -> list[str]:
-    """One line per slot: free, or who holds it."""
+    paths = state.Paths(root)
     lines = []
-    for slot in range(slots(name, lock)):
-        path = _slot_path(root, name, slot)
-        handle = _try(path)
-        if handle is None:
-            lines.append(f"{name}.{slot} {_describe(_read(path))}")
-            continue
-        release(handle)
-        lines.append(f"{name}.{slot} free")
+    with state.mutex(paths.state_root):
+        paths.check()
+        for slot in range(slots(name, lock)):
+            path = paths.locks / f'{name}.{slot}.lock'
+            # Inspection creates neither payload nor slots.
+            if not path.exists():
+                lines.append(f'{name}.{slot} free')
+                continue
+            handle = _try(path)
+            if handle is None:
+                lines.append(f'{name}.{slot} {_describe(_read(path))}')
+            else:
+                release(handle)
+                lines.append(f'{name}.{slot} free')
     return lines
 
 
 @contextlib.contextmanager
 def hold(root: Path, name: str, lock: Lock, holder: dict) -> Iterator[dict]:
-    """Wait for a free slot, then hold it for the block.
-
-    Yields {"slot", "wait_s"}. Refuses (DelegationError) when the lock's wait
-    limit passes first. Both POSIX and Windows use native process locks.
-    """
+    if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', name):
+        raise DelegationError('Invalid resource lock name: ' + name)
+    paths = state.Paths(root)
     count = slots(name, lock)
-    paths = [_slot_path(root, name, slot) for slot in range(count)]
-    started = time.monotonic()
-    announced = False
-    while True:
-        for slot, path in enumerate(paths):
-            handle = _try(path)
+    token = uuid.uuid4().hex
+    record = {**holder, **state.owner(), 'worktree': str(paths.root),
+              'since': datetime.now(timezone.utc).isoformat()}
+    started, announced = time.monotonic(), False
+    handle, selected = None, None
+    slot_paths = [paths.locks / f'{name}.{slot}.lock' for slot in range(count)]
+    try:
+        while True:
+            with state.mutex(paths.state_root):
+                paths.ensure()
+                paths.locks.mkdir(parents=True, exist_ok=True)
+                for slot, path in enumerate(slot_paths):
+                    candidate = _try(path)
+                    meta = _prune(_read(path))
+                    if candidate is not None:
+                        # An uncertain owner protects its state even when OS lock is free.
+                        if meta.get('holder'):
+                            release(candidate)
+                        else:
+                            handle, selected = candidate, slot
+                            meta['holder'] = record
+                    if handle is None:
+                        meta.setdefault('waiters', {})[token] = record
+                    else:
+                        meta.setdefault('waiters', {}).pop(token, None)
+                    state.atomic(_metadata_path(path), meta)
+                    if handle is not None:
+                        break
+                # Remove our waiter registrations from earlier unsuccessful slots.
+                if handle is not None:
+                    for path in slot_paths:
+                        if not path.exists():
+                            continue
+                        meta = _read(path)
+                        if token in meta.get('waiters', {}):
+                            del meta['waiters'][token]
+                            state.atomic(_metadata_path(path), meta)
+                busy = '; '.join(f'{name}.{i} {_describe(_read(p))}' for i, p in enumerate(slot_paths))
             if handle is not None:
                 break
-        else:
             waited = time.monotonic() - started
-            holders = [_read(p) for p in paths]
-            busy = "; ".join(f"{name}.{i} {_describe(h)}" for i, h in enumerate(holders))
             if lock.wait is not None and waited >= lock.wait:
-                raise DelegationError(f"lock {name} still busy after {lock.wait:g}s: {busy}")
-            # A holder writes its details just after taking the slot; give it a moment.
-            if not announced and (all(holders) or waited >= ANNOUNCE_GRACE_S):
-                print(f"waiting for lock {name}: {busy}", file=sys.stderr, flush=True)
+                raise DelegationError(f'lock {name} still busy after {lock.wait:g}s: {busy}')
+            if not announced:
+                print(f'waiting for lock {name}: {busy}', file=sys.stderr)
                 announced = True
             time.sleep(POLL_S)
-            continue
-        break
-    wait_s = round(time.monotonic() - started, 3)
-    try:
-        record = {
-            **holder,
-            "pid": os.getpid(),
-            "worktree": str(root),
-            "since": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        }
-        if os.name == "nt":
-            _metadata_path(path).write_text(json.dumps(record) + "\n", encoding="utf-8")
-        else:
-            handle.seek(0)
-            handle.truncate()
-            handle.write((json.dumps(record) + "\n").encode("utf-8"))
-            handle.flush()
-        yield {"slot": slot, "wait_s": wait_s}
+        yield {'slot': selected, 'wait_s': round(time.monotonic() - started, 3)}
     finally:
         try:
-            with contextlib.suppress(OSError):
-                if os.name == "nt":
-                    _metadata_path(path).unlink()
-                else:
-                    handle.seek(0)
-                    handle.truncate()
+            with state.mutex(paths.state_root):
+                for slot, path in enumerate(slot_paths):
+                    if not path.exists():
+                        continue
+                    meta = _read(path)
+                    meta.get('waiters', {}).pop(token, None)
+                    if slot == selected:
+                        meta['holder'] = None
+                    state.atomic(_metadata_path(path), meta)
+                if handle is not None:
+                    release(handle)
+                    handle = None
         finally:
-            release(handle)
+            if handle is not None:
+                release(handle)

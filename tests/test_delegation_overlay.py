@@ -1,3 +1,4 @@
+from delegation_support import isolate_xdg, state_payload
 from pathlib import Path
 import tempfile
 import unittest
@@ -33,6 +34,7 @@ class OverlayTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
+        isolate_xdg(self, Path(tmp.name))
         self.root = git_repo(Path(tmp.name) / "repo")
 
     def test_missing_overlay_uses_defaults(self):

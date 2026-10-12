@@ -192,3 +192,59 @@ class StateTests(RepoTest):
         retired = list(current.path.parent.glob('*.retired-*'))
         self.assertEqual(len(retired), 1)
         self.assertTrue((retired[0] / 'snapshots' / (old['id'] + '.json')).exists())
+
+    def test_scoped_draft_cli_and_expiry(self):
+        output = self.cli('state', 'draft', '--id', 'review')
+        current = state.State(Git(self.root))
+        path = Path(output['draft_directory'])
+        self.assertEqual(path, current.cache / 'drafts/review')
+        self.assertEqual(self.cli('status')['cache_directory'], str(current.cache))
+        self.assertFalse(state.alive(state.read(path / 'identity.json')['owner']))
+        (path / 'overlay.md').write_text('draft bytes')
+        now = time.time()
+        state.gc(apply=True, now=now + state.MONTH - 1)
+        self.assertTrue(path.exists())
+        state.gc(apply=True, now=now + state.MONTH + 1)
+        self.assertFalse(path.exists())
+
+    def test_draft_active_unknown_symlink_and_renewal(self):
+        path = Path(self.cli('state', 'draft', '--id', 'review')['draft_directory'])
+        original = state.read(path / 'identity.json')
+        state.atomic(path / 'identity.json', {**original, 'owner': state.owner()})
+        state.gc(apply=True, now=time.time() + 2 * state.MONTH)
+        self.assertTrue(path.exists())
+        with self.assertRaises(Invalid):
+            state.draft(Git(self.root), 'review')
+        state.atomic(path / 'identity.json', {**original, 'owner': {'pid': os.getpid(), 'start': None}})
+        state.gc(apply=True, now=time.time() + 2 * state.MONTH)
+        self.assertTrue(path.exists())
+        state.atomic(path / 'identity.json', original)
+        self.cli('state', 'draft', '--id', 'review')
+        (path / 'escape.md').symlink_to(self.root / 'tiny.py')
+        state.gc(apply=True, now=time.time() + 2 * state.MONTH)
+        self.assertTrue(path.exists())
+        self.cli('state', 'draft', '--id', '../escape', code=2)
+
+    def test_cache_draft_deleted_worktree_has_recovery_window(self):
+        linked = self.base / 'linked'
+        self.git('worktree', 'add', '-b', 'linked', str(linked))
+        path = Path(self.cli('state', 'draft', '--id', 'recovery', root=linked)['draft_directory'])
+        current = state.State(Git(linked))
+        self.assertNotEqual(current.cache, state.State(Git(self.root)).cache)
+        self.git('worktree', 'remove', '--force', str(linked))
+        now = time.time()
+        state.gc(apply=True, now=now)
+        self.assertTrue(path.exists())
+        state.gc(apply=True, now=now + state.WEEK)
+        self.assertFalse(current.cache.exists())
+
+    def test_git_registration_probe_never_holds_root_lock(self):
+        current = state.State(Git(self.root))
+        current.put('closure.json', {'preserve': True})
+        native = state.registered
+        def probe(common, worktree):
+            with state.lock(current.root, timeout=.1):
+                pass
+            return native(common, worktree)
+        with patch('long_horizon.state.registered', side_effect=probe):
+            state.gc(apply=True)

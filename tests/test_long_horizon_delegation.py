@@ -31,7 +31,8 @@ class DelegationTests(RepoTest):
         self.carry(output)
         self.assertEqual(self.cli('evidence', 'find')['checks'][0]['status'], 'fresh')
         import shutil
-        shutil.rmtree(self.root / '.delegation')
+        paths = json.loads(self.checker('paths', '--json'))
+        shutil.rmtree(paths['worktree_state_directory'])
         self.assertEqual(self.cli('evidence', 'find')['checks'][0]['status'], 'fresh')
         before = self.prepare()
         self.cli('evidence', 'record', 'validator:unit', '--snapshot', before['id'], '--outcome', 'PASS',

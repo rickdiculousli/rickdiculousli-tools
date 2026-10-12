@@ -61,6 +61,8 @@ def parser():
     verify = common(cl.add_parser('verify'))
     verify.add_argument('--state')
     st = commands.add_parser('state').add_subparsers(dest='action', required=True)
+    draft = common(st.add_parser('draft'))
+    draft.add_argument('--id')
     clear = common(st.add_parser('clear'))
     clear.add_argument('--state-directory', required=True)
     gc = common(st.add_parser('gc'))
@@ -119,13 +121,15 @@ def inspect(args, git, policy, parsed):
     # Unfinished closure is status data, not a failed inspection.
     findings += [finding(x.code, x.message, x.remedy, 'warning', x.path, x.line) for x in closure_findings]
     return {'selection': selection, 'handoff': continuation, 'needs_you': needs, 'acceptance': acceptance['checks'],
-            'closure': cl, 'state_directory': str(state.State(git).path), 'cache_directory': str(state.xdg('cache')),
+            'closure': cl, 'state_directory': str(state.State(git).path), 'cache_directory': str(state.State(git).cache),
             'git': {'root': str(git.root), 'common_dir': str(git.common), 'branch': git.branch(),
                     'head': git.oid(), 'target': policy['integration'].get('target') or git.target(), 'dirty': git.dirty()}}, findings
 
 
 def execute(args):
     if args.command == 'state':
+        if args.action == 'draft':
+            return state.draft(Git(args.root), args.id), []
         if args.action == 'clear':
             return state.clear(Git(args.root), args.state_directory), []
         return state.gc(args.apply, args.if_due, location_root=args.root), []

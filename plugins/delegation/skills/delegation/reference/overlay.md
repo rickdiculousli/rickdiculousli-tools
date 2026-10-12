@@ -33,7 +33,7 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
   Names match `[a-z0-9][a-z0-9_-]*` and must be unique. `check.py run <name>`
   runs the command through the shell from the worktree root, stdin closed,
   stdout and stderr merged. The full output goes to
-  `.delegation/logs/<delegation>/<n>.log`; the ledger keeps that path, the exit
+  `state-relative logs/<delegation>/<n>.log`; the ledger keeps that path, the exit
   code, duration, a SHA-256 of the output and its last 40 lines (at most 4000
   characters).
 - **Validator attributes.** Optional, in brackets after the name, separated by
@@ -78,18 +78,18 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
     or session, for example `DELEGATION_LOCK_CARGO=2`. Set it the same way for
     every session on the machine: each session uses only the slots it knows of.
   - `check.py locks` lists each lock's slots and who holds them.
-  - How it works: each slot is a file under `/tmp/delegation-locks-<hash of
-    git's common directory>/`, held with `flock` on macOS/Linux or `msvcrt.locking` on Windows. The kernel releases a slot
-    when its holder exits, even on a crash, so there is no server to start and
-    no stale lock to clear. Sandboxes that keep `.git` read-only still allow
-    `/tmp`. Windows slot files live in the system temporary directory instead of `/tmp`.
-    Holder details are stored in separate `.json` files so inspection does not
-    read the byte-locked region. Stale metadata alone never marks a slot busy;
-    the native lock determines whether it is held.
+  - How it works: native `flock` (POSIX) or `msvcrt.locking` (Windows)
+    holds each slot in the XDG repository resource-lock directory returned by
+    `check.py paths --json`. Both platforms use JSON holder/waiter sidecars with
+    PID and process-start identity. The fixed root `state.lock` coordinates
+    acquisition, waiter registration and cleanup; no slot wait or validator runs
+    while holding it. All coordinating processes must use the same XDG root.
+    Metadata alone never breaks native contention. Unknown owners protect state.
 - **`validator:<name>` references.** Anywhere in the file, `validator:<name>`
   must name a registered validator, or lint reports `unregistered validator`.
   Use it in `## Oracle` or `## Tier hints` to tie prose to a check.
-- **`## Extra inputs`.** One path per line, relative to the worktree root;
+- **`## Extra inputs`.** One path per line, relative to the worktree root, or a logical
+  `state:context/<relative-path>` input;
   surrounding backticks are stripped. Absolute paths and paths containing `..`
   are rejected. A file contributes its content hash, a directory the hashes of
   every file under it, and a missing path the marker `missing`. With extra
@@ -101,7 +101,7 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 - **`## Roles`.** One named role per line, for example:
 
   ```text
-  capture: tier=execute, runbook=.delegation/context/capture.md, max-uses=8, max-context-bytes=100000
+  capture: tier=execute, runbook=state:context/capture.md, max-uses=8, max-context-bytes=100000
   ```
 
   `tier` is `execute` or `routine`; `runbook` names a context file inside the

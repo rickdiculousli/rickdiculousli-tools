@@ -441,3 +441,70 @@ Native Windows contention/atomic replacement, GUI behavior, live quota savings
 and real hosted remote closure remain untested. Local fixture remote observations
 are not proof of current server state. game-decomp adoption was not applied; it remains
 a separately authorized consuming-repository follow-on.
+
+
+## XDG follow-up: delegation 0.7.0 and long-horizon 0.2.0 (2026-10-11–12)
+
+Checked on Linux x86_64. Host validation was Codex only, as requested; normal
+plugin profiles and consuming-repository state were untouched.
+
+- Generated metadata check passed. Sources, both generated host manifests and
+  marketplace versions were regenerated with `scripts/sync_marketplaces.py`.
+- Full standard-library suite: **334 tests passed** on Python **3.14.4** and
+  **3.10.22**. Commands: `python3 -m unittest discover -s tests -v` and
+  `uv run --offline --no-project --python 3.10 -m unittest discover -s tests -v`.
+- `python3 scripts/verify_lifecycle.py --hosts codex --report /tmp/plugin-verification.json`
+  passed at **2026-10-12T00:53:28.343436+00:00**, with **Codex 0.162.1**. All seven plugins
+  were discovered, installed into a disposable profile, compared byte for byte,
+  uninstalled, and their marketplace removed without cleanup errors. Installed
+  delegation exercised path discovery, an XDG brief, native resource locking,
+  stable validator PASS, unchanged acceptance tree and close. Installed
+  long-horizon prepared evidence and created a scoped identity-bearing cache
+  draft. All fixture XDG paths were outside checkouts and installed plugins.
+- Disposable Git repositories and linked worktrees cover path normalization,
+  default/custom/empty/relative XDG values, unwritable roots without fallback,
+  root/slot inode preservation, real POSIX holder/waiter/crash contention, PID
+  reuse and unknown owners, collection during active work, injected-clock weekly
+  cadence and seven-/30-day retention, stale Git registrations, recreated paths,
+  context confinement and pins, unchanged real Git indexes/object databases,
+  and hash stability while bookkeeping changes.
+- Migration tests cover preview, byte-identical historical events/log lookup,
+  receipts and identical no-op, busy old/new locks and other worktrees, open-work
+  refusal, changed legacy sources, destination conflicts, and interrupted staging
+  recovery/refusal. Unknown legacy/staging files remain for review. Migration
+  never rewrites old tree hashes, result outcomes or evidence hashes.
+- Six actual Codex model runs used temporary profiles and Git fixtures, observed
+  model **gpt-6.1-sol**. The three final scenario outcomes were reviewed: new
+  linked-worktree setup used `state draft`, preserved source/test bytes and ran no
+  validators; reconstruction recovered committed scoped acceptance without old
+  state and left milestone/goal acceptance open; composition preserved registered
+  evidence through an owned commit and deletion of the disposable XDG ledger.
+  The corrected composition run additionally proves a working empty current-tree
+  query and refusal specifically for the missing registered result. No workers,
+  normal-profile changes or network Git integration ran in these pilots.
+  [Curated pilot records](xdg-pilot-results.json) retain report/trace/source-content
+  hashes, the two intermediate runs, and one rejected repeat despite its original
+  automated PASS: changing the identity implementation mid-run blocked cleanup.
+  The runner assertions were strengthened, regression-tested and the scenario
+  rerun successfully with stable source. Pilot content hashes identify pre-commit
+  builds; they do not claim every run observed every subsequent helper change.
+- Native Codex `:workspace` sandbox checks used disposable profiles/repos/XDG
+  homes. Configured XDG roots under `/tmp` worked. Roots outside `/tmp` under the
+  disposable home-cache fixture were denied, exiting 2 with the actionable shared
+  XDG-root diagnostic. Hosts must grant both external XDG roots write permission;
+  no per-command root substitution or checkout/temporary fallback is provided.
+
+Explicit legacy migration requires a coordinated stop/restart of all repository
+checker sessions with one shared XDG root. Native locks and Linux process probes
+refuse detected activity; no implementation can prove an arbitrary old binary
+will never be launched again. Historical files remain for explicit review.
+Linux identities use `statx` creation time where supported to prevent rapid inode
+reuse; older identity records may require explicit recovery rather than silently
+inheriting local bookkeeping. Long-horizon preserves durable Git evidence and
+quarantines old generations on mutation. Filesystems without creation identity
+provide only device/inode checks.
+
+Native Windows/macOS execution, Claude lifecycle/model behavior for these new
+versions, GUI behavior and hosted remote closure were **not tested**. Mocked
+Windows locking cases are unit evidence only. No normal-profile upgrade, legacy
+user-state migration, release tag or hosted PR was performed.

@@ -1,8 +1,15 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "long-horizon",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Bounded progress across sessions with shared setup, resume, checkpoint and durable scoped acceptance.",
-  "author": {"name": "Rick Li"},
-  "keywords": ["goals", "continuation", "evidence", "checkpoint"]
+  "author": {
+    "name": "Rick Li"
+  },
+  "keywords": [
+    "goals",
+    "continuation",
+    "evidence",
+    "checkpoint"
+  ]
 }

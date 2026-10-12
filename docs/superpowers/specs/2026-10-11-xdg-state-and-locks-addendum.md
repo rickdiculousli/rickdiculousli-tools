@@ -1,8 +1,8 @@
 # Addendum: unified XDG state and locks
 
-Status: specified side work for delegation, requested alongside long-horizon.
-This document changes the design contract and repository contributor guidance;
-it does not change released delegation behavior or migrate any user state.
+Status: implemented in delegation 0.7.0 and long-horizon 0.2.0.
+Migration is explicit and quiescent; this release does not automatically migrate
+legacy user state. See docs/verification.md for actual validation and limitations.
 
 Applies to the [delegation design](2026-10-09-delegation-design.md), the
 [long-horizon design](2026-10-11-long-horizon-design.md) and its

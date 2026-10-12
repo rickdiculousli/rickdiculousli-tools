@@ -46,3 +46,18 @@ def run_cli(root: Path, *args: str) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
     )
+
+
+def isolate_xdg(test, base):
+    import os
+    from unittest.mock import patch
+    patched = patch.dict(os.environ, XDG_STATE_HOME=str(base / 'xdg state'), XDG_CACHE_HOME=str(base / 'xdg cache'))
+    patched.start()
+    test.addCleanup(patched.stop)
+
+
+def state_payload(root):
+    from delegation_check.state import Paths, mutex
+    paths = Paths(root)
+    with mutex(paths.state_root):
+        return paths.ensure()

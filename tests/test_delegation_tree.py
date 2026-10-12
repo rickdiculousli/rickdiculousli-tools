@@ -1,3 +1,4 @@
+from delegation_support import isolate_xdg, state_payload
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,6 +13,7 @@ class TreeTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
+        isolate_xdg(self, Path(tmp.name))
         self.tmp = Path(tmp.name)
         self.root = git_repo(self.tmp / "repo")
 
@@ -59,10 +61,10 @@ class TreeTests(unittest.TestCase):
 
     def test_state_dir_does_not_change_tree(self):
         t0 = tree_hash(self.root)
-        (state_dir(self.root) / "ledger.jsonl").write_text("{}\n")
+        (state_payload(self.root) / "ledger.jsonl").write_text("{}\n")
         self.assertEqual(t0, tree_hash(self.root))
         self.assertEqual(list(state_dir(self.root).glob("tmp-index-*")), [])
-        self.assertEqual((state_dir(self.root) / ".gitignore").read_text(), "*\n")
+        self.assertFalse((self.root / ".delegation").exists())
 
     def test_repo_without_commits(self):
         root = self.tmp / "empty"
@@ -75,10 +77,10 @@ class TreeTests(unittest.TestCase):
     def test_linked_worktree(self):
         wt = self.tmp / "wt"
         git(self.root, "worktree", "add", "-q", str(wt))
-        before = {p.name for p in self.tmp.iterdir()}
+        before = {p.name for p in wt.iterdir()}
         self.assertRegex(tree_hash(wt), r"\A[0-9a-f]{40}\Z")
-        self.assertEqual(before, {p.name for p in self.tmp.iterdir()})
-        self.assertTrue((wt / ".delegation/.gitignore").exists())
+        self.assertEqual(before, {p.name for p in wt.iterdir()})
+        self.assertFalse((wt / ".delegation").exists())
         self.assertFalse((self.root / ".agents").exists())
         self.assertEqual(repo_root(wt).resolve(), wt.resolve())
 

@@ -17,8 +17,7 @@ import time
 from typing import Sequence
 
 from . import DelegationError
-from . import locks
-from .file_lock import exclusive
+from . import locks, state
 from .overlay import Lock, Role, Validator
 from .tree import state_dir, tree_hash
 
@@ -26,16 +25,16 @@ SCHEMA = 1
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 TIERS = ("execute", "routine")
 OUTCOMES = ("done", "stuck", "abandoned")
-CONTEXT_REF = re.compile(r"\.delegation/context/[A-Za-z0-9_./-]*[A-Za-z0-9_-]")
+CONTEXT_REF = re.compile(r"(?:state:context/|\.delegation/context/)[^\s`\"\'<>),;]+")
 
 
 def _context_hashes(root: Path, brief: bytes) -> dict[str, str]:
-    """Hash each `.delegation/context/` file the brief names, keyed by that path."""
+    """Hash each logical `state:context/` file the brief names, keyed by that path."""
     hashes = {}
     for ref in sorted(set(CONTEXT_REF.findall(brief.decode("utf-8", errors="replace")))):
         if ".." in Path(ref).parts:
-            raise DelegationError(f"context path escapes .delegation/context: {ref}")
-        target = root.resolve() / ref
+            raise DelegationError(f"context path escapes state:context: {ref}")
+        target = state.context_path(root, ref)
         if not target.is_file():
             raise DelegationError(f"context file not found: {target}")
         hashes[ref] = hashlib.sha256(target.read_bytes()).hexdigest()
@@ -46,8 +45,16 @@ def ledger_path(root: Path) -> Path:
     return state_dir(root) / "ledger.jsonl"
 
 
-def ledger_lock(root: Path) -> contextlib.AbstractContextManager[None]:
-    return exclusive(state_dir(root) / "ledger.lock")
+@contextlib.contextmanager
+def ledger_lock(root: Path, write=False):
+    paths = state.Paths(root)
+    if write:
+        state.opportunistic()
+    with state.bind(paths), state.mutex(paths.state_root):
+        paths.check()
+        if write:
+            paths.ensure()
+        yield
 
 
 def read_events(root: Path) -> list[dict]:
@@ -91,7 +98,7 @@ def _append(root: Path, event: dict) -> dict:
 
 
 def append_event(root: Path, event: dict) -> dict:
-    with ledger_lock(root):
+    with ledger_lock(root, write=True):
         return _append(root, event)
 
 
@@ -124,15 +131,21 @@ def open_delegation(
     brief = brief if brief.is_absolute() else root_resolved / brief
     if not brief.is_file():
         raise DelegationError(f"brief not found: {brief}")
+    location = {}
+    state_path = state_dir(root)
     try:
-        brief_name = brief.resolve().relative_to(root_resolved).as_posix()
+        brief_name = brief.resolve().relative_to(state_path).as_posix()
+        location = {'location': 'state'}
     except ValueError:
-        brief_name = str(brief)
+        try:
+            brief_name = brief.resolve().relative_to(root_resolved).as_posix()
+        except ValueError:
+            brief_name = str(brief.resolve())
     brief_bytes = brief.read_bytes()
     brief_sha = hashlib.sha256(brief_bytes).hexdigest()
     context = _context_hashes(root, brief_bytes)
     tree = tree_hash(root, extra_inputs)
-    with ledger_lock(root):
+    with ledger_lock(root, write=True):
         events = _read_events_unlocked(root)
         if any(e.get("event") == "open" and e.get("delegation") == delegation for e in events):
             raise DelegationError(f"delegation id already used: {delegation}")
@@ -153,8 +166,8 @@ def open_delegation(
             role = (roles or {}).get(role_name)
             if role is None or role.tier != tier:
                 raise DelegationError(f"unknown role or wrong tier: {role_name}")
-            target = root_resolved / role.runbook
-            if not target.resolve().is_relative_to(root_resolved / '.delegation/context') or not target.is_file():
+            target = state.context_path(root, role.runbook)
+            if not target.is_file():
                 raise DelegationError(f"role runbook not found or escapes context directory: {role.runbook}")
             context[role.runbook] = hashlib.sha256(target.read_bytes()).hexdigest()
             session = prior.get('agent_session', continued_from) if prior else delegation
@@ -162,7 +175,7 @@ def open_delegation(
             if any(e.get('agent_session') == session for e in active):
                 raise DelegationError("role agent has an open brief; review and close it before continuing")
             uses = len(chain) + 1
-            size = len(brief_bytes) + sum((root_resolved / ref).stat().st_size for ref in context)
+            size = len(brief_bytes) + sum(state.context_path(root, ref).stat().st_size for ref in context)
             context_bytes = sum(e.get('context_bytes_added', 0) for e in chain) + size
             if ((role.max_uses is not None and uses > role.max_uses)
                     or (role.max_context_bytes is not None and context_bytes > role.max_context_bytes)):
@@ -190,6 +203,7 @@ def open_delegation(
                 "tier": tier,
                 "writes": writes,
                 "brief": brief_name,
+                **location,
                 "brief_sha256": brief_sha,
                 "context": context,
                 "tree": tree,
@@ -203,15 +217,14 @@ def load_brief(root: Path, delegation: str) -> tuple[dict, bytes]:
     opened = [e for e in pending(root) if e["delegation"] == delegation]
     if not opened:
         raise DelegationError(f"delegation is not open: {delegation}")
-    brief = Path(opened[0]["brief"])
-    brief = brief if brief.is_absolute() else root.resolve() / brief
+    brief = state.recorded_path(root, opened[0], "brief")
     if not brief.is_file():
         raise DelegationError(f"brief not found: {brief}")
     data = brief.read_bytes()
     if hashlib.sha256(data).hexdigest() != opened[0]["brief_sha256"]:
         raise DelegationError(f"brief changed since open: {brief}")
     for ref, digest in opened[0].get("context", {}).items():
-        target = root.resolve() / ref
+        target = state.context_path(root, ref)
         if not target.is_file():
             raise DelegationError(f"context file not found: {target}")
         if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
@@ -222,7 +235,7 @@ def load_brief(root: Path, delegation: str) -> tuple[dict, bytes]:
 def close_delegation(root: Path, delegation: str, outcome: str, note: str | None) -> dict:
     if outcome not in OUTCOMES:
         raise DelegationError(f"outcome must be one of {', '.join(OUTCOMES)}, got {outcome!r}")
-    with ledger_lock(root):
+    with ledger_lock(root, write=True):
         if delegation not in {e["delegation"] for e in _pending(_read_events_unlocked(root))}:
             raise DelegationError(f"delegation is not open: {delegation}")
         return _append(
@@ -263,7 +276,7 @@ def execute(
 
 
 def log_path(root: Path, result_id: str) -> Path:
-    """Where a result's complete output is kept: .delegation/logs/<delegation>/<n>.log."""
+    """Where a result's complete output is kept: state-relative logs/<delegation>/<n>.log."""
     delegation, _, number = result_id.rpartition("#")
     return state_dir(root) / "logs" / delegation / f"{number}.log"
 
@@ -292,7 +305,7 @@ def run_validator(
         if validator.lock
         else contextlib.nullcontext({"slot": None, "wait_s": None})
     )
-    with held as slot:
+    with state.activity(root, "validator"), held as slot:
         before = tree_hash(root, extra_inputs)
         started = time.monotonic()
         code, timed_out, output = execute(root, argv if argv is not None else validator.command, timeout)
@@ -300,7 +313,7 @@ def run_validator(
         after = tree_hash(root, extra_inputs)
     text = output.decode("utf-8", errors="replace")
     tail = "\n".join(text.splitlines()[-TAIL_LINES:])[-TAIL_CHARS:]
-    with ledger_lock(root):
+    with ledger_lock(root, write=True):
         events = _read_events_unlocked(root)
         if delegation not in {e["delegation"] for e in _pending(events)}:
             raise DelegationError(f"delegation closed while the validator ran: {delegation}")
@@ -334,7 +347,8 @@ def run_validator(
                 "host": {"platform": sys.platform, "machine": platform.machine(), "node": platform.node()},
                 "output_sha256": hashlib.sha256(output).hexdigest(),
                 "output_tail": tail,
-                "log": log.relative_to(root).as_posix(),
+                "log": log.relative_to(state_dir(root)).as_posix(),
+                "location": "state",
             },
         )
 

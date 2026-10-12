@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "verification_scope": "Codex only, disposable fixtures/profiles; no Windows/macOS/Claude verification",
+  "runs": [
+    {
+      "host": "codex",
+      "scenario": "composed",
+      "started": "2026-10-11T23:35:40.371806+00:00",
+      "plugin_version": "0.1.1",
+      "host_version": "codex-cli 0.162.1",
+      "observed_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 72.78,
+      "source_commit": "c6ba47f374101293188ad9f625cce49c38ac2b32",
+      "plugin_content_sha256": "43338e735650231650b0b4226d2d31927deb4b2f135dd02dde8cd914da19db1d",
+      "assertions": {
+        "model_exited_0": true,
+        "cli_status_ok": true,
+        "no_checkout_runtime_state": true,
+        "checked_result_durable": true,
+        "no_second_ledger": true
+      },
+      "passed": true,
+      "report_sha256": "1396629de52d5568b72564f677c01232dcf91fa19b7d7243c621a0628b4bbab1",
+      "trace_sha256": "3408f13b2571117042413282e87afb2a01607e56c0d1287f18684724ed5c12cc",
+      "run_id": "20261011T233540-codex-composed",
+      "manual_passed": true,
+      "manual_note": "Intermediate acceptance/continuation check before scoped cache-draft implementation; retained as historical evidence."
+    },
+    {
+      "host": "codex",
+      "scenario": "reconstruct",
+      "started": "2026-10-11T23:36:47.425377+00:00",
+      "plugin_version": "0.1.1",
+      "host_version": "codex-cli 0.162.1",
+      "observed_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 42.55,
+      "source_commit": "c6ba47f374101293188ad9f625cce49c38ac2b32",
+      "plugin_content_sha256": "2992078db8edc66aebe8cebe2609be094257582f0d753b9ef7c92d63e186942d",
+      "assertions": {
+        "model_exited_0": true,
+        "cli_status_ok": true,
+        "no_checkout_runtime_state": true,
+        "durable_unit_recovered": true,
+        "task_only_completion": true
+      },
+      "passed": true,
+      "report_sha256": "fb6c4b315f2cb7007f97a8515edc7458254643fa500d929ba4727167b5afaab6",
+      "trace_sha256": "fc0a174ff3bc4598bf6600e0fc04a78380e4c7cb47ebc7c8df5eb59aa6683cd2",
+      "run_id": "20261011T233647-codex-reconstruct",
+      "manual_passed": true,
+      "manual_note": "Intermediate acceptance/continuation check before scoped cache-draft implementation; retained as historical evidence."
+    },
+    {
+      "host": "codex",
+      "scenario": "new",
+      "started": "2026-10-11T23:41:35.958850+00:00",
+      "plugin_version": "0.2.0",
+      "host_version": "codex-cli 0.162.1",
+      "observed_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 68.96,
+      "source_commit": "c6ba47f374101293188ad9f625cce49c38ac2b32",
+      "plugin_content_sha256": "643aa8ddef87d76cd79558c152b0569fe3c2bce6c943ed61ad826176566825d7",
+      "assertions": {
+        "model_exited_0": true,
+        "cli_status_ok": true,
+        "no_checkout_runtime_state": true,
+        "setup_cache_layout": true,
+        "overlay_written": true,
+        "handoff_written": true,
+        "selected_task": true,
+        "pointer_reachable": true
+      },
+      "passed": true,
+      "report_sha256": "9417325b9618d24d5a78faa353644b0f5a04bd1f25333205347038cab61725cc",
+      "trace_sha256": "83ca818654f1500d9b0e0d84e970d6ec7a603be2cd0bebec7052aed0ad7be6b0",
+      "run_id": "20261011T234135-codex-new",
+      "manual_passed": true,
+      "manual_note": "Reviewed tool calls and final state. Fixture/XDG boundaries preserved; no workers, normal-profile changes or network Git integration. Unaccepted work remained open."
+    },
+    {
+      "host": "codex",
+      "scenario": "composed",
+      "started": "2026-10-11T23:43:16.857008+00:00",
+      "plugin_version": "0.2.0",
+      "host_version": "codex-cli 0.162.1",
+      "observed_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 86.31,
+      "source_commit": "c6ba47f374101293188ad9f625cce49c38ac2b32",
+      "plugin_content_sha256": "4099f463489ede8870b43d3d17dc16fa6be0b88e81cd2d9c7240f78fe4fc0e43",
+      "assertions": {
+        "model_exited_0": true,
+        "cli_status_ok": true,
+        "no_checkout_runtime_state": true,
+        "checked_result_durable": true,
+        "no_second_ledger": true
+      },
+      "passed": true,
+      "report_sha256": "07b47e521195a42fa030ed1d60f81dfa3a82a6ae44ac948813d54e6134c3bf76",
+      "trace_sha256": "db8d7ccb3aef6bf42d3dadfb4d3e5a49a6b9f23232f98f0a3313d0d8fd7d9d85",
+      "run_id": "20261011T234316-codex-composed",
+      "manual_passed": false,
+      "manual_note": "Rejected despite original automated PASS: source identity format changed mid-run. Cleanup/current query failed with an identity error, so missing-result refusal was not demonstrated. Strengthened runner assertions and reran with stable source."
+    },
+    {
+      "host": "codex",
+      "scenario": "reconstruct",
+      "started": "2026-10-11T23:43:16.856394+00:00",
+      "plugin_version": "0.2.0",
+      "host_version": "codex-cli 0.162.1",
+      "observed_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 37.72,
+      "source_commit": "c6ba47f374101293188ad9f625cce49c38ac2b32",
+      "plugin_content_sha256": "4099f463489ede8870b43d3d17dc16fa6be0b88e81cd2d9c7240f78fe4fc0e43",
+      "assertions": {
+        "model_exited_0": true,
+        "cli_status_ok": true,
+        "no_checkout_runtime_state": true,
+        "durable_unit_recovered": true,
+        "task_only_completion": true
+      },
+      "passed": true,
+      "report_sha256": "0e51cdf5930818bd47e030f5c3ae2ddbe8f126cb81f593a2b30f1368bbfe1bad",
+      "trace_sha256": "8309f40edac0ee00e0a095cf49ff71be26e710e38a7c5dc37c71c3551d4ccb24",
+      "run_id": "20261011T234316-codex-reconstruct",
+      "manual_passed": true,
+      "manual_note": "Reviewed tool calls and final state. Fixture/XDG boundaries preserved; no workers, normal-profile changes or network Git integration. Unaccepted work remained open."
+    },
+    {
+      "host": "codex",
+      "scenario": "composed",
+      "started": "2026-10-11T23:46:24.094615+00:00",
+      "plugin_version": "0.2.0",
+      "host_version": "codex-cli 0.162.1",
+      "observed_models": [
+        "gpt-6.1-sol"
+      ],
+      "elapsed_seconds": 82.71,
+      "source_commit": "c6ba47f374101293188ad9f625cce49c38ac2b32",
+      "plugin_content_sha256": "3e8486ab096b52b3aa4a71f125e81b91c90dfe1e4081b40529219a4c0f1307a1",
+      "assertions": {
+        "model_exited_0": true,
+        "cli_status_ok": true,
+        "no_checkout_runtime_state": true,
+        "checked_result_durable": true,
+        "no_second_ledger": true,
+        "fixture_ledger_deleted": true,
+        "current_query_empty_without_identity_error": true,
+        "new_checked_claim_refused_for_missing_result": true
+      },
+      "passed": true,
+      "report_sha256": "66a254e85afda129ce26a6a1c71dd4163240dfef39d13b33431b11913ed8c4d3",
+      "trace_sha256": "05a67c7eccc380b1a74e81c7bb3b8b1ce1f278a4120aa3f2c8981665cc506bd4",
+      "run_id": "20261011T234624-codex-composed",
+      "manual_passed": true,
+      "manual_note": "Reviewed tool calls and final state. Fixture/XDG boundaries preserved; no workers, normal-profile changes or network Git integration. Unaccepted work remained open."
+    }
+  ]
+}

@@ -18,6 +18,36 @@ python3 <delegation-dir>/scripts/check.py [--root <worktree>] <command> ...
 
 Work from the target repo's worktree root. Write nothing until step 4.
 
+## Local state and coordinated upgrade
+
+Resolve directories with `python3 "<skill-dir>/scripts/check.py" paths --json`
+(delegation's script for setup). Use the returned `brief_directory`,
+`context_directory`, and `log_directory`; quote every returned shell path.
+Inspection creates no payload. Plugin-owned bytes live under XDG state, and Git
+hash scratch under XDG cache, outside the checkout and installation. In briefs
+and role declarations name context as `state:context/<relative-path>`; `brief`
+checks its bytes and prints the resolved quoted path. Keep a pinned context
+single-writer and immutable until its active briefs have closed.
+
+Before opening work with an existing `.delegation/ledger.jsonl`, stop old checker
+sessions, close their open delegations with the old checker, and preview
+`check.py state migrate`. Apply with `check.py state migrate --apply` only when
+all repository sessions and validators are quiescent. Inspect the reported
+`Host side effects` policy for XDG restrictions; do not override it. Review the
+receipt and proposed overlay/helper reference updates; apply repository edits
+within current task authorization. Restart all sessions with the new checker and
+the same XDG root. Keep legacy copies for explicit review; changed legacy bytes
+block dependent operations. Migration does not rewrite historical evidence or
+establish a new PASS. Renamed acceptance inputs need the authorized checks rerun.
+
+`check.py state gc` previews collection; `check.py state gc --apply [--if-due]`
+applies it, including outside a checkout. Normal writes sweep at most weekly.
+Confirmed deleted, unregistered worktrees have a seven-day recovery window;
+existing unfinished work, ledger inputs, role runbooks and uncertain owners stay.
+Unreferenced briefs/context expire after 30 days; dead hash attempts are collected
+weekly. Cleanup never touches durable tracked evidence or legacy copies.
+
+
 ## 1. Check the starting point
 
 - It must be a git worktree (`check.py tree` exits 2 otherwise).
@@ -93,9 +123,9 @@ Wait for approval or edits.
 2. Notify the user before any `needs-human` validator and early while the
    user is present; stop for required human action without infinite retries.
    Run every validator once through the ledger, under one setup delegation:
-   - write a short brief to `.delegation/briefs/setup.md` ("Setup: prove each
+   - write a short brief to `<brief-directory>/setup.md` ("Setup: prove each
      validator runs");
-   - `check.py open --delegation setup-<YYYYMMDD> --tier routine --brief .delegation/briefs/setup.md`;
+   - `check.py open --delegation setup-<YYYYMMDD> --tier routine --brief "<brief-directory>/setup.md"`;
    - for each validator, `check.py run <name> --delegation setup-<YYYYMMDD>`, adding
      `--timeout 1800` for one without its own timeout;
    - `check.py close --delegation setup-<YYYYMMDD> --outcome done`, or

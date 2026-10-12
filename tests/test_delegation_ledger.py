@@ -1,3 +1,4 @@
+from delegation_support import isolate_xdg, state_payload
 import hashlib
 import json
 import subprocess
@@ -16,6 +17,7 @@ class LedgerTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
+        isolate_xdg(self, Path(tmp.name))
         self.root = git_repo(Path(tmp.name) / "repo")
         self.brief = Path(tmp.name) / "brief.md"
         self.brief.write_text("do the thing\n")
@@ -129,8 +131,8 @@ class LedgerTests(unittest.TestCase):
         self.assertTrue(r.stdout.endswith("Return fields: none\nReturn cap: 400 words\n"))
 
     def test_brief_checks_context_files(self):
-        context = self.root / ".delegation" / "context" / "spec.md"
-        self.brief.write_text("Settled: read .delegation/context/spec.md first.\n")
+        context = state_payload(self.root) / "context" / "spec.md"
+        self.brief.write_text("Settled: read state:context/spec.md first.\n")
         r = self.open("d1")
         self.assertEqual(r.returncode, 2)
         self.assertIn("context file not found", r.stderr)
@@ -140,7 +142,7 @@ class LedgerTests(unittest.TestCase):
         (event,) = [e for e in read_events(self.root) if e.get("delegation") == "d2"]
         self.assertEqual(
             event["context"],
-            {".delegation/context/spec.md": hashlib.sha256(b"facts\n").hexdigest()},
+            {"state:context/spec.md": hashlib.sha256(b"facts\n").hexdigest()},
         )
         self.assertEqual(run_cli(self.root, "brief", "--delegation", "d2").returncode, 0)
         context.write_text("other facts\n")
@@ -149,10 +151,10 @@ class LedgerTests(unittest.TestCase):
         self.assertIn("context changed since open", r.stderr)
 
     def test_context_path_may_not_escape(self):
-        self.brief.write_text("Settled: .delegation/context/../../a.txt\n")
+        self.brief.write_text("Settled: state:context/../../a.txt\n")
         r = self.open("d1")
         self.assertEqual(r.returncode, 2)
-        self.assertIn("escapes .delegation/context", r.stderr)
+        self.assertIn("escapes state:context", r.stderr)
 
     def test_return_format_doc_matches_footer(self):
         doc = (SCRIPTS.parent / "reference" / "return-format.md").read_text()

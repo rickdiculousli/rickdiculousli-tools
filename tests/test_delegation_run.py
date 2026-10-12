@@ -1,3 +1,4 @@
+from delegation_support import isolate_xdg, state_payload
 import json
 import os
 from pathlib import Path
@@ -28,6 +29,7 @@ class RunTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
+        isolate_xdg(self, Path(tmp.name))
         self.root = git_repo(Path(tmp.name) / "repo")
         write_overlay(self.root, OVERLAY)
         self.brief = Path(tmp.name) / "brief.md"
@@ -50,11 +52,14 @@ class RunTests(unittest.TestCase):
         import os
         if os.geteuid() == 0:
             self.skipTest("root ignores directory permissions")
-        self.root.chmod(0o555)
-        self.addCleanup(self.root.chmod, 0o755)
+        from delegation_check.state import xdg
+        directory = xdg('state')
+        directory.mkdir(parents=True)
+        directory.chmod(0o555)
+        self.addCleanup(directory.chmod, 0o755)
         r = run_cli(self.root, "pending")
         self.assertEqual(r.returncode, 2, r.stderr)
-        self.assertIn("check.py: cannot access", r.stderr)
+        self.assertIn("XDG state root is not writable", r.stderr)
         self.assertNotIn("Traceback", r.stderr)
 
     def test_run_appends_result(self):
@@ -73,8 +78,8 @@ class RunTests(unittest.TestCase):
         self.assertFalse(event["timed_out"])
         self.assertEqual(event["output_tail"], "hello")
         self.assertEqual(len(event["output_sha256"]), 64)
-        self.assertEqual(event["log"], ".delegation/logs/d1/1.log")
-        self.assertEqual((self.root / event["log"]).read_text(), "hello\n")
+        self.assertEqual(event["log"], "logs/d1/1.log")
+        self.assertEqual((state_payload(self.root) / event["log"]).read_text(), "hello\n")
         self.assertIsNone(event["timeout_s"])
         self.assertIsNone(event["lock"])
         self.assertEqual(event["tree"], run_cli(self.root, "tree").stdout.strip())
@@ -177,7 +182,7 @@ class RunTests(unittest.TestCase):
             self.assertEqual(proc.returncode, 0, out + err)
 
     def assert_clean_lines(self):
-        raw = (self.root / ".delegation/ledger.jsonl").read_text()
+        raw = (state_payload(self.root) / "ledger.jsonl").read_text()
         for line in raw.splitlines():
             json.loads(line)
 
@@ -323,7 +328,7 @@ class RunTests(unittest.TestCase):
         self.open()
         r = run_cli(self.root, "run", "long", "--delegation", "d1")
         self.assertEqual(r.returncode, 1)
-        log = self.root.resolve() / ".delegation/logs/d1/1.log"
+        log = state_payload(self.root) / "logs/d1/1.log"
         self.assertTrue(r.stdout.endswith(f"full output: {log}\n"))
         self.assertEqual(len(log.read_text().splitlines()), 500)
 

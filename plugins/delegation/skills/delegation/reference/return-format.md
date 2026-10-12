@@ -30,7 +30,8 @@ while it ran) is never `checked`.
 
 ## Brief template
 
-Save as `.delegation/briefs/<id>.md`. Fill every field; write `none` where
+Resolve `brief_directory` with `check.py paths --json`; save as
+`<brief-directory>/<id>.md` and quote that absolute path in commands. Fill every field; write `none` where
 nothing applies. Write only these fields: `check.py brief` appends the
 delegation id, the validator command with absolute paths, the return format,
 and the overlay's return fields and cap. The footer also prohibits commits unless
@@ -42,7 +43,7 @@ section is nonempty. These are agent instructions, not filesystem enforcement.
 # Delegation <id>
 
 Tier: <execute|routine>
-Settled: <facts and rulings already established, with refs; or "read .delegation/context/<name>.md first"; or none>
+Settled: <facts and rulings already established, with refs; or "read state:context/<name>.md first"; or none>
 Goal: <one or two sentences: what done looks like>
 Inputs: <paths, symbols or addresses to read; these bound your reading>
 May write: <paths, or "nothing (reader)">
@@ -50,7 +51,7 @@ Must not write: <the overlay's single-writer resources, and anything not listed 
 Done when: <the condition>; validators: <names from the overlay that cover this change, or none>. A writer runs them last, after its final edit, so the results are at the tree the judge reviews.
 ```
 
-`open` records the hash of the brief and of every `.delegation/context/` file it
+`open` records the hash of the brief and of every `state:context/` file it
 names; `brief` refuses if any of them changed. Don't edit either after opening.
 
 

@@ -1,3 +1,4 @@
+from delegation_support import isolate_xdg, state_payload
 import hashlib
 import json
 from pathlib import Path
@@ -14,18 +15,19 @@ class RoleTests(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
+        isolate_xdg(self, Path(tmp.name))
         self.root = git_repo(Path(tmp.name) / 'repo')
-        self.context = self.root / '.delegation/context/capture.md'
+        self.context = state_payload(self.root) / 'context/capture.md'
         self.context.parent.mkdir(parents=True)
         self.context.write_text('capture runbook\n')
-        self.brief = self.root / '.delegation/briefs/a.md'
+        self.brief = state_payload(self.root) / 'briefs/a.md'
         self.brief.parent.mkdir()
         self.brief.write_text('Goal: capture\n')
         self.overlay()
 
     def overlay(self, caps='max-uses=2'):
         write_overlay(self.root, f'''## Roles
-capture: tier=execute, runbook=.delegation/context/capture.md, {caps}
+capture: tier=execute, runbook=state:context/capture.md, {caps}
 ## Rote scripts
 capture: python scripts/capture.py; replaces launch, verify, import, index
 ## Host side effects
@@ -56,7 +58,7 @@ games: slots=6, wait=2
         text = run_cli(self.root, 'brief', '--delegation', 'a').stdout
         for expected in ['Do not commit unless the brief says so', 'No first person in committed files.',
                          'Never write these', '~/Library/Application Support/settings.nogg',
-                         'needs-human', '.delegation/context/capture.md', 'validator=null',
+                         'needs-human', 'state:context/capture.md', 'validator=null',
                          'registered validator']:
             self.assertIn(expected, text)
         self.context.write_text('changed')
@@ -75,7 +77,7 @@ games: slots=6, wait=2
         write_overlay(self.root, '## Roles\n')
         r = run_cli(self.root, 'brief', '--delegation', 'a')
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn('.delegation/context/capture.md', r.stdout)
+        self.assertIn('state:context/capture.md', r.stdout)
 
     def test_reuse_preserves_writer_and_parallel_rules(self):
         self.assertEqual(self.open('a').returncode, 0)
@@ -130,13 +132,13 @@ games: slots=6, wait=2
         self.assertEqual(self.open('fresh').returncode, 0)
 
     def test_lint_rejects_bad_roles_and_rote_scripts(self):
-        cases = ['capture: tier=wrong, runbook=.delegation/context/a.md, max-uses=2',
+        cases = ['capture: tier=wrong, runbook=state:context/a.md, max-uses=2',
                  'capture: tier=execute, runbook=../a.md, max-uses=2',
-                 'capture: tier=execute, runbook=.delegation/context/a.md',
-                 'capture: tier=execute, runbook=.delegation/context/a.md, max-uses=0',
-                 'capture: tier=execute, tier=routine, runbook=.delegation/context/a.md, max-uses=2',
-                 'capture: tier=execute, runbook=.delegation/context/a.md, max-uses=²',
-                 'capture: tier=execute, runbook=.delegation/context/a.md, max-context-bytes=nan']
+                 'capture: tier=execute, runbook=state:context/a.md',
+                 'capture: tier=execute, runbook=state:context/a.md, max-uses=0',
+                 'capture: tier=execute, tier=routine, runbook=state:context/a.md, max-uses=2',
+                 'capture: tier=execute, runbook=state:context/a.md, max-uses=²',
+                 'capture: tier=execute, runbook=state:context/a.md, max-context-bytes=nan']
         for row in cases:
             with self.subTest(row=row):
                 write_overlay(self.root, '## Roles\n' + row + '\n')
@@ -167,7 +169,7 @@ games: slots=6, wait=2
         self.assertIsNone(events[0]['validator'])
         self.assertEqual(events[0]['delegation'], 'caller')
         self.assertEqual(events[0]['lock'], 'games')
-        self.assertEqual((self.root / events[0]['log']).read_text(), 'capture\n')
+        self.assertEqual((state_payload(self.root) / events[0]['log']).read_text(), 'capture\n')
         run_cli(self.root, 'run', 'ok', '--delegation', 'caller')
         q = json.loads(run_cli(self.root, 'query', '--delegation', 'caller', '--json').stdout)
         self.assertEqual([e['id'] for e in q['results']], ['caller#1', 'caller#2'])

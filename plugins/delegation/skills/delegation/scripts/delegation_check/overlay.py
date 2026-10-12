@@ -140,9 +140,9 @@ def _roles(lines: list[tuple[int, str]], problems: list[str]) -> dict[str, Role]
             problems.append(f'line {number}: invalid or duplicate role name "{name}"')
         if tier not in {"execute", "routine"}:
             problems.append(f'line {number}: role tier must be execute or routine')
-        if (_escapes(runbook) or not runbook.startswith(".delegation/context/")
-                or not runbook[len(".delegation/context/"):]):
-            problems.append(f'line {number}: role runbook must be under .delegation/context/')
+        if (_escapes(runbook.removeprefix("state:context/")) or not runbook.startswith("state:context/")
+                or not runbook[len("state:context/"):]):
+            problems.append(f'line {number}: role runbook must use state:context/<relative-path>')
         caps = []
         for key in ("max-uses", "max-context-bytes"):
             value = values.get(key)
@@ -247,7 +247,7 @@ def load_overlay(root: Path) -> Overlay:
         value = text.strip("`").strip()
         if not value:
             continue
-        if _escapes(value):
+        if _escapes(value.removeprefix("state:context/")) or (value.startswith("state:") and not value.startswith("state:context/")):
             problems.append(f"line {number}: extra input escapes the repository: {value}")
         else:
             extra.append(value)

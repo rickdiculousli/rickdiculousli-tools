@@ -21,6 +21,36 @@ python3 <skill-dir>/scripts/check.py [--root <worktree>] <command> ...
 directory). Exit codes: 0 ok; 1 lint problems or a failing validator; 2 an error
 or a refused operation (the reason is on stderr).
 
+## Local state and coordinated upgrade
+
+Resolve directories with `python3 "<skill-dir>/scripts/check.py" paths --json`
+(delegation's script for setup). Use the returned `brief_directory`,
+`context_directory`, and `log_directory`; quote every returned shell path.
+Inspection creates no payload. Plugin-owned bytes live under XDG state, and Git
+hash scratch under XDG cache, outside the checkout and installation. In briefs
+and role declarations name context as `state:context/<relative-path>`; `brief`
+checks its bytes and prints the resolved quoted path. Keep a pinned context
+single-writer and immutable until its active briefs have closed.
+
+Before opening work with an existing `.delegation/ledger.jsonl`, stop old checker
+sessions, close their open delegations with the old checker, and preview
+`check.py state migrate`. Apply with `check.py state migrate --apply` only when
+all repository sessions and validators are quiescent. Inspect the reported
+`Host side effects` policy for XDG restrictions; do not override it. Review the
+receipt and proposed overlay/helper reference updates; apply repository edits
+within current task authorization. Restart all sessions with the new checker and
+the same XDG root. Keep legacy copies for explicit review; changed legacy bytes
+block dependent operations. Migration does not rewrite historical evidence or
+establish a new PASS. Renamed acceptance inputs need the authorized checks rerun.
+
+`check.py state gc` previews collection; `check.py state gc --apply [--if-due]`
+applies it, including outside a checkout. Normal writes sweep at most weekly.
+Confirmed deleted, unregistered worktrees have a seven-day recovery window;
+existing unfinished work, ledger inputs, role runbooks and uncertain owners stay.
+Unreferenced briefs/context expire after 30 days; dead hash attempts are collected
+weekly. Cleanup never touches durable tracked evidence or legacy copies.
+
+
 ## 1. Load the overlay
 
 The repo's overlay is `.agents/delegation.md`; its format is in
@@ -56,7 +86,7 @@ or change an overlay, use the `setup` skill from this plugin.
    material is small next to each item's own work. When it is large, batch the
    items into fewer calls, or first delegate one `execute` reader to digest it:
    facts, signatures and conventions with refs, within the return cap. Review
-   the digest, save it once to `.delegation/context/<name>.md`, and point every
+   the digest, save it once to `<context-directory>/<name>.md`, and point every
    sibling's `Settled` field at it. Fill `Settled` yourself only from what you
    already know; don't read bulk material to write it.
 7. **Sequence dependent work.** When one item needs another's output (shared
@@ -92,14 +122,14 @@ or change an overlay, use the `setup` skill from this plugin.
 
 1. **Brief.** Choose an id matching `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` (a letter
    or digit first; never reused in this worktree). Write the brief to
-   `.delegation/briefs/<id>.md` (create the folder if needed; `check.py`
-   keeps `.delegation/` git-ignored). Don't edit it after opening: `open`
-   records its hash, and the hash of every `.delegation/context/` file the brief
+   `<brief-directory>/<id>.md` (create the folder if needed). Obtain the
+   directory from `check.py paths --json`, and quote the absolute brief path. Don't edit it after opening: `open`
+   records its hash, and the hash of every `state:context/` file the brief
    names.
 2. **Open.**
 
    ```sh
-   python3 <skill-dir>/scripts/check.py open --delegation <id> --tier execute|routine --brief .delegation/briefs/<id>.md [--writes]
+   python3 <skill-dir>/scripts/check.py open --delegation <id> --tier execute|routine --brief "<brief-directory>/<id>.md" [--writes]
    ```
 
    Pass `--writes` if the subagent may edit the worktree. Exit 2 means refused:
@@ -149,15 +179,15 @@ or change an overlay, use the `setup` skill from this plugin.
 `check.py run <validator> --delegation <id> [--timeout <seconds>]` needs the
 delegation open. It uses the overlay's timeout for that validator unless
 `--timeout` is given, waits for the validator's `lock` if the overlay sets one,
-and keeps the full output in `.delegation/logs/<id>/<n>.log`; a failed run
+and keeps the full output in `<log-directory>/<id>/<n>.log`; a failed run
 prints that path. `check.py tree` prints the current tree hash.
 
 ### Reusable roles and continuations
 
 The optional `## Roles` section registers a tier, runbook and at least one reuse
 cap. Open a first use with `open --delegation <new-id> --tier execute --role capture --brief
-.delegation/briefs/<new-id>.md`; continue it with `open --delegation <new-id> --tier execute
---continue <prior-id> --brief .delegation/briefs/<new-id>.md`. The prior use must
+<brief-directory>/<new-id>.md`; continue it with `open --delegation <new-id> --tier execute
+--continue <prior-id> --brief "<brief-directory>/<new-id>.md"`. The prior use must
 be closed, the tier stays the same, and the role session cannot have another open
 brief. `--tier` remains required; a role validates it rather than selecting it.
 Use a new delegation id and brief each time. Counters include the first
@@ -262,7 +292,7 @@ your session to another provider. Subagents can't survive that switch, so:
 - **The host lacks the generated tier definitions:** follow this host's
   fallback in `reference/hosts.md`.
 - **`check.py` exits 2:** read stderr. It refuses rather than guesses; don't work
-  around a refusal by editing `.delegation/`.
+  around a refusal by editing XDG state.
 
 ## Composition with long-horizon
 

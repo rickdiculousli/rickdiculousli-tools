@@ -33,7 +33,7 @@ was actually observed. The default batch is one task or one blocker resolution.
    Suggest `delegation:setup` if bulk work or ledger-worthy validators warrant it;
    pass along survey notes and validator names, never duplicate their commands.
    Do not install tools, configure delegation or run startup implicitly.
-4. Draft only owned files under the exact plugin cache_directory returned by status, in drafts/<unique-id>/. This is ${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/long-horizon/, resolved in Python; do not use a sibling XDG cache directory or shell-expand a home fallback. Use the actual root
+4. Create an identity-bearing draft with `python3 "$LONG_HORIZON_SCRIPT" state draft --root "$PROJECT" --json`. Draft only owned files under its returned `draft_directory`. The status `cache_directory` is scoped by repository/worktree keys; drafts live in its `drafts/<unique-id>/` directory. This is ${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/long-horizon/, resolved in Python; do not use a sibling XDG cache directory or shell-expand a home fallback. Use the actual root
    for Git identity and `--draft-root` for all draft managed paths. Show together:
    goals/overlay/handoff, exact pointer edits, dry-run status and chosen task,
    missing inputs, a sample three-line session, and closure recommendation.
@@ -49,7 +49,7 @@ was actually observed. The default batch is one task or one blocker resolution.
    Ensure CLAUDE.md reaches it, normally through one `@AGENTS.md` import. Preserve
    existing imports/host policy. Do not add a repository runtime directory/ignore.
 6. Run the commands below with the resolved CLI and actual checkout. Lint errors
-   require repair; warnings can proceed. Remove applied/cancelled scratch drafts from XDG cache after verifying their owned files; keep any explicitly retained recovery draft with a 30-day expiry. Show chosen task, Needs you, and where
+   require repair; warnings can proceed. Remove applied/cancelled scratch drafts from XDG cache after verifying their owned files; preserve the generated `identity.json` while drafting so collection can recognize the payload. Use `state draft --id <id>` to renew an existing draft before reuse; keep any explicitly retained recovery draft with a 30-day expiry. Show chosen task, Needs you, and where
    acceptance/integration still need approval. Do not claim a model pilot from
    source review, installation or these CLI checks.
 
