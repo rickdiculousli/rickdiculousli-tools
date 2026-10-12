@@ -711,4 +711,23 @@ orchestrator (game-decomp capture) cancel or time out a game wrapped in
 - `sync_marketplaces.py --check` current; `verify_lifecycle.py` PASS for
   codex-cli 0.162.1 and Claude Code 2.1.296 in disposable profiles.
 
-Not yet reinstalled on the Mac or linux normal profiles; not pushed.
+### Requested push and delegation 0.7.3 reinstall — Mac and linux
+
+All five pending commits through `1e5aeaf` were pushed to `origin/main`; linux's
+clean checkout was fast-forwarded from the remote. Delegation was uninstalled
+and reinstalled through Claude Code (`--scope user`) and Codex native commands
+in both machines' normal profiles after refreshing the local marketplace.
+
+- Mac and linux, both Claude Code 2.1.296 and Codex 0.162.1: delegation **0.7.3**,
+  long-horizon **0.3.0**, quota **0.1.1**, yt-transcript **0.1.1** are enabled.
+  Every tracked portable plugin file in all 16 installed copies matches its
+  checkout byte for byte. Delegation was the only outdated installed plugin.
+- Fresh Mac checks: generated metadata current; all **25 delegation run tests**
+  passed. Native isolated lifecycle verification passed on both hosts; evidence
+  is `/private/tmp/plugins-prepush-verification.json`.
+- Fresh full Linux suite on linux: **364 tests passed** in 59.325 seconds;
+  log `/tmp/plugins-release-tests.log`. This avoids the previously documented
+  Mac temporary-path comparison failures.
+
+Restart Claude Code and start a new Codex session to load the updated skills.
+Existing running model sessions were not tested for hot reloading.
