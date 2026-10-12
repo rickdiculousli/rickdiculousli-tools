@@ -67,3 +67,8 @@
   model execution checks unless they were performed.
 - Update README commands and documentation when supported packaging or CLI
   behavior changes. Bump versions for released plugin content changes.
+- A modification is complete only after it is verified, merged to `main` and
+  pushed to `origin`. This is standing authorization: run the checks above that
+  apply, commit, merge any work branch or worktree into `main`, and push `main`
+  without asking again. If a check fails, the merge conflicts or the push is
+  rejected, stop and report; never force-push, skip checks or rewrite `main`.
