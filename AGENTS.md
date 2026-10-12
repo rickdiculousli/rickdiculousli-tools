@@ -57,7 +57,7 @@
 
   ```sh
   python3 scripts/sync_marketplaces.py --check
-  python3 -m unittest discover -s tests -v
+  python3 scripts/run_tests.py   # parallel; python3 -m unittest discover -s tests -v runs it serially
   python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
   ```
 

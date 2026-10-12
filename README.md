@@ -439,7 +439,7 @@ Claude Code 2.1.296 and Codex 0.162.1 when updating delegation to 0.8.0.
 ```sh
 python3 scripts/sync_marketplaces.py
 python3 scripts/sync_marketplaces.py --check
-python3 -m unittest discover -s tests -v
+python3 scripts/run_tests.py   # parallel; python3 -m unittest discover -s tests -v runs it serially
 python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
 # For a Codex-only run, add --hosts codex.
 ```
