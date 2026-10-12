@@ -543,3 +543,48 @@ Checked on Linux x86_64:
 Platform branches were simulated on Linux. No native Windows/macOS execution,
 Claude lifecycle, or additional full setup/continuation model pilot was performed
 for this update. Earlier pilot results remain historical evidence.
+
+## Long-horizon readiness cache correction — 0.3.0 (2026-10-11)
+
+Startup supports `readiness: "cache:readiness.json"`, resolved under the keyed
+worktree cache's `readiness/` directory, separate from drafts. Read-only
+`lh.py paths --root PATH --json` returns state/cache/readiness paths and cache
+identity metadata without creating files. Producers persist that identity under
+the shared lifecycle lock; cache reads reject missing/malformed/mismatched
+identity. Legacy readiness paths remain usable with a warning from lint.
+
+Verification on this Mac:
+
+- `python3 scripts/sync_marketplaces.py --check`: passed; source version and
+  generated Claude marketplace/host manifests are 0.3.0. Catalog identity/order
+  and the Codex marketplace shape did not need changes.
+- `TMPDIR=/private/tmp python3 -m unittest discover -s tests -v`: **348 tests
+  passed**. Final log: `/tmp/long-horizon-tests-final.log`. Eight readiness tests
+  cover resolution, worktree isolation, no-creation discovery, traversal,
+  symlink/Windows-normalisation escapes, missing/stale/checkout/identity handling,
+  legacy lint, readiness-only GC grace, unknown protection and mocked Windows
+  LocalAppData/explicit XDG resolution. These are not native Windows results.
+- The first run with macOS's default `/var/folders/...` TMPDIR failed 12
+  assertions because existing fixtures compared noncanonical `/var` paths with
+  canonical `/private/var` paths. All failures were reproduced on unchanged base
+  commit `414cf98`: delegation state's `test_migration_open_and_busy_legacy_lock_refused`
+  and `test_xdg_default_empty_relative_and_custom`; long-horizon overlay's
+  `test_linked_worktree_and_subdirectory`; Windows defaults'
+  `test_empty_relative_xdg_values_use_windows_defaults` (two subcases),
+  `test_explicit_xdg_overrides_still_win_on_windows`,
+  `test_missing_invalid_localappdata_uses_home_appdata_local` (three subcases),
+  `test_posix_defaults_ignore_localappdata` (two subcases), and
+  `test_windows_native_defaults_for_both_plugins`. Baseline logs:
+  `/tmp/lh-baseline-tests.log`, `/tmp/lh-baseline-other.log`,
+  `/tmp/lh-baseline-overlay.log`. Canonical TMPDIR avoids this existing fixture
+  issue; no unrelated test or delegation production code was changed.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  passed on **Codex 0.162.1** and **Claude Code 2.1.296** using disposable profiles;
+  source comparison, install, inventory, runtime checks, uninstall and marketplace
+  cleanup passed, with no cleanup errors.
+- Independent review identified cache identity reuse on readiness reads; this
+  was fixed and verified with a failing-then-passing regression. Follow-up review
+  found no blocking issues.
+
+No consuming repository was changed. No GUI or model execution check is claimed.
+Normal-profile installation results are recorded separately below after release.

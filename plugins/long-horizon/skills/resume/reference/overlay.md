@@ -13,7 +13,7 @@ command interpolation. JSON arrays/maps must fit one line.
 | Goals and ownership | `path`: string docs/goals.md; `milestone-policy`: user; `task-refinement`: agent; `task-completion`: agent; `milestone-completion`: agent; `goal-signoff`: user. Ownership strings are user or agent. |
 | Goals format | `markers`: object with four distinct nonempty literal strings current/done/shelved/dropped; defaults `— current`, `— done`, `— shelved`, `— dropped`. No regex. |
 | Continuation | `handoff`: string docs/handoff.md; `archive`: string docs/goals-archive; `findings`: string array []; `evidence`: string docs/evidence; `non-code`: string array defaulting to configured goals/handoff/archive/findings; `handoff-budget`: positive integer 80 |
-| Startup | `command`: string; `effects`: string array; `context`: string; `readiness`: string. All absent by default. Command/effects describe actual skill authorization, never an instruction executed by status. |
+| Startup | `command`: string; `effects`: string array; `context`: string; `readiness`: string `cache:<relative-json-path>` resolved under this worktree’s XDG cache `readiness/` directory; legacy checkout-relative/absolute strings remain readable with a lint warning. All absent by default. Command/effects describe actual skill authorization, never an instruction executed by status. |
 | Capabilities | `tags`: object mapping tag to array of named readiness levels; default `{"any": []}`. All tags/levels required; unknown tags ineligible. |
 | Evidence | `checks`: object {}; `inputs`: object {}; `delegation-script`: string literal path OR `delegation-env`: string variable name; `validator-policy`: string path; when delegation is configured defaults to .agents/delegation.md |
 | Batch | `tasks`: positive integer 1; `blocker-resolutions`: positive integer 1; `quota`: boolean false; `quota-script`: string literal path OR `quota-env`: string variable name |
@@ -73,9 +73,9 @@ evidence: "docs/evidence"
 handoff-budget: 80
 ## Startup
 command: "python3 tools/resume.py"
-effects: ["read local files", "write readiness.json"]
+effects: ["read local files", "write XDG readiness cache and identity"]
 context: "docs/current-context.md"
-readiness: "readiness.json"
+readiness: "cache:readiness.json"
 ## Capabilities
 tags: {"any": [], "fixtures": ["fixtures"], "native": ["fixtures", "native"]}
 ## Evidence

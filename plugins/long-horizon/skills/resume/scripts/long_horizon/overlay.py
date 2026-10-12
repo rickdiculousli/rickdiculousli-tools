@@ -91,6 +91,10 @@ def parse(text):
 
 
 def validate(data):
+    name = data['startup'].get('readiness')
+    if name and name.startswith('cache:'):
+        from .readiness import cache_name
+        cache_name(name)
     if data['state']['state'] not in ('active', 'dormant'):
         raise Invalid('State must be active or dormant.')
     for key, value in data['goals and ownership'].items():

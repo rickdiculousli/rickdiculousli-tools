@@ -488,7 +488,7 @@ we?" alone prints `lh.py status --brief` and starts nothing.
    with goals or the tree, reconcile: goals define scope; a newer handoff cannot
    silently reorder them.
 3. Run only the authorized startup helper and re-run `lh.py status` to pick up
-   its readiness report. Startup may prepare declared ignored state, but does
+   its readiness report. Startup may prepare declared external runtime cache, but does
    not perform acceptance, installs, downloads, captures or cache regeneration by
    default. If a helper fails, preserve the diagnostic and continue only work
    whose inputs and safety do not depend on the failed preparation.
@@ -1234,3 +1234,20 @@ must not manufacture retrospective PASS. Gate checks newly completed tasks,
 milestones and goals, completion records and owned policy changes, not every
 legacy checkbox on every invocation. Criteria edits invalidate evidence via
 policy digest. Existing false structural claims are still lint errors.
+
+
+## Readiness cache correction (0.3.0)
+
+Startup readiness defaults to `cache:readiness.json`, resolved under the actual
+worktree’s repository/worktree-keyed XDG cache `readiness/` directory, alongside
+`drafts/`. Read-only `lh.py paths --root PATH --json` exposes state/cache/readiness
+paths plus cache identity metadata. The producer persists that identity and its
+report under the shared lifecycle lock, enabling readiness-only cache collection.
+Relative JSON names are confined, with traversal/absolute/Windows drive/symlink
+escapes rejected. Legacy readiness paths keep working but lint warns with the
+`cache:` remedy. Lookup freshness and checkout matching remain unchanged.
+Weekly GC recognises readiness JSON and preserves unknown files; confirmed deleted
+and unregistered worktrees receive the existing seven-day recovery window.
+Tests cover discovery without creation, worktree separation, escape rejection,
+missing/stale/mismatched reports, legacy lint, GC and mocked Windows defaults.
+No consuming repository is migrated by this plugin correction.

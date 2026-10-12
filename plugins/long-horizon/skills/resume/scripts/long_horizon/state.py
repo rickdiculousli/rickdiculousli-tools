@@ -520,7 +520,10 @@ def collect_cache(root, apply, now, result, registrations):
             if any(x.is_symlink() for x in (path, path.parent, path.parent.parent)):
                 continue
             saved = read(path / 'identity.json')
-            if not saved or path_key(saved['common']) != path.parent.parent.name or path_key(saved['worktree']) != path.name or any(x.name not in {'identity.json', 'drafts'} or x.is_symlink() for x in path.iterdir()):
+            if not saved or path_key(saved['common']) != path.parent.parent.name or path_key(saved['worktree']) != path.name or any(x.name not in {'identity.json', 'drafts', 'readiness'} or x.is_symlink() for x in path.iterdir()):
+                continue
+            if (path / 'readiness').exists() and (not (path / 'readiness').is_dir() or any(x.is_symlink() or (x.is_file() and x.suffix != '.json') for x in (path / 'readiness').rglob('*'))):
+                entry['reason'] = 'unknown readiness cache files; retained'
                 continue
             if containing_volume(Path(saved['worktree'])) != saved['volume']:
                 entry['reason'] = 'volume unavailable or changed'
@@ -531,7 +534,7 @@ def collect_cache(root, apply, now, result, registrations):
                 if any(actual[k] != saved[k] for k in ('files', 'volume')):
                     entry['reason'] = 'recreated cache worktree identity'
                     continue
-                entry['reason'] = 'existing worktree drafts'
+                entry['reason'] = 'existing worktree cache'
             except FileNotFoundError:
                 if Path(saved['worktree']).exists():
                     continue

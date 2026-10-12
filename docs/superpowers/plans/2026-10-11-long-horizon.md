@@ -936,3 +936,20 @@ and closure record --new-batch (only after previous Git facts verify complete;
 preserve prior closure snapshot). Canonical records preserve normalized criterion
 summaries so archived proof cannot be swapped to different prose. These extend
 the public command contract without running validators or Git integration.
+
+
+## Readiness cache correction (0.3.0)
+
+Startup readiness defaults to `cache:readiness.json`, resolved under the actual
+worktree’s repository/worktree-keyed XDG cache `readiness/` directory, alongside
+`drafts/`. Read-only `lh.py paths --root PATH --json` exposes state/cache/readiness
+paths plus cache identity metadata. The producer persists that identity and its
+report under the shared lifecycle lock, enabling readiness-only cache collection.
+Relative JSON names are confined, with traversal/absolute/Windows drive/symlink
+escapes rejected. Legacy readiness paths keep working but lint warns with the
+`cache:` remedy. Lookup freshness and checkout matching remain unchanged.
+Weekly GC recognises readiness JSON and preserves unknown files; confirmed deleted
+and unregistered worktrees receive the existing seven-day recovery window.
+Tests cover discovery without creation, worktree separation, escape rejection,
+missing/stale/mismatched reports, legacy lint, GC and mocked Windows defaults.
+No consuming repository is migrated by this plugin correction.

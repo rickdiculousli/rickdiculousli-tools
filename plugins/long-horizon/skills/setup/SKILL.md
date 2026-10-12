@@ -33,6 +33,11 @@ was actually observed. The default batch is one task or one blocker resolution.
    Suggest `delegation:setup` if bulk work or ledger-worthy validators warrant it;
    pass along survey notes and validator names, never duplicate their commands.
    Do not install tools, configure delegation or run startup implicitly.
+   When a startup helper exists, default drafted Startup readiness to
+   `"cache:readiness.json"`; include helper path discovery with `lh.py paths --root
+   "$PROJECT" --json` and identity publication from [readiness](../resume/reference/readiness.md)
+   in the concrete draft. Preserve legacy paths during unrelated updates, and
+   explain their lint warning and migration remedy.
 4. Create an identity-bearing draft with `python3 "$LONG_HORIZON_SCRIPT" state draft --root "$PROJECT" --json`. Draft only owned files under its returned `draft_directory`. The status `cache_directory` is scoped by repository/worktree keys; drafts live in its `drafts/<unique-id>/` directory. The helper resolves the cache root in Python: explicit XDG overrides win; otherwise Windows uses `%LOCALAPPDATA%/rickdiculousli-tools/long-horizon/cache/` and POSIX uses `~/.cache/rickdiculousli-tools/long-horizon/`; do not use a sibling XDG cache directory or shell-expand a home fallback. Use the actual root
    for Git identity and `--draft-root` for all draft managed paths. Show together:
    goals/overlay/handoff, exact pointer edits, dry-run status and chosen task,

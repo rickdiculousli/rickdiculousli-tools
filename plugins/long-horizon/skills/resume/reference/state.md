@@ -64,3 +64,15 @@ Explicit approved clear, after displaying/reviewing exactly this worktree path:
 ```sh
 python3 "$LONG_HORIZON_SCRIPT" state clear --root "$PROJECT" --state-directory "$DISPLAYED_STATE_DIRECTORY" --json
 ```
+
+Readiness reports are regenerable cache data. `cache:readiness.json` resolves to
+`<worktree-cache>/readiness/readiness.json`; `paths --root PATH --json` discovers
+this and the state/cache paths without creating files or acquiring the lock.
+The startup helper publishes the returned cache identity alongside its report
+under the shared lifecycle lock; see [readiness](readiness.md). Weekly GC recognises
+JSON files in `readiness/` as well as drafts, preserves unknown files and applies
+the same confirmed-deleted-worktree seven-day recovery window to readiness-only
+caches. Existing readiness reports become unusable after 24 hours, but remain
+until regenerated or their worktree cache is eligible for cleanup.
+Legacy overlay readiness paths are supported for compatibility and warned by
+lint; migrate to `cache:` to satisfy the external runtime-file contract.

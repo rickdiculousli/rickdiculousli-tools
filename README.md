@@ -406,6 +406,7 @@ The same Python 3.10+ standard-library CLI ships on both hosts. From this checko
 ```sh
 python3 plugins/long-horizon/skills/resume/scripts/lh.py status --brief
 python3 plugins/long-horizon/skills/resume/scripts/lh.py lint
+python3 plugins/long-horizon/skills/resume/scripts/lh.py paths --root "$PROJECT" --json
 python3 plugins/long-horizon/skills/resume/scripts/lh.py state gc --json
 ```
 
@@ -420,6 +421,16 @@ drafts after 30 days and applies the seven-day recovery window to deleted,
 unregistered worktrees; active/uncertain owners, unknown files and symlinks protect
 recovery bytes. Existing plugin-wide drafts remain for explicit review.
 
+
+Long-horizon 0.3.0 supports Startup `readiness: "cache:readiness.json"`.
+`paths --root "$PROJECT" --json` discovers `readiness_path` under the current
+worktree cache’s `readiness/` directory, `state_directory`, `cache_directory`,
+`readiness_directory`, `cache_identity_path` and `cache_identity`, without creating
+files. Helpers publish the cache identity and report under the lifecycle lock;
+see [readiness publication](plugins/long-horizon/skills/resume/reference/readiness.md).
+Legacy readiness paths keep working with a lint warning. Readiness remains
+unknown when missing/stale/for another checkout. Weekly GC recognises readiness
+JSON and applies the deleted-worktree recovery window.
 
 | Project | Composition |
 | --- | --- |

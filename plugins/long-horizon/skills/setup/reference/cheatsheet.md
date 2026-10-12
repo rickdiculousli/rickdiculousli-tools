@@ -34,3 +34,7 @@ tasks done with evidence; or obtain actual targeted exception approval. Readines
 never means acceptance. Commit/merge/push/sync are separate claims. Runtime state
 is XDG, with weekly collection, seven-day deleted-worktree recovery and 30-day
 unreferenced draft/snapshot expiry. Durable Git evidence survives cleanup.
+
+With a startup helper, draft `readiness: "cache:readiness.json"`. Helpers use
+`lh.py paths --root PATH --json` for the per-worktree destination and cache
+identity; follow [publication and recovery](../../resume/reference/readiness.md).

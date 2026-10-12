@@ -38,3 +38,7 @@ Next: 1.1 Implement tiny function; Needs you: none
 Setup draft inventory: overlay, roadmap, short handoff, instruction pointer diffs,
 closure recommendation/alternatives, retained existing policy and exact missing
 input recovery. Verify a second identical application produces no diff.
+
+With a startup helper, draft `readiness: "cache:readiness.json"`. Helpers use
+`lh.py paths --root PATH --json` for the per-worktree destination and cache
+identity; follow [publication and recovery](../../resume/reference/readiness.md).

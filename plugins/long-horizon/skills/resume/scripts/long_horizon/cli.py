@@ -21,6 +21,7 @@ def common(parser):
 def parser():
     top = argparse.ArgumentParser(description='Inspect continuation and acceptance without running validators or Git integration.')
     commands = top.add_subparsers(dest='command', required=True)
+    common(commands.add_parser('paths'))
     status = common(commands.add_parser('status'))
     status.add_argument('--brief', action='store_true')
     check = common(commands.add_parser('lint'))
@@ -133,6 +134,10 @@ def execute(args):
         if args.action == 'clear':
             return state.clear(Git(args.root), args.state_directory), []
         return state.gc(args.apply, args.if_due, location_root=args.root), []
+    if args.command == 'paths':
+        git = Git(args.root)
+        policy = overlay.load(git, args.overlay, args.draft_root, args.goals, args.handoff)
+        return readiness.paths(policy, git), []
     git, policy, parsed = context(args)
     if args.command == 'status':
         return inspect(args, git, policy, parsed)
@@ -141,6 +146,10 @@ def execute(args):
             raise Invalid('--apply requires --fix and explicit review of the mechanical diff.')
         data, findings = inspect(args, git, policy, parsed)
         findings += lint.pointers(policy, git)
+        name = policy['startup'].get('readiness')
+        if name and not name.startswith('cache:'):
+            findings.append(finding('readiness-legacy-path', 'Legacy readiness path violates the external runtime cache contract.',
+                'Use readiness: \"cache:readiness.json\" and have the startup helper discover its destination with lh.py paths --root PATH --json.', 'warning', policy['_overlay']))
         if args.fix:
             data['diff'] = lint.repair(policy, parsed, args.apply)
         return data, findings
