@@ -351,6 +351,72 @@ transcripts download from YouTube and model/package hosts. Delegation uses the
 host's authenticated model service. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.
 
+## Update installed plugins from a local checkout
+
+When asked to pull and update this repository's plugins, use the existing
+local-checkout marketplace in each host's normal user profile. Check for local
+changes first, then fast-forward the checkout; do not overwrite uncommitted work.
+Run these commands from the checkout, wherever it is located:
+
+```sh
+git status --short --branch
+git pull --ff-only
+python3 scripts/sync_marketplaces.py --check
+claude plugin list --json
+codex plugin list --marketplace rickdiculousli-tools --json
+```
+
+Compare the installed versions with `plugins/<name>/plugin.json` and refresh
+outdated installed plugins. Keep the user's existing plugin selection and enabled
+state. For example, to update delegation:
+
+```sh
+claude plugin marketplace update rickdiculousli-tools
+claude plugin update delegation@rickdiculousli-tools --scope user
+codex plugin add delegation@rickdiculousli-tools --json
+```
+
+Claude's `update` refreshes an existing installation; Codex's `add` also refreshes
+an existing installation from the local source. Uninstall/reinstall is a fallback
+if the installed copy still differs. Codex's `marketplace upgrade` is for Git
+marketplaces and reports that a local marketplace is not configured as Git;
+pull the checkout instead. Marketplace registration alone does not refresh an
+installed cache. If a marketplace is missing, register this checkout with
+`claude plugin marketplace add "$PWD"` or `codex plugin marketplace add "$PWD"`.
+
+Verify the native installed lists again: each refreshed plugin must have the
+source version and retain its enabled state. Check actual installed files too,
+because matching version numbers alone do not prove the cache is current.
+Claude's list reports `installPath`; Codex's `add --json` reports `installedPath`.
+Use the repository's existing comparison helpers with the reported path:
+
+```sh
+# Replace these values with the plugin name and the native reported cache path.
+PLUGIN_NAME=delegation
+INSTALLED_PATH='/absolute/path/reported/by/the/host'
+PYTHONDONTWRITEBYTECODE=1 python3 - "$PLUGIN_NAME" "$INSTALLED_PATH" <<'PY'
+import sys
+from pathlib import Path
+
+root = Path.cwd()
+sys.path.insert(0, str(root / "scripts"))
+from verify_lifecycle import compare_tree, tracked_files
+
+plugin = Path("plugins") / sys.argv[1]
+problems = compare_tree(tracked_files(root, plugin), root / plugin, Path(sys.argv[2]))
+if problems:
+    raise SystemExit("\n".join(problems))
+print("Installed portable files match the checkout byte for byte.")
+PY
+```
+
+Repeat the comparison for each installed plugin in both hosts. It checks missing,
+changed and extra files, excluding generated host manifests and incidental
+`__pycache__`/`.DS_Store` files. Record the checkout commit, host versions and
+actual results when documenting an update. Restart Claude Code and start a new
+Codex session to load the updated skills. These commands were verified on
+Claude Code 2.1.296 and Codex 0.162.1 when updating delegation to 0.8.0.
+
 ## Add or change a plugin
 
 1. Create `plugins/<name>/plugin.json` using the portable format shown in an
@@ -373,8 +439,7 @@ python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
 Commit the sources and generated files together. Edit root `plugin.json` and
 `catalog.json`; regeneration replaces host manifests. Bump the plugin version
 when releasing changed content. To refresh an installed plugin after edits,
-regenerate, uninstall and reinstall it, then start a new session. Marketplace
-registration alone does not guarantee an existing installed cache has refreshed.
+regenerate and follow [the local update procedure](#update-installed-plugins-from-a-local-checkout).
 
 New plugins are included automatically in lifecycle verification. Future MCP
 servers, hooks, or host-specific components need explicit adapter support and
