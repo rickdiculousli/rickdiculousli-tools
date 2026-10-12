@@ -665,3 +665,32 @@ Verification on this Apple Silicon Mac:
 
 No native Windows, GUI, or sustained host role/model execution pilot was
 performed for this update. Installation results are recorded below separately.
+
+### Requested delegation reinstall — Mac and linux
+
+Release commit `f5f1b50` was installed through native plugin commands in both
+machines' normal user profiles. Their existing local-checkout marketplaces were
+updated; delegation alone was uninstalled and reinstalled with Claude's
+`--scope user`, and removed/re-added with Codex. linux's clean plugin checkout was
+fast-forwarded from `11d7b54` through a Git bundle transferred over SSH. No push,
+origin fetch, or consuming-repository migration occurred.
+
+| Machine | Host CLI | Delegation | Enabled | Portable source comparison |
+| --- | --- | --- | --- | --- |
+| Mac | Claude Code 2.1.296 | 0.7.2 | yes | all 20 files match |
+| Mac | Codex 0.162.1 | 0.7.2 | yes | all 20 files match |
+| linux | Claude Code 2.1.296 | 0.7.2 | yes | all 20 files match |
+| linux | Codex 0.162.1 | 0.7.2 | yes | all 20 files match |
+
+Installed `check.py open --help` and `exec --help` passed on all four copies.
+On linux, `sync_marketplaces.py --check` passed and all **25 role tests passed**
+in 9.424 seconds under native Linux. Install logs are
+`/private/tmp/delegation-mac-install.log` and linux's
+`/tmp/delegation-linux-install.log`; Linux role-test log:
+`/tmp/delegation-roles-linux.log`.
+
+Cache copies are in each user's `.claude/plugins/cache/rickdiculousli-tools/delegation/0.7.2`
+and `.codex/plugins/cache/rickdiculousli-tools/delegation/0.7.2`. Claude also loads
+the declared local source folder. Reload Claude plugins and start a new Codex
+session to consume the updated instructions; the reinstall does not establish
+that running model sessions reloaded skills.
