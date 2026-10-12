@@ -588,3 +588,33 @@ Verification on this Mac:
 
 No consuming repository was changed. No GUI or model execution check is claimed.
 Normal-profile installation results are recorded separately below after release.
+
+### Requested normal-profile installation — Mac and linux
+
+Implementation commit `5caad1a` was installed through the native plugin commands.
+Both machines use local-checkout `rickdiculousli-tools` marketplaces. linux's clean
+checkout was fast-forwarded from `414cf98` using a Git bundle transferred over
+SSH; no push, remote fetch from origin, or consuming-repository migration occurred.
+
+| Machine | Host CLI | Installed long-horizon | Enabled | Source comparison |
+| --- | --- | --- | --- | --- |
+| Mac | Claude Code 2.1.296 | 0.3.0 | yes | all 31 files match |
+| Mac | Codex 0.162.1 | 0.3.0 | yes | all 31 files match |
+| linux | Claude Code 2.1.296 | 0.3.0 | yes | all 31 files match |
+| linux | Codex 0.162.1 | 0.3.0 | yes | all 31 files match |
+
+On each machine, `claude plugin marketplace update rickdiculousli-tools` and
+`claude plugin install long-horizon@rickdiculousli-tools` were run. Since the
+plugin was already installed from a local folder, install reported in-place
+loading and recommended update; `claude plugin update long-horizon@rickdiculousli-tools`
+then recorded 0.2.1 → 0.3.0. `codex plugin add long-horizon@rickdiculousli-tools --json`
+installed 0.3.0 on both machines. Codex marketplace upgrade on the Mac reported
+that the local marketplace is not configured as a Git marketplace; no Git
+snapshot refresh is required for local sources.
+
+Installed `lh.py paths --help` passed on every host. Cache copies are under each
+user's `.claude/plugins/cache/rickdiculousli-tools/long-horizon/0.3.0` and
+`.codex/plugins/cache/rickdiculousli-tools/long-horizon/0.3.0`. Claude additionally
+loads the declared local source folder. Restart/reload Claude plugins and start
+a new Codex session to consume updated skill instructions. Installation and CLI
+verification do not claim that running model sessions reloaded their skills.
