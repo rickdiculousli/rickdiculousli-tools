@@ -1,6 +1,6 @@
 # Addendum: unified XDG state and locks
 
-Status: implemented in delegation 0.7.0 and long-horizon 0.2.0.
+Status: implemented in delegation 0.7.1 and long-horizon 0.2.1.
 Migration is explicit and quiescent; this release does not automatically migrate
 legacy user state. See docs/verification.md for actual validation and limitations.
 
@@ -18,23 +18,28 @@ project decisions and acceptance remain tracked in the consuming repository.
 
 Move delegation's plugin-owned ledger, briefs, generated shared context, role
 runbooks and validator logs from `.delegation/` to XDG state. Move its repository
-resource locks from `/tmp` or Windows' temporary directory to XDG state. Move
+resource locks from `/tmp` on POSIX to the resolved state root. Windows has no
+legacy installation or state layout; no Windows migration is provided. Move
 temporary Git indexes and object directories to XDG cache. Keep its current
 POSIX/Windows native locks, repository-wide resource-slot behavior, validator
 ledger authority, tree algorithm and agent lifecycle. Do not introduce a second
 ledger or let location migration create a new PASS.
 
-The installed implementation currently uses `.delegation/` for worktree state
-and system temporary directories for resource locks. These are legacy layouts
+The legacy POSIX implementation used `.delegation/` for worktree state
+and `/tmp` for resource locks. These are legacy layouts
 requiring the explicit migration below, not compliant paths to preserve forever.
 
 ## Shared location contract
 
-Use an absolute, nonempty `XDG_STATE_HOME` or default to `Path.home() /
-'.local/state'`; use an absolute, nonempty `XDG_CACHE_HOME` or default to
-`Path.home() / '.cache'`. Relative/empty environment values are ignored, with a
-compact explanation when explicitly set. Resolve paths in Python, without shell
-expansion. Apply these same conventions on macOS, Linux and Windows. A configured
+Honor absolute, nonempty `XDG_STATE_HOME` and `XDG_CACHE_HOME` overrides on
+every platform, with the existing `rickdiculousli-tools/<plugin>/` namespace.
+Without those overrides, POSIX defaults to `Path.home() / '.local/state'` and
+`Path.home() / '.cache'`. Windows defaults to
+`%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/state/` and
+`%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/cache/`. An absent, empty or relative
+LOCALAPPDATA uses `Path.home() / 'AppData' / 'Local'`. Relative/empty XDG values
+are ignored, with a compact explanation when explicitly set. Resolve paths in
+Python, without shell expansion. A configured
 unwritable root produces an actionable diagnostic; never fall back to a second
 state or resource-lock domain under the checkout or `/tmp`.
 
@@ -51,7 +56,9 @@ are local storage identifiers, never acceptance tree hashes. Store identity
 metadata including original paths, directory file identities and volume identity;
 a recreated path must not silently inherit old worktree state.
 
-Delegation layout:
+Delegation layout below uses POSIX/XDG-override roots. Windows uses the resolved
+LocalAppData state/cache directories above; the contents below each plugin root
+are identical.
 
 ```text
 <state-home>/rickdiculousli-tools/delegation/
@@ -187,6 +194,9 @@ Location/reference/CLI changes need a minor version bump, shared skills and
 README updates, regenerated manifests and actual lifecycle verification.
 Long-horizon continues to work with the old checker's evidence/pending interface;
 XDG migration is not a prerequisite for using it solo or with legacy delegation.
+
+Legacy migration is POSIX-only. Windows starts fresh in LocalAppData and has no
+legacy temporary-lock or home-directory migration path.
 
 Add `check.py state migrate` (preview) and `check.py state migrate --apply`:
 

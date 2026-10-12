@@ -508,3 +508,38 @@ Native Windows/macOS execution, Claude lifecycle/model behavior for these new
 versions, GUI behavior and hosted remote closure were **not tested**. Mocked
 Windows locking cases are unit evidence only. No normal-profile upgrade, legacy
 user-state migration, release tag or hosted PR was performed.
+
+
+## Windows native defaults: delegation 0.7.1 and long-horizon 0.2.1 (2026-10-12)
+
+Both plugins now honor absolute XDG overrides and otherwise default on Windows
+to `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/state/` and the sibling `cache/`.
+Missing/empty/relative LOCALAPPDATA uses Python's home `AppData/Local` directory.
+POSIX defaults are unchanged. There are no existing Windows users/installations;
+no Windows migration is shipped. Delegation migration is POSIX-only, with no
+Windows legacy temporary-lock location. Contributor guidance, the addendum,
+README and shared skill references describe the native defaults.
+
+Checked on Linux x86_64:
+
+- The six new platform-selection regressions failed before implementation for
+  the expected missing Windows defaults/migration restriction, then passed.
+  Cases cover both plugins, separate state/cache roots, explicit XDG precedence,
+  empty/relative XDG values, missing/invalid LOCALAPPDATA, spaces, read-only path
+  resolution, unchanged POSIX defaults and refusal of Windows migration.
+- **340 tests passed** on Python **3.14.4** and **3.10.22**, using the full unittest
+  suite and `uv run --offline --no-project --python 3.10` respectively.
+- `python3 scripts/sync_marketplaces.py --check`: passed after regeneration.
+- `python3 scripts/verify_lifecycle.py --hosts codex --report /tmp/localappdata-plugin-verification.json`:
+  passed at **2026-10-12T01:07:12.761529+00:00**, on **Codex 0.162.1**, including all seven
+  disposable-profile plugin installs, source comparisons, installed state-script
+  checks, uninstall and marketplace removal. No cleanup errors; normal profiles
+  were untouched.
+- A fresh-context Codex reference check first recovered the old home-directory
+  defaults from the unchanged docs. After correction, rereading the same shared
+  references recovered exact LocalAppData paths, override precedence and no
+  Windows migration. This checks reference interpretation, not Windows runtime.
+
+Platform branches were simulated on Linux. No native Windows/macOS execution,
+Claude lifecycle, or additional full setup/continuation model pilot was performed
+for this update. Earlier pilot results remain historical evidence.

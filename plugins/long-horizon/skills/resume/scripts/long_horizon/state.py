@@ -20,12 +20,22 @@ MONTH = 30 * 86400
 
 
 def xdg(kind):
+    """Explicit XDG roots override platform defaults; Windows uses local app data."""
     name = 'XDG_' + kind.upper() + '_HOME'
-    raw = os.environ.get(name, '')
-    if name in os.environ and (not raw or not Path(raw).is_absolute()):
-        warnings.warn(name + ' is empty or relative; using the home default.', RuntimeWarning)
-    base = Path(raw) if raw and Path(raw).is_absolute() else Path.home() / ('.local/state' if kind == 'state' else '.cache')
-    return base / 'rickdiculousli-tools' / 'long-horizon'
+    raw = os.environ.get(name)
+    namespace = Path('rickdiculousli-tools') / 'long-horizon'
+    if raw and Path(raw).is_absolute():
+        path = Path(raw) / namespace
+    else:
+        if raw is not None:
+            warnings.warn(name + ' is empty or relative; using the platform default.', RuntimeWarning)
+        if sys_platform() == 'win32':
+            local = os.environ.get('LOCALAPPDATA')
+            base = Path(local) if local and Path(local).is_absolute() else Path.home() / 'AppData' / 'Local'
+            path = base / namespace / kind
+        else:
+            path = Path.home() / ('.local/state' if kind == 'state' else '.cache') / namespace
+    return path
 
 
 def read(path, default=None):

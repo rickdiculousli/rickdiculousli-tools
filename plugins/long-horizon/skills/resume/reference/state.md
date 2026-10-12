@@ -1,9 +1,13 @@
 # State and recovery
 
-Persistent operational records live under
-`${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/long-horizon/`; worktree-scoped
-setup drafts use `${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/long-horizon/`.
-Python resolves home; empty/relative XDG values fall back to defaults. Every
+On Windows, defaults are `%LOCALAPPDATA%/rickdiculousli-tools/long-horizon/state/`
+and `%LOCALAPPDATA%/rickdiculousli-tools/long-horizon/cache/`. Explicit absolute
+`XDG_STATE_HOME`/`XDG_CACHE_HOME` overrides win on every platform and keep the
+`rickdiculousli-tools/long-horizon/` namespace directly below the override.
+POSIX defaults remain `~/.local/state` and `~/.cache`. If LOCALAPPDATA is absent,
+empty or relative, Python resolves `Path.home() / 'AppData' / 'Local'`. Empty or
+relative XDG values select platform defaults. Windows starts fresh; it has no
+legacy migration layout. Every
 process coordinating this plugin uses the same writable state root; failure is
 reported rather than changing lock domain. A workspace sandbox must allow the
 configured external XDG state/cache roots; use host permissions rather than
@@ -47,8 +51,8 @@ partial failures. Committed evidence/goals/archives and live locks survive.
 Recover explicitly during grace: inspect the reported old path, copy a reviewed
 pending evidence/detail proposal into the current batch, or verify one explicitly
 chosen old closure with `closure verify --state /absolute/old/closure.json`.
-Never automatically import another worktree's state. Legacy checkout-local state
-is reported for manual migration, never silently moved/deleted.
+Never automatically import another worktree's state. Legacy POSIX checkout-local state
+is reported for manual recovery, never silently moved/deleted.
 
 For approved wind-down, use the CLI's state clear command for exactly the current
 identity payload after displaying its path; root lock/gc survive. Retain durable

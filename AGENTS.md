@@ -20,8 +20,13 @@
   `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/<plugin>/`,
   regenerable caches and temporary hashing/build files under
   `${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/<plugin>/`.
-  Treat empty or relative XDG values as unset and use the defaults on all
-  supported platforms. Resolve home paths in Python, not through shell expansion.
+  For delegation and long-horizon on Windows, honor explicit absolute XDG
+  overrides; otherwise use `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/state/`
+  and `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/cache/`. If LOCALAPPDATA is
+  missing, empty or relative, resolve `Path.home() / "AppData" / "Local"`.
+  Their legacy migration is POSIX-only; Windows has no legacy layout.
+  Treat empty or relative XDG values as unset and use the platform defaults.
+  Resolve home paths in Python, not through shell expansion.
   Do not put runtime state or locks in consuming worktrees, installed plugin
   directories, Git directories or hardcoded `/tmp` paths. Keep durable project
   knowledge and acceptance in the consuming repository's tracked documents.

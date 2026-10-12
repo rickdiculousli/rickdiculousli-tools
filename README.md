@@ -119,7 +119,7 @@ briefs, roles and `Extra inputs` use `state:context/<relative-path>`; the checke
 rejects traversal and symlink escapes. Recorded generated paths are state-relative
 with `location: state`; caller brief paths may remain absolute.
 
-For an existing `.delegation/` history, close its open work using the old checker
+On POSIX, for an existing `.delegation/` history, close its open work using the old checker
 and stop every repository checker/validator session. Run `check.py state migrate`
 to review counts, conflicts, unknown files, host restrictions and reference edits;
 then `check.py state migrate --apply`. It preserves original event/log hashes and
@@ -138,7 +138,12 @@ are retained. Unreferenced briefs/context expire after 30 days. Hash scratch is
 removed on exit; a weekly sweep removes interrupted attempts only when the owner
 is confirmed gone. No background service runs. Legacy copies require explicit
 review/removal. Durable knowledge and acceptance stay in tracked documents.
-Empty/relative XDG values use home defaults on every platform; unwritable roots
+Both plugins honor explicit absolute XDG state/cache overrides on every platform.
+Without overrides, Windows uses `%LOCALAPPDATA%\rickdiculousli-tools\<plugin>\state\`
+and `%LOCALAPPDATA%\rickdiculousli-tools\<plugin>\cache\`; missing/invalid LOCALAPPDATA
+uses the Python-resolved home `AppData\Local` directory. POSIX retains the home
+`.local/state` and `.cache` defaults. Empty/relative XDG values select these
+platform defaults. Legacy migration is POSIX-only; Windows starts fresh. Unwritable roots
 fail with a diagnostic and never switch lock domains. Workspace sandboxes must
 allow both configured external XDG roots; grant those paths through the host’s
 permission configuration rather than changing roots for individual commands.

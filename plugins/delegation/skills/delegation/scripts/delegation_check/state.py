@@ -26,12 +26,22 @@ MONTH = 30 * 86400
 
 
 def xdg(kind):
+    """Explicit XDG roots override platform defaults; Windows uses local app data."""
     name = 'XDG_' + kind.upper() + '_HOME'
     raw = os.environ.get(name)
-    if raw is not None and (not raw or not Path(raw).is_absolute()):
-        warnings.warn(name + ' is empty or relative; using the home default.', RuntimeWarning)
-    base = Path(raw) if raw and Path(raw).is_absolute() else Path.home() / ('.local/state' if kind == 'state' else '.cache')
-    return (base / 'rickdiculousli-tools' / 'delegation').resolve()
+    namespace = Path('rickdiculousli-tools') / 'delegation'
+    if raw and Path(raw).is_absolute():
+        path = Path(raw) / namespace
+    else:
+        if raw is not None:
+            warnings.warn(name + ' is empty or relative; using the platform default.', RuntimeWarning)
+        if sys_platform() == 'win32':
+            local = os.environ.get('LOCALAPPDATA')
+            base = Path(local) if local and Path(local).is_absolute() else Path.home() / 'AppData' / 'Local'
+            path = base / namespace / kind
+        else:
+            path = Path.home() / ('.local/state' if kind == 'state' else '.cache') / namespace
+    return path.resolve()
 
 
 def key(path):
@@ -221,7 +231,7 @@ class Paths:
         self.locks = self.repo / 'locks'
         self.legacy = self.root / '.delegation'
         legacy_key = self.repo_key[:16]
-        self.legacy_locks = Path(tempfile.gettempdir() if os.name == 'nt' else '/tmp') / ('delegation-locks-' + legacy_key)
+        self.legacy_locks = None if sys_platform() == 'win32' else Path('/tmp') / ('delegation-locks-' + legacy_key)
         verify_location(self)
         # Capture Git discovery and identity before entering bookkeeping locks.
         self.identity = {'version': 1, 'worktree': str(self.root), 'common': str(self.common), 'git': str(self.git),
@@ -251,6 +261,8 @@ class Paths:
             raise DelegationError('Unknown worktree payload without identity; inspect ' + str(self.path))
         receipt = read(self.path / 'migration.json')
         if (self.legacy / 'ledger.jsonl').exists():
+            if sys_platform() == 'win32':
+                raise DelegationError('Legacy .delegation history is unsupported on Windows; review copied history on its original POSIX host before removing it.')
             if receipt is None:
                 raise DelegationError('Legacy .delegation ledger detected; stop old checker sessions, close open delegations, then run state migrate --apply. No fresh XDG history was opened.')
             if manifest(self.legacy)[0] != receipt['source_digests']:
@@ -306,6 +318,8 @@ def context_path(root, ref):
         receipt = read(paths.path / 'migration.json')
         if receipt and ref in receipt['mappings']:
             return confined(paths.path, receipt['mappings'][ref])
+        if sys_platform() == 'win32':
+            raise DelegationError('Legacy context references are unsupported on Windows; use state:context/<relative-path>: ' + ref)
         raise DelegationError('Legacy context reference requires state migrate and an overlay update: ' + ref)
     raise DelegationError('Context references must use state:context/<relative-path>: ' + ref)
 
@@ -636,6 +650,8 @@ def checker_activity(paths):
 
 
 def migrate(root, apply=False):
+    if sys_platform() == 'win32':
+        raise DelegationError('Legacy migration is POSIX-only; Windows starts fresh in LocalAppData.')
     paths = paths_for(root)
     digests, unknown = manifest(paths.legacy)
     events = events_at(paths.legacy / 'ledger.jsonl')

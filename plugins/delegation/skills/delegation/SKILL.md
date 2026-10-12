@@ -26,13 +26,17 @@ or a refused operation (the reason is on stderr).
 Resolve directories with `python3 "<skill-dir>/scripts/check.py" paths --json`
 (delegation's script for setup). Use the returned `brief_directory`,
 `context_directory`, and `log_directory`; quote every returned shell path.
-Inspection creates no payload. Plugin-owned bytes live under XDG state, and Git
-hash scratch under XDG cache, outside the checkout and installation. In briefs
+Inspection creates no payload. Plugin-owned bytes live under the resolved state root, and Git
+hash scratch under the resolved cache root, outside the checkout and installation. In briefs
 and role declarations name context as `state:context/<relative-path>`; `brief`
 checks its bytes and prints the resolved quoted path. Keep a pinned context
 single-writer and immutable until its active briefs have closed.
 
-Before opening work with an existing `.delegation/ledger.jsonl`, stop old checker
+On Windows, unset XDG variables select `%LOCALAPPDATA%/rickdiculousli-tools/delegation/state/`
+and the sibling `cache/` directory. Explicit absolute XDG overrides win. Windows
+has no legacy layout; `state migrate` is POSIX-only.
+
+On POSIX, before opening work with an existing `.delegation/ledger.jsonl`, stop old checker
 sessions, close their open delegations with the old checker, and preview
 `check.py state migrate`. Apply with `check.py state migrate --apply` only when
 all repository sessions and validators are quiescent. Inspect the reported
