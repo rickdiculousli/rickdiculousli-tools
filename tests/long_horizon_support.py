@@ -8,6 +8,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+# macOS's /var is a symlink to /private/var, and the tools report resolved paths, so give every
+# test resolved temporary directories rather than resolving them test by test.
+tempfile.tempdir = os.path.realpath(tempfile.gettempdir())
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / 'plugins/long-horizon/skills/resume/scripts/lh.py'
 sys.path.insert(0, str(SCRIPT.parent))

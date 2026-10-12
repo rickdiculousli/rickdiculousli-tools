@@ -3,6 +3,12 @@
 from pathlib import Path
 import subprocess
 import sys
+import os
+import tempfile
+
+# macOS's /var is a symlink to /private/var, and the tools report resolved paths, so give every
+# test resolved temporary directories rather than resolving them test by test.
+tempfile.tempdir = os.path.realpath(tempfile.gettempdir())
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "plugins/delegation/skills/delegation/scripts"
