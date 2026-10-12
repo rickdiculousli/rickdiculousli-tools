@@ -59,20 +59,20 @@ have been exercised by a model yet.
 
 ## Quota and YouTube transcript scripts
 
-Date: 2026-10-10 (Mac) and 2026-10-11 UTC (linux). Evidence: `checked`.
+Date: 2026-10-10 (Mac) and 2026-10-11 UTC (Linux). Evidence: `checked`.
 
-- `quota`: 5 unit tests, ported from coordinator, mock Claude's usage page and
+- `quota`: 5 unit tests, ported from an earlier private script, mock Claude's usage page and
   Codex's `account/rateLimits/read`; they pass on 3.14 and 3.10. Live
   `uv run --script plugins/quota/skills/quota/scripts/quota.py` printed both providers
-  and exited 0 on the Mac (macOS, Apple Silicon) and on linux (Ubuntu 26.04, x86_64),
+  and exited 0 on the Mac (macOS, Apple Silicon) and on a Linux host (Ubuntu 26.04, x86_64),
   appending to `~/.local/state/rickdiculousli-tools/quota/usage.jsonl` on each.
 - `yt-transcript`, on both boxes: `dQw4w9WgXcQ` with `--whisper never` wrote a
   transcript with engine `human captions`; `jNQXAC9IVRw` with `--whisper always`
   wrote a timestamped transcript with engine `mlx_whisper mlx-community/whisper-large-v3-turbo`
-  on the Mac and `faster_whisper large-v3-turbo` on linux (19 s wall, 1.7 GB peak RSS).
-  The linux run first failed in `av.open()` (`metadata_errors`) with PyAV 19.0.1 and
+  on the Mac and `faster_whisper large-v3-turbo` on the Linux host (19 s wall, 1.7 GB peak RSS).
+  The Linux run first failed in `av.open()` (`metadata_errors`) with PyAV 19.0.1 and
   faster-whisper 1.2.1, so the script pins `av<19` off macOS; 16, 17 and 18 decode.
-  The linux runs used a copy of the script in `/tmp` before the repository had a remote.
+  The Linux runs used a copy of the script in `/tmp` before the repository had a remote.
 
 ## Visual audit renderer
 
@@ -269,7 +269,7 @@ printed the holder, waited about a second, then ran.
 
 ### (b) Codex: effort when `reasoning_effort` is omitted (`checked`)
 
-Performed 2026-10-10 with Rick's approval, near the end of the Codex quota. Each run:
+Performed 2026-10-10 with the owner's approval, near the end of the Codex quota. Each run:
 `codex exec --sandbox read-only --skip-git-repo-check -m gpt-6-luna -c model_reasoning_effort=high "<prompt>"`
 from a fresh `/tmp` directory (the `-c` override applies to that run only). The
 parent ran at `high` so that an inherited effort would be distinguishable from the
@@ -326,7 +326,7 @@ Evidence: `checked` unless otherwise stated.
   stopped-agent resumption and other Codex harnesses were not tested. The current
   tool contract says `send_message` does not start an idle turn; use judge
   `followup_task` for that case.
-- Claude peer messaging is `cited` from the user's game-decomp session report:
+- Claude peer messaging is `cited` from a session report from a consuming repository:
   SendMessage accepts a supplied peer id, stopped peers resume, replies reach the
   sender, ids are absent from ListAgents, and the judge receives stop handbacks.
   This session did not repeat that Claude model test.
@@ -396,9 +396,9 @@ verify the Windows locking branch added in 0.6.1. No Intel Mac execution was run
 ## Normal-profile rollout (2026-10-11)
 
 At the user's explicit request, portability commit `ae9474d` was pushed to
-`origin/main` and applied to the local Apple Silicon Mac and linux (Ubuntu x86_64).
+`origin/main` and applied to the local Apple Silicon Mac and a Linux host (Ubuntu x86_64).
 Both machines used Claude Code 2.1.296 and Codex 0.162.1 with their existing
-local-checkout marketplaces and normal user profiles. The clean linux checkout
+local-checkout marketplaces and normal user profiles. The clean the Linux host checkout
 was fast-forwarded to the pushed commit.
 
 Claude's native plugin update command refreshed the three changed plugins;
@@ -439,7 +439,7 @@ quota remains 0.1.1.
 
 Native Windows contention/atomic replacement, GUI behavior, live quota savings
 and real hosted remote closure remain untested. Local fixture remote observations
-are not proof of current server state. game-decomp adoption was not applied; it remains
+are not proof of current server state. Adoption in a consuming repository was not applied; it remains
 a separately authorized consuming-repository follow-on.
 
 
@@ -589,10 +589,10 @@ Verification on this Mac:
 No consuming repository was changed. No GUI or model execution check is claimed.
 Normal-profile installation results are recorded separately below after release.
 
-### Requested normal-profile installation — Mac and linux
+### Requested normal-profile installation — Mac and Linux
 
 Implementation commit `5caad1a` was installed through the native plugin commands.
-Both machines use local-checkout `rickdiculousli-tools` marketplaces. linux's clean
+Both machines use local-checkout `rickdiculousli-tools` marketplaces. the Linux host's clean
 checkout was fast-forwarded from `414cf98` using a Git bundle transferred over
 SSH; no push, remote fetch from origin, or consuming-repository migration occurred.
 
@@ -600,8 +600,8 @@ SSH; no push, remote fetch from origin, or consuming-repository migration occurr
 | --- | --- | --- | --- | --- |
 | Mac | Claude Code 2.1.296 | 0.3.0 | yes | all 31 files match |
 | Mac | Codex 0.162.1 | 0.3.0 | yes | all 31 files match |
-| linux | Claude Code 2.1.296 | 0.3.0 | yes | all 31 files match |
-| linux | Codex 0.162.1 | 0.3.0 | yes | all 31 files match |
+| Linux | Claude Code 2.1.296 | 0.3.0 | yes | all 31 files match |
+| Linux | Codex 0.162.1 | 0.3.0 | yes | all 31 files match |
 
 On each machine, `claude plugin marketplace update rickdiculousli-tools` and
 `claude plugin install long-horizon@rickdiculousli-tools` were run. Since the
@@ -666,12 +666,12 @@ Verification on this Apple Silicon Mac:
 No native Windows, GUI, or sustained host role/model execution pilot was
 performed for this update. Installation results are recorded below separately.
 
-### Requested delegation reinstall — Mac and linux
+### Requested delegation reinstall — Mac and Linux
 
 Release commit `f5f1b50` was installed through native plugin commands in both
 machines' normal user profiles. Their existing local-checkout marketplaces were
 updated; delegation alone was uninstalled and reinstalled with Claude's
-`--scope user`, and removed/re-added with Codex. linux's clean plugin checkout was
+`--scope user`, and removed/re-added with Codex. the Linux host's clean plugin checkout was
 fast-forwarded from `11d7b54` through a Git bundle transferred over SSH. No push,
 origin fetch, or consuming-repository migration occurred.
 
@@ -679,13 +679,13 @@ origin fetch, or consuming-repository migration occurred.
 | --- | --- | --- | --- | --- |
 | Mac | Claude Code 2.1.296 | 0.7.2 | yes | all 20 files match |
 | Mac | Codex 0.162.1 | 0.7.2 | yes | all 20 files match |
-| linux | Claude Code 2.1.296 | 0.7.2 | yes | all 20 files match |
-| linux | Codex 0.162.1 | 0.7.2 | yes | all 20 files match |
+| Linux | Claude Code 2.1.296 | 0.7.2 | yes | all 20 files match |
+| Linux | Codex 0.162.1 | 0.7.2 | yes | all 20 files match |
 
 Installed `check.py open --help` and `exec --help` passed on all four copies.
-On linux, `sync_marketplaces.py --check` passed and all **25 role tests passed**
+On the Linux host, `sync_marketplaces.py --check` passed and all **25 role tests passed**
 in 9.424 seconds under native Linux. Install logs are
-`/private/tmp/delegation-mac-install.log` and linux's
+`/private/tmp/delegation-mac-install.log` and the Linux host's
 `/tmp/delegation-linux-install.log`; Linux role-test log:
 `/tmp/delegation-roles-linux.log`.
 
@@ -700,7 +700,7 @@ that running model sessions reloaded skills.
 `execute` (used by `exec` and `run`) now forwards SIGTERM, SIGINT and SIGHUP on
 POSIX to the wrapped command's process group, kills the group after a one-second
 grace, and exits with 128 + signal, releasing the held lock. This lets an
-orchestrator (game-decomp capture) cancel or time out a game wrapped in
+orchestrator (game capture) cancel or time out a game wrapped in
 `exec --lock games` without orphaning it in its separate session.
 
 - Two new `test_delegation_run` tests (a child that exits on SIGTERM and one that
@@ -711,21 +711,21 @@ orchestrator (game-decomp capture) cancel or time out a game wrapped in
 - `sync_marketplaces.py --check` current; `verify_lifecycle.py` PASS for
   codex-cli 0.162.1 and Claude Code 2.1.296 in disposable profiles.
 
-### Requested push and delegation 0.7.3 reinstall — Mac and linux
+### Requested push and delegation 0.7.3 reinstall — Mac and Linux
 
-All five pending commits through `1e5aeaf` were pushed to `origin/main`; linux's
+All five pending commits through `1e5aeaf` were pushed to `origin/main`; the Linux host's
 clean checkout was fast-forwarded from the remote. Delegation was uninstalled
 and reinstalled through Claude Code (`--scope user`) and Codex native commands
 in both machines' normal profiles after refreshing the local marketplace.
 
-- Mac and linux, both Claude Code 2.1.296 and Codex 0.162.1: delegation **0.7.3**,
+- Mac and Linux, both Claude Code 2.1.296 and Codex 0.162.1: delegation **0.7.3**,
   long-horizon **0.3.0**, quota **0.1.1**, yt-transcript **0.1.1** are enabled.
   Every tracked portable plugin file in all 16 installed copies matches its
   checkout byte for byte. Delegation was the only outdated installed plugin.
 - Fresh Mac checks: generated metadata current; all **25 delegation run tests**
   passed. Native isolated lifecycle verification passed on both hosts; evidence
   is `/private/tmp/plugins-prepush-verification.json`.
-- Fresh full Linux suite on linux: **364 tests passed** in 59.325 seconds;
+- Fresh full Linux suite on the Linux host: **364 tests passed** in 59.325 seconds;
   log `/tmp/plugins-release-tests.log`. This avoids the previously documented
   Mac temporary-path comparison failures.
 
@@ -753,7 +753,7 @@ scripts" procedures: by default add a role or script for repeated work and
 report it (or propose first where `## Authoring` says `ask`), without rerunning
 setup.
 
-Verification on Linux (linux, Python 3.14.4):
+Verification on Linux (Ubuntu, Python 3.14.4):
 
 - `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
   source and generated manifests and the Claude marketplace declare 0.8.0.
@@ -771,9 +771,9 @@ Verification on Linux (linux, Python 3.14.4):
 No host model session was run against the new procedures, and no normal-profile
 reinstall was performed.
 
-### Requested push and delegation 0.8.0 reinstall — linux only
+### Requested push and delegation 0.8.0 reinstall — Linux only
 
-Commit `077d7b6` was pushed to `origin/main`. On linux, the local-checkout
+Commit `077d7b6` was pushed to `origin/main`. On the Linux host, the local-checkout
 marketplace was refreshed and delegation was uninstalled and reinstalled in the
 normal user profiles: Claude Code with `--scope user`, Codex with
 `plugin remove`/`plugin add` (Codex's `marketplace upgrade` reports a local
@@ -781,8 +781,8 @@ folder marketplace as not Git-backed, which is expected).
 
 | Machine | Host CLI | Delegation | Portable source comparison |
 | --- | --- | --- | --- |
-| linux | Claude Code 2.1.296 | 0.8.0 | all 24 files match |
-| linux | Codex 0.162.1 | 0.8.0 | all 24 files match |
+| Linux | Claude Code 2.1.296 | 0.8.0 | all 24 files match |
+| Linux | Codex 0.162.1 | 0.8.0 | all 24 files match |
 
 Installed `check.py open --help` (showing `--kind` and `--new-kind`),
 `kinds --help` and `patterns --help` ran from both copies. The Mac was not
@@ -881,3 +881,21 @@ Verification on Linux 7.0.0-38-generic, Python 3.14.4:
 
 No host model session ran either migrate skill, no consuming repository was
 migrated, and no normal-profile reinstall was performed.
+
+## Public-release scrub — delegation 0.10.1, quota 0.1.2, yt-transcript 0.1.2
+
+Date: 2026-10-12. Evidence: `checked`.
+
+Before the repository goes public, references to the owner's private
+repositories, machines and directories were made generic: script docstrings no
+longer cite private source repositories, the Codex app-server client name is
+`rickdiculousli-tools-quota`, the delegation worked example is `game-decomp`,
+and verification notes name hosts by platform. Behaviour is unchanged.
+
+Verification on macOS 26.5.2 (Apple Silicon), Python 3.14.7:
+
+- `python3 scripts/sync_marketplaces.py --check`: passed.
+- `python3 scripts/run_tests.py`: 407 tests passed in 43.7 seconds.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  PASS at **2026-10-12T22:08:13.429482+00:00** on **codex-cli 0.162.1** and **Claude Code 2.1.296**, in
+  disposable profiles.

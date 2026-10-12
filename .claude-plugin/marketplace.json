@@ -47,7 +47,7 @@
     },
     {
       "name": "delegation",
-      "version": "0.10.0",
+      "version": "0.10.1",
       "description": "Pods of judge, execute and routine agents: route bulk work to cheaper tiers and keep evidence by tree hash.",
       "author": {
         "name": "Rick Li"
@@ -61,7 +61,7 @@
     },
     {
       "name": "quota",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Read Claude and Codex subscription usage: windows, resets, weekly pace and projected unused quota.",
       "author": {
         "name": "Rick Li"
@@ -76,7 +76,7 @@
     },
     {
       "name": "yt-transcript",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Fetch a YouTube video's timestamped transcript: captions first, then auto-captions, then Whisper.",
       "author": {
         "name": "Rick Li"

@@ -10,7 +10,7 @@
 # ///
 """Fetch a YouTube video's transcript as timestamped markdown.
 
-Extracted from the video-reading recipe in a private project:
+How it works:
   1. Pull captions with yt-dlp as json3 (vtt rate-limits more often). Human captions are
      preferred over auto-captions; a 429 gets one retry after a pause.
   2. If no captions come back, transcribe the audio with Whisper instead: mlx-whisper on Apple

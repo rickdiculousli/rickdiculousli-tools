@@ -19,8 +19,8 @@
 - `check.py` writes only inside the worktree it runs in: never to `$TMPDIR`, the git directory or the real index.
 - At most one writer per worktree; parallel readers up to the overlay's `## Parallel limit` (default 3). Return cap default 400 words.
 - Claim labels are exactly `checked`, `cited`, `asserted`; close outcomes exactly `done`, `stuck`, `abandoned`; findings statuses include `refuted`.
-- Lifecycle tests use the verifier's disposable profiles. Never modify Rick's normal Claude or Codex configuration for automation.
-- Work in a T3-created worktree under `a separate worktree`, never inside the repo.
+- Lifecycle tests use the verifier's disposable profiles. Never modify the user's normal Claude or Codex configuration for automation.
+- Work in a separate Git worktree outside the repository, never inside it.
 - Don't claim model-driven, GUI or remote checks unless they were performed. `docs/verification.md` records actual versions.
 
 ### Decisions made while planning (fold into the spec in Task 6)

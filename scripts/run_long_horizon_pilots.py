@@ -4,7 +4,7 @@
 Profiles (including the temporary credential copy) are always removed. Curatable
 reports and transcripts live under XDG cache and expire by manual pilot cleanup
 at 30 days; this script never reads credentials except the explicitly named file.
-No normal host config, user plugin install, network Git remote or game-decomp changes.
+No normal host config, user plugin install, network Git remote or consuming-repository changes.
 """
 import argparse
 from datetime import datetime, timezone

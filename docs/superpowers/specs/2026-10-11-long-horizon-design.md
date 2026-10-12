@@ -1,7 +1,7 @@
 # Long-horizon: reliable progress across sessions (2026-10-11)
 
-Status: proposed specification, based on Rick's approval to generalize the
-game-decomp workflow. Revised after written-spec review to add deterministic
+Status: proposed specification, based on the owner's approval to generalize the
+workflow of a game-decompilation project. Revised after written-spec review to add deterministic
 checks, an interview-led setup flow, default session closure, the goal
 lifecycle and friction controls. Implementation planning is linked below.
 This document does not add an installed plugin or change any consuming repository.
@@ -37,7 +37,7 @@ script, not by prose: selection, goal consistency, handoff staleness, evidence
 freshness, the milestone close gate and closure verification. Skills keep the
 judgment: interviewing, planning, interpreting blockers and deciding scope.
 
-## Lessons from game-decomp
+## Lessons from a consuming project
 
 These are observations from `game-decomp` at revision
 `ea0fd97a6d0f5e3f7abddf83867070a131d26e57`, not claims that this plugin has been
@@ -724,12 +724,12 @@ measurement; they are not prerequisites for shipping.
 ## Adoption and next step
 
 After written-spec review, create the implementation plan for packaging, `lh.py`
-with its tests, skills/templates and pilots. game-decomp is the first consuming
+with its tests, skills/templates and pilots. A game-decompilation project is the first consuming
 repository candidate: run setup in adopt mode, keep its documents, bootstrap,
 milestone ownership and host policies, add the readiness report to
 `tools/resume.py`, replace its plugin-cache glob with a declared checker path,
 and move standing policy out of the handoff. Those changes need a separately
-authorized adoption change. This spec alone changes neither game-decomp nor the
+authorized adoption change. This spec alone changes neither that project nor the
 delegation plugin.
 
 ## Consolidated planning clarifications (2026-10-11)

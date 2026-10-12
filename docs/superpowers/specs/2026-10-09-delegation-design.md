@@ -5,7 +5,7 @@ specifies the next state/cache/resource-lock layout and an explicit migration
 from the released layout described below. It takes precedence for that side
 work; this documentation change does not migrate installed delegation state.
 
-What a design session on 2026-10-09 (run from `coordinator`) settled. A thread writing the plan or building any part of this hasn't seen that session; this file is its context.
+What a design session on 2026-10-09 settled. A thread writing the plan or building any part of this hasn't seen that session; this file is its context.
 
 ## Why
 
@@ -29,10 +29,10 @@ This plugin packages that as a reusable **base** plus a per-repo **overlay**, so
 - **Overlays live in the repo they describe**, at `.agents/delegation.md`. Not in `AGENTS.md`, not centrally.
 - **Activation is a one-line pointer in each repo's `AGENTS.md`** plus the skill. No hooks, no reliance on description triggering.
 - **Agent definitions are generated from `tiers.json`** by `scripts/sync_marketplaces.py`, committed and never hand-edited, like the host manifests. Effort is only settable through definitions, so instruction-only routing was rejected. Headless `claude -p` / `codex exec` delegation was rejected as too heavy.
-- **There is no `judge` definition.** The judge is the main session; Rick starts it at medium effort in T3. The skill states the expected judge setting but can't set it.
+- **There is no `judge` definition.** The judge is the main session; the user starts it at medium effort. The skill states the expected judge setting but can't set it.
 - **Evidence is deterministic where it can be:** registered validators, run through `check.py`, recorded in a ledger keyed by delegation id and git tree hash. Not keyed by time.
 - **At most one writer per worktree.** Readers may run in parallel; writers run one at a time. Parallel writers (separate worktrees, commit-sha evidence) are out of v1.
-- **Pods never depend on the relay.** The relay (`coordinator`, on hold) consumes a small interface defined here.
+- **Pods never depend on the relay.** A separate relay project (on hold) consumes a small interface defined here.
 
 ## Components
 
@@ -184,7 +184,7 @@ routine: probe batches (--jobs 6 max); first-divergence triage; export_functions
 
 ## Pods and relay
 
-The relay (a coordinator repo, on hold) relays a pod's **head**, the judge thread, between providers. The split:
+A separate relay project (on hold) relays a pod's **head**, the judge thread, between providers. The split:
 
 - **The pod owns routing:** tiers, what to delegate, briefs, evidence.
 - **The relay owns** the baton, provider choice, quota zones and handoffs. It never sees tiers.
@@ -231,19 +231,19 @@ Also confirm on Claude Code that a plugin's agent definitions are picked up and 
 ## Rollout
 
 1. **Plugin:** `delegation` 0.1.0 in this repo, verified and installed on both hosts.
-2. **game-decomp pilot** (its own change in `game-decomp`):
+2. **Pilot** (its own change in a consuming repository):
    - the overlay and the `AGENTS.md` pointer
    - `refuted` added to the findings statuses
    - the `unit`, `probes` and `refs` validators, writing `research/modules/check_refs.py` (every claimed address is a function in `functions.csv`; every cited Windows match is in the match table)
    - no ignore rule needed: `check.py` keeps `.delegation/` ignored itself
    - run the Rust plan's **Task 2** (naming across module files) as the pilot, as parallel readers
-   - judge it roughly: quota points per task from a coordinator repo, and how much of the judge's context is free at the end
-3. **coordinator** (its own change): `projects.md` rows for `game-decomp` and this repo, and a note of which repos have an overlay.
+   - judge it roughly: quota points per task from the `quota` plugin, and how much of the judge's context is free at the end
+3. **Project index** (its own change): record which repositories have an overlay.
 4. **A second repo** later, with only an overlay. If it needs more, the base is missing something.
 
 ## Out of scope / later
 
-- **Parallel writers.** Separate worktrees per writer, each committing on its own branch, evidence keyed by commit sha, the judge merging and re-validating. Blocked first by a conflict: Claude Code's built-in worktree isolation creates worktrees inside the repo, and Rick's global rule puts worktrees only under `a separate worktree`.
+- **Parallel writers.** Separate worktrees per writer, each committing on its own branch, evidence keyed by commit sha, the judge merging and re-validating. Blocked first by a conflict: Claude Code's built-in worktree isolation creates worktrees inside the repo, and the owner's setup keeps worktrees outside the repo.
 - A `visual-audit` report reading the ledger.
 - Overlays overriding tier models. Tiers are global until a repo needs otherwise.
 - Tamper-proof evidence.

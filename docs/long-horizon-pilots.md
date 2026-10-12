@@ -89,7 +89,7 @@ Windows process contention/atomic replacement remains **untested** (no Windows
 runner), with both lock backends tested through mocks and real POSIX contention.
 No model-driven Windows, GUI or real-server closure claim is made.
 
-game-decomp adoption remains separately authorized: adopt existing goals/handoff,
+Adoption in a consuming repository remains separately authorized: adopt existing goals/handoff,
 preserve ownership/host policy, add readiness output to tools/resume.py, replace
 cache globbing with a declared checker path, move standing policy out of handoff,
 dry-run selection, approve concrete edits, lint/status and verify authorized

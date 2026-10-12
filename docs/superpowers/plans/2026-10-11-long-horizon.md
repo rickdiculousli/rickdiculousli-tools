@@ -836,7 +836,7 @@ results or a plainly documented release blocker. No token savings claim.
 - Commit owned source/generated/docs changes together and integrate only
   under the implementation session's authorization. Report exact commit/closure
   and any release blockers; do not claim an unperformed push or host pilot.
-- [x] Leave game-decomp adoption as a separately authorized consuming-repo change.
+- [x] Leave consuming-repository adoption as a separately authorized consuming-repo change.
   Its concrete checklist is adopt existing goals/handoff, preserve ownership and
   host policy, add readiness output to `tools/resume.py`, replace cache globbing
   with a declared checker path, move standing policy out of handoff, dry-run
@@ -912,7 +912,7 @@ not results. Record actual pass/fail/untested in the pilot report.
 | Idempotent setup/record/repair/archive/closure/reactivation | 2, 4, 5, 7, 8, 9 | U, C, D |
 | Daily worktree churn, retention, GC/writer races, fixed root lock | 2, 9 | U injected clock/processes |
 | Deferred claims, scheduling and generic cost measurement | 1, 12 | Scope review; no v1 implementation |
-| game-decomp adoption separately authorized | 12 | Explicit follow-on checklist |
+| Consuming-repository adoption separately authorized | 12 | Explicit follow-on checklist |
 
 ## Planning completion criteria
 

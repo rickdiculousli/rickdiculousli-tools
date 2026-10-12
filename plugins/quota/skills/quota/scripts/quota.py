@@ -8,9 +8,8 @@
 Each provider is read the way its own client reads it, and neither read costs tokens:
 
 - Claude: the page Claude Code's `/usage` screen reads (`/api/oauth/usage`), with the login
-  Claude Code already keeps (macOS keychain, or ~/.claude/.credentials.json on Linux). Adapted
-  from the usage gate in a private project. The page is
-  undocumented.
+  Claude Code already keeps (macOS keychain, or ~/.claude/.credentials.json on Linux). The page
+  is undocumented.
 - Codex: `account/rateLimits/read` on Codex's own app server (`codex app-server`, JSON-RPC over
   stdio), the same call the Codex TUI and desktop app make. Codex handles its own auth.
 
