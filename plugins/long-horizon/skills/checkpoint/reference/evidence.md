@@ -2,6 +2,8 @@
 
 Checks use exact overlay tokens. Scope is Git pathspec matched tracked plus
 nonignored untracked entries with content/mode/deletion/symlink/submodule identity.
+Content is hashed as Git would store it (its eol and clean rules), so CRLF and LF
+checkouts of one commit share a scope.
 No writes to real index or Git objects. Unresolved conflicts/unreadable or dirty
 submodules fail closed. Default scope excludes configured goals/handoff/findings/
 archives/evidence sink; acceptance policy has a separate digest covering check
@@ -95,7 +97,8 @@ Batch ID = SHA-256 canonical sorted-key JSON of `{"evidence_ids": <sorted IDs>,
 "paths": <paths sorted by relative path>}`. `closure manifest --base <pre-batch>`
 builds both from the worktree: every path changed since base plus untracked,
 unignored files (narrow with repeated `--path <pathspec>` to leave unrelated dirty
-work out), their current byte digests, and the pending records that currently
+work out), their current byte digests (the commit step also accepts the commit's
+contents in checked-out form, so eol conversion still matches), and the pending records that currently
 accept their check (or explicit repeated `--pending`). It reports stale pending
 records as `unused_pending`, prints the batch ID and writes the manifest to XDG
 state `manifests/<batch>.json` (or `--output` outside the checkout). Review it, then pass the reported path

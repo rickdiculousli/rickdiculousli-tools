@@ -101,7 +101,9 @@ def snapshot(git, policy, check, probe=False):
             mode = '100755' if info.st_mode & 0o111 else '100644'
         else:
             raise Invalid('Unsupported/unreadable scope entry: ' + name)
-        oid = git.run('hash-object', '--stdin', binary=True, input=content).decode().strip()
+        # --path applies the checkout's eol/clean rules, so CRLF and LF checkouts of one commit agree.
+        where = ['--path', name] if mode != '120000' else []
+        oid = git.run('hash-object', *where, '--stdin', binary=True, input=content).decode().strip()
         items.append([name, mode, oid])
     inputs = {}
     for name in spec.get('inputs', []):

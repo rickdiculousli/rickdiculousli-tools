@@ -44,3 +44,14 @@ class ScopeTests(RepoTest):
         self.assertEqual(result['checks'][0]['status'], 'conflict')
         self.carry(self.record(self.prepare()))
         self.assertEqual(self.cli('evidence', 'find')['checks'][0]['status'], 'fresh')
+
+    def test_scope_is_the_same_for_crlf_and_lf_checkouts(self):
+        # Windows checkouts with core.autocrlf get CRLF files from the same LF blobs.
+        self.write('tiny.py', 'def tiny():\n    return 2\n')
+        self.commit('LF blob')
+        lf = self.prepare()
+        self.git('config', 'core.autocrlf', 'true')
+        (self.root / 'tiny.py').unlink()
+        self.git('checkout', '--', 'tiny.py')
+        self.assertIn(b'\r\n', (self.root / 'tiny.py').read_bytes())
+        self.assertEqual(self.prepare()['scope'], lf['scope'])

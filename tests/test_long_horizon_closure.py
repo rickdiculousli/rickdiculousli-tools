@@ -94,3 +94,27 @@ class ClosureTests(RepoTest):
         self.cli('closure', 'verify')
         self.write('.agents/long-horizon.md', (self.root / '.agents/long-horizon.md').read_text().replace('Fixture authorizes', 'Changed authorization authorizes'))
         self.cli('closure', 'verify', code=1)
+
+    def test_commit_step_accepts_eol_converted_checkout(self):
+        self.configure(('commit',))
+        self.git('config', 'core.autocrlf', 'true')
+        base = self.git('rev-parse', 'HEAD')
+        (self.root / 'tiny.py').write_bytes(b'def tiny():\r\n    return 2\r\n')
+        built = self.cli('closure', 'manifest', '--base', base, '--pending', 'a' * 64)
+        commit = self.commit('Owned batch')
+        self.assertNotIn(b'\r\n', self.git_bytes('show', commit + ':tiny.py'))
+        self.cli('closure', 'record', '--batch', built['batch'], '--step', 'commit', '--outcome', 'success',
+                 '--commit', commit, '--manifest', built['path'])
+        self.assertEqual(self.cli('closure', 'verify')['state'], 'complete')
+        # Different content still fails even after eol conversion.
+        (self.root / 'tiny.py').write_bytes(b'def tiny():\r\n    return 3\r\n')
+        other = self.cli('closure', 'manifest', '--base', commit, '--pending', 'a' * 64)
+        self.commit('Second batch')
+        (self.root / 'tiny.py').write_bytes(b'def tiny():\r\n    return 4\r\n')
+        wrong = self.commit('Wrong content')
+        self.cli('closure', 'record', '--new-batch', '--batch', other['batch'], '--step', 'commit', '--outcome', 'success',
+                 '--commit', wrong, '--manifest', other['path'], code=2)
+
+    def git_bytes(self, *args):
+        import subprocess
+        return subprocess.run(['git', '-C', str(self.root), *args], capture_output=True, check=True).stdout

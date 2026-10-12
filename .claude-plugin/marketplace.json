@@ -90,7 +90,7 @@
     },
     {
       "name": "long-horizon",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "description": "Bounded progress across sessions with shared setup, resume, checkpoint and durable scoped acceptance.",
       "author": {
         "name": "Rick Li"

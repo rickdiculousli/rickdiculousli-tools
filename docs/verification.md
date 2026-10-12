@@ -939,3 +939,39 @@ Verification on Linux 7.0.0-38-generic, Python 3.14.4:
   disposable profiles.
 
 No consuming repository's state was changed or re-recorded.
+
+## Line-ending conversion — long-horizon 0.5.2
+
+Date: 2026-10-12. Evidence: `checked`.
+
+With Git eol conversion (`core.autocrlf=true`, common on Windows), checkouts hold
+CRLF files while commits store LF blobs. Two hashes compared the wrong forms:
+
+- Scope snapshots hashed raw worktree bytes with `git hash-object --stdin`, so CRLF
+  and LF checkouts of one commit had different scopes and evidence went stale
+  across machines. Regular files are now hashed with `--path`, which applies the
+  checkout's eol and clean rules. Where no conversion applies the object IDs are
+  unchanged. Repositories that do normalize (for example `* text=auto` with
+  CRLF files in the worktree) see pending evidence go stale once.
+- The `closure record` commit step compared worktree-byte manifest digests with
+  the stored blob, so it always rejected eol-converted files. It now also accepts
+  the blob in checked-out form (`git cat-file --filters`). Manifest and batch IDs
+  are unchanged, and different contents still fail.
+
+Delegation was checked and needs no change: its tree hash uses `git add -A` and
+`write-tree`, which already normalize. Goals, handoff and overlay parsing, and
+`lint --fix`, were checked with LF, CRLF, CR-only and no final newline.
+
+Verification on Linux 7.0.0-38-generic, Python 3.14.4:
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  manifests declare long-horizon 0.5.2.
+- `python3 scripts/run_tests.py`: 412 tests passed in 14.4 seconds. The new
+  `test_scope_is_the_same_for_crlf_and_lf_checkouts` and
+  `test_commit_step_accepts_eol_converted_checkout` use `core.autocrlf=true` and
+  failed against 0.5.1.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  PASS at **2026-10-12T22:33:15.063802+00:00** on **codex-cli 0.162.1** and
+  **Claude Code 2.1.296**, in disposable profiles.
+
+Not run on a Windows host; eol conversion was exercised through Git on Linux.

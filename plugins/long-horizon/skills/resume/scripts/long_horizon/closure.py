@@ -36,11 +36,17 @@ def content_matches(git, commit, manifest):
     if set(changed) != expected:
         return False
     for item in manifest['paths']:
-        raw = git.run('show', commit + ':' + item['path'], binary=True, check=False)
         exists = bool(git.run('ls-tree', commit, '--', item['path']).strip())
-        actual = hashlib.sha256(raw).hexdigest() if exists else None
-        if actual != item['digest']:
-            return False
+        if not exists:
+            if item['digest'] is not None:
+                return False
+            continue
+        # The manifest hashes worktree bytes; with eol conversion they match the checked-out form, not the blob.
+        stored = git.run('show', commit + ':' + item['path'], binary=True, check=False)
+        if hashlib.sha256(stored).hexdigest() != item['digest']:
+            checkout = git.run('cat-file', '--filters', commit + ':' + item['path'], binary=True, check=False)
+            if hashlib.sha256(checkout).hexdigest() != item['digest']:
+                return False
     return True
 
 
