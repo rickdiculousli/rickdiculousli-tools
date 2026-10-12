@@ -298,22 +298,32 @@ class RunTests(unittest.TestCase):
     def test_exec_holds_lock_and_passes_exit_code(self):
         write_overlay(self.root, "## Locks\nmem:\n")
         self.open("d9")
+        release = self.root.parent / "release-holder"
+        hold = f"while [ ! -e '{release}' ]; do sleep 0.02; done"
+        # The holder keeps the lock until the test releases it, so a loaded machine can't let it go early.
         holder = subprocess.Popen(
-            [sys.executable, str(SCRIPTS / "check.py"), "exec", "--lock", "mem", "--timeout", "10",
-             "--delegation", "d9", "--", "sleep", "1"],
+            [sys.executable, str(SCRIPTS / "check.py"), "exec", "--lock", "mem", "--timeout", "60",
+             "--delegation", "d9", "--", "sh", "-c", hold],
             cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
         import time
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + 30
         while "held by d9" not in run_cli(self.root, "locks").stdout:
             self.assertLess(time.monotonic(), deadline)
             time.sleep(0.05)
         r = run_cli(self.root, "locks")
-        self.assertRegex(r.stdout, r"\Amem: 1 slot\n  mem\.0 held by d9 \(pid \d+, since [^)]+\): sleep 1\n\Z")
-        r = run_cli(self.root, "exec", "--lock", "mem", "--timeout", "10", "--", "sh", "-c", "echo ran; exit 7")
-        holder.communicate(timeout=10)
-        self.assertEqual((r.returncode, r.stdout), (7, "ran\n"))
-        self.assertIn("waiting for lock mem", r.stderr)
+        self.assertRegex(r.stdout, r"\Amem: 1 slot\n  mem\.0 held by d9 \(pid \d+, since [^)]+\): sh -c 'while .* done'\n\Z")
+        waiter = subprocess.Popen(
+            [sys.executable, str(SCRIPTS / "check.py"), "exec", "--lock", "mem", "--timeout", "60",
+             "--", "sh", "-c", "echo ran; exit 7"],
+            cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        waiting = waiter.stderr.readline()   # printed once the waiter finds the lock busy
+        release.touch()
+        holder.communicate(timeout=30)
+        out, err = waiter.communicate(timeout=30)
+        self.assertEqual((waiter.returncode, out), (7, "ran\n"))
+        self.assertIn("waiting for lock mem", waiting + err)
         self.assertEqual(run_cli(self.root, "locks").stdout, "mem: 1 slot\n  mem.0 free\n")
         r = run_cli(self.root, "exec", "--lock", "mem", "--timeout", "0.2", "--", "sleep", "3")
         self.assertEqual(r.returncode, 124)

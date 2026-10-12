@@ -97,7 +97,8 @@ class LifecycleTests(unittest.TestCase):
 
     def test_existing_profile_refused_without_invoking_cli(self):
         (self.profile / "settings.json").write_text("{}")
-        with patch("scripts.verify_lifecycle.run_command") as command:
+        with patch("scripts.verify_lifecycle.shutil.which", return_value="/usr/bin/claude"), \
+                patch("scripts.verify_lifecycle.run_command") as command:
             result = verify_host("claude", ROOT, self.profile)
         self.assertFalse(result["passed"])
         self.assertIn("empty", result["error"])

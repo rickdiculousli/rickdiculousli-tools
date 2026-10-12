@@ -824,3 +824,31 @@ Verification on macOS (Darwin 25.5.0, Python 3.14.7):
 
 No host model session was run against the new procedures, and no normal-profile
 reinstall was performed.
+
+## 2026-10-12: delegation 0.9.1, test isolation and parallel runner
+
+`tree_hash` copied the real index with `shutil.copyfile`, which gives the copy a
+fresh mtime. Git treats an entry as possibly changed only when its mtime is not older
+than the index's, so a same-size edit made in the same second as the last index write
+was hashed as unchanged once that second had passed. A probe that forces this timing
+missed the edit 6 of 6 times with `copyfile` and 0 of 6 with `shutil.copy2`, which
+keeps the mtime; delegation 0.9.1 uses `copy2`, with a regression test.
+
+Tests: the shared support modules point `tempfile` at the resolved temp root, fixing
+the 12 macOS `/var` vs `/private/var` failures recorded above.
+`test_exec_holds_lock_and_passes_exit_code` holds its lock until the test releases it
+instead of for `sleep 1`, which a loaded machine could outlast, and
+`test_existing_profile_refused_without_invoking_cli` no longer needs `claude` on PATH.
+`scripts/run_tests.py` runs the suite in parallel, one process per available CPU and
+up to 8 tests per process.
+
+Verification on macOS (Darwin 25.5.0, Python 3.14.7):
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  manifests declare delegation 0.9.1.
+- `python3 scripts/run_tests.py`: 397 tests passed in 44.7 seconds (6 jobs);
+  with `-j 16 --chunk 2` under heavier contention, passed in 55.6 seconds.
+  Serial `python3 -m unittest discover -s tests`: passed.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  PASS at **2026-10-12T19:14:10.538612+00:00** on **codex-cli 0.162.1** and **Claude Code 2.1.296**, in
+  disposable profiles.

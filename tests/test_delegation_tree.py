@@ -36,6 +36,16 @@ class TreeTests(unittest.TestCase):
         self.assertEqual(len(e1), 64)
         self.assertEqual(len(tree_hash(self.root)), 40)
 
+    def test_same_size_edit_in_commit_second_seen_after_the_second_ends(self):
+        # Git treats an entry as possibly changed when its mtime isn't older than the index's.
+        # The hash must keep the index's mtime, or this edit hides once the second has passed.
+        import time
+        time.sleep(1 - time.time() % 1 + 0.01)
+        root = git_repo(self.tmp / "racy")
+        (root / "a.txt").write_text("b\n")
+        time.sleep(1.1)
+        self.assertNotEqual(tree_hash(root), git(root, "write-tree").stdout.strip())
+
     def test_missing_extra_input_is_distinct_from_present(self):
         missing = tree_hash(self.root, ["nope.bin"])
         (self.root / "nope.bin").write_bytes(b"")

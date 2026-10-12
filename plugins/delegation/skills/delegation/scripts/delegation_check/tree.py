@@ -67,7 +67,9 @@ def git_tree(root: Path) -> str:
         if not real_objects.is_absolute():
             real_objects = root / real_objects
         if real.is_file():
-            shutil.copyfile(real, temp)
+            # copy2 keeps the index's mtime, which git needs to spot racily clean entries: a
+            # same-size edit made within the index's timestamp tick would otherwise be missed.
+            shutil.copy2(real, temp)
         objects.mkdir()
         env = dict(os.environ, GIT_INDEX_FILE=str(temp), GIT_OBJECT_DIRECTORY=str(objects),
                    GIT_ALTERNATE_OBJECT_DIRECTORIES=str(real_objects))

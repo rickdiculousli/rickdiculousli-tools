@@ -61,8 +61,11 @@ def run(module, tests):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("patterns", nargs="*", default=["test*.py"], help="module file patterns (default test*.py)")
-    parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 4, help="processes at once (default: CPU count)")
-    parser.add_argument("--chunk", type=int, default=4, help="most tests per process (default 4)")
+    # One process per CPU this process may use, so each box sizes itself: measured fastest on the Mac
+    # (6 CPUs, ~45s) and the linux (16 threads, ~13s); more processes than CPUs only added contention.
+    parser.add_argument("-j", "--jobs", type=int, default=os.process_cpu_count() or 4,
+                        help="processes at once (default: CPUs available to this process)")
+    parser.add_argument("--chunk", type=int, default=8, help="most tests per process (default 8)")
     parser.add_argument("-v", "--verbose", action="store_true", help="print every process's output")
     args = parser.parse_args(argv)
     started = time.monotonic()
