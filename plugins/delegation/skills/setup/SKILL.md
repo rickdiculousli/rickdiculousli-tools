@@ -73,6 +73,7 @@ source in bulk. Collect:
 | `## Validators` | Commands that pass or fail mechanically: test suites, linters, type checks, consistency scripts. Each must run from the root, exit 0 on success, not edit tracked files (that makes results `unstable`), and finish in minutes. Prefer offline ones. Mark fast linters and format checks `[cheap]`; give slow suites `[timeout=<seconds>]`; give builds that compete for memory or a device the same `[lock=<name>]`. Mark checks requiring human action `[needs-human]` and notify the user before work and early while the user is present. |
 | `## Rote scripts` | Deterministic multi-step rote sequences (run N jobs → verify → import → index) that could become repository helpers. Propose `name: command; what it replaces`, with default path `.agents/delegation/scripts/<name>` and steps; keep general tools where they are. Ask which repeated sequences the user wants automated; write scripts only with explicit approval. |
 | `## Roles` | Repeated specialist briefs that can share a runbook. Propose tier, tracked `.agents/delegation/runbooks/<role>.md` source and at least one cap; prefer a use-count cap. |
+| `## Authoring` | Whether the judge adds roles and runbooks, or rote scripts, on its own when it sees repeated work. Both default to `allowed`. Write `roles: ask` and/or `scripts: ask` only for what the user wants to approve case by case. |
 | `## Host side effects` | User-wide configuration, live saves and other host paths outside the worktree that delegated work must never change. Record one prohibited change per line. |
 | `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. |
 | `## Oracle` | What ultimately says work is right (golden files, reference traces, a spec suite). Tie prose to checks with `validator:<name>`. |
@@ -103,7 +104,9 @@ Show the user, in chat:
    scripts separately from approval to record a proposal in the overlay.
 5. Open questions only for what the repo cannot establish: unknown rote
    procedures worth scripting; role, runbook and reuse-cap preferences; which
-   resources are single-writer; which validators are trustworthy enough to count
+   resources are single-writer; whether the judge may keep adding roles and
+   scripts on its own (the default) or should ask first for either (`## Authoring`);
+   which validators are trustworthy enough to count
    as `checked`; where findings should go; physical-resource slot limits (for
    example, concurrent games) and the parallel limit for shared tools; and host
    paths or OS permission prompts that require restrictions or human action.
@@ -147,6 +150,12 @@ Wait for approval or edits.
 
 Report one table: validator, result (`PASS`, `FAIL` or `unstable`), duration and
 ledger id. Then list what was written, and anything left for the user.
+
+Setup doesn't register work labels; the judge registers them as it opens work
+(`--kind`, `--new-kind`). Recurring work found in the survey makes good first
+labels: mention them in `## Tier hints` so the judge can reuse the names. To add
+a single role or script later, the judge follows the delegation skill's
+"Growing roles and scripts" path instead of rerunning setup.
 
 ## Composition with long-horizon
 

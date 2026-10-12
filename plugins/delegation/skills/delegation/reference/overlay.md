@@ -14,6 +14,7 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 | `## Roles` | Named tier/runbook pairs with reuse caps | None |
 | `## Rote scripts` | `name: command; what it replaces` proposals or approved helpers | None |
 | `## Host side effects` | Prohibited host changes outside the worktree, one per line | None |
+| `## Authoring` | Whether the judge adds roles or rote scripts on its own or asks first: `roles: ask\|allowed`, `scripts: ask\|allowed` | Both `allowed` |
 | `## Single writer` | Resources only the judge writes | None |
 | `## Findings` | The findings sink and its schema | The execution log |
 | `## Return fields` | Repo-specific fields for returns | None |
@@ -119,14 +120,21 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
   valid.
 - **`## Rote scripts`.** One `name: body` per line; the parser validates
   this structure. Use `name: command; what it replaces` for proposals. Record deterministic multi-step rote sequences worth replacing with
-  repository scripts. A proposal does not authorize writing a script: obtain
-  explicit approval before creating or changing repository helpers.
+  repository scripts. Whether the judge may then write one without asking
+  follows `## Authoring` (default `allowed`).
 - **`## Host side effects`.** Free text, one prohibited host change outside the
   worktree per line (for example, user-wide plugin configuration or live game
   saves). When the section is nonempty, briefs append these as never-write
   restrictions with the isolation instruction. These are agent instructions,
   not filesystem enforcement; worktree write permissions do not authorize host
   changes.
+- **`## Authoring`.** Up to two lines, `roles: ask|allowed` and
+  `scripts: ask|allowed` (case-insensitive). `allowed`, the default when the
+  section or a line is missing, lets the judge add that kind of material under
+  `.agents/delegation/` when it sees repeated work; it reports each addition,
+  keeps a single writer, and lints and proves what it adds. `ask` means each
+  addition needs the user's approval first. An unknown key or value, or a repeated key, is a lint
+  problem. Neither value allows editing tiers or agent definitions.
 - **`## Tier hints`.** Free text may mark human dependencies, for example
   `execute [needs-human]: native launches require human approval`. The judge
   notifies the user before such work and early while the user is present;
@@ -192,8 +200,8 @@ Delegation material defaults to tracked `.agents/delegation/runbooks/` role
 sources and `.agents/delegation/scripts/` approved rote scripts. The overlay stays
 at `.agents/delegation.md`. These sections and directories are optional; general
 repository tools stay in their own location and may be referenced intentionally.
-Creating or changing scripts requires explicit approval; recording a proposal
-alone grants no permission.
+Whether the judge creates or changes them without asking follows
+`## Authoring` (default `allowed`).
 
 A role's `runbook` is a repository-relative tracked source. `open` validates
 tracking and containment (including symlinks), then copies it under external

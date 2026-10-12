@@ -731,3 +731,42 @@ in both machines' normal profiles after refreshing the local marketplace.
 
 Restart Claude Code and start a new Codex session to load the updated skills.
 Existing running model sessions were not tested for hot reloading.
+
+## Delegation 0.8.0 — work labels, pattern log and scratch (2026-10-12)
+
+`open --kind <label>` (with `--new-kind "<description>"` to register) labels each
+delegation in a repository-wide registry (`<state>/<repo-key>/kinds.json`); every
+open and close is appended to `<repo-key>/patterns.jsonl`, shared by all worktrees.
+Unknown labels are refused before opening, with the closest existing labels.
+Each brief is fingerprinted by tier, writes, input/write path shapes and named
+validators; a shape match under another label prints a note. `kinds` lists,
+merges, renames and marks labels; `patterns` reports candidates (three or more
+uses, no role, no decision) and unlabeled shapes. The optional overlay
+`## Authoring` section (`roles|scripts: ask|allowed`, both defaulting to
+`allowed`) is linted and printed by `patterns`; setup asks whether to restrict
+either to `ask`. Briefs name a per-delegation scratch directory under the worktree
+cache, and both tier instructions now allow writing scratch and prefer a
+throwaway script to repeated hand edits. Collection folds pattern lines older
+than 180 days into per-kind archived counts and removes scratch files untouched
+for 30 days. The skill gained "Labels and patterns" and "Growing roles and
+scripts" procedures: by default add a role or script for repeated work and
+report it (or propose first where `## Authoring` says `ask`), without rerunning
+setup.
+
+Verification on Linux (linux, Python 3.14.4):
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  source and generated manifests and the Claude marketplace declare 0.8.0.
+- `python3 -m unittest discover -s tests`: **379 tests passed** in 67.3 seconds,
+  including 15 new `test_delegation_patterns` tests (refusal before opening,
+  registration and reuse, label rules, sharing across a linked worktree, shape
+  notes, merge/rename aliasing, candidates/marks/roles, unlabeled shapes, role
+  and continuation kinds, `--since` and retention folding, scratch in briefs and
+  its expiry, tier instructions, `## Authoring` parsing and lint).
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  PASS at **2026-10-12T17:10:34.236472+00:00** on **codex-cli 0.162.1** and
+  **Claude Code 2.1.296**, in disposable profiles. New files had to be staged
+  first: the installed-copy comparison uses tracked files.
+
+No host model session was run against the new procedures, and no normal-profile
+reinstall was performed.

@@ -244,7 +244,9 @@ class Paths:
                 'repository_key': self.repo_key, 'worktree_key': self.worktree_key,
                 'worktree_state_directory': str(self.path), 'brief_directory': str(self.path / 'briefs'),
                 'context_directory': str(self.path / 'context'), 'log_directory': str(self.path / 'logs'),
-                'resource_lock_directory': str(self.locks), 'root_mutex': str(self.state_root / 'state.lock')}
+                'resource_lock_directory': str(self.locks), 'root_mutex': str(self.state_root / 'state.lock'),
+                'scratch_directory': str(self.cache / 'scratch'), 'kind_registry': str(self.repo / 'kinds.json'),
+                'pattern_log': str(self.repo / 'patterns.jsonl')}
 
     def check(self):
         if any(p.is_symlink() for p in (self.repo, self.path.parent, self.path)):
@@ -564,6 +566,17 @@ def gc(apply=False, if_due=False, now=None):
                             result['entries'].append({'path': str(item), 'action': 'remove', 'reason': 'unreferenced for 30 days'})
                             if apply:
                                 item.unlink()
+                # Scratch is disposable working space; untouched files expire like briefs.
+                scratch = cache / 'scratch'
+                if scratch.is_dir() and not any(p.is_symlink() for p in [scratch, *scratch.parents]):
+                    for item in sorted(scratch.rglob('*'), reverse=True):
+                        if item.is_symlink() or item.is_file():
+                            if now - item.lstat().st_mtime >= MONTH:
+                                result['entries'].append({'path': str(item), 'action': 'remove', 'reason': 'scratch untouched for 30 days'})
+                                if apply:
+                                    item.unlink()
+                        elif item.is_dir() and apply and not any(item.iterdir()):
+                            item.rmdir()
             except (DelegationError, OSError, KeyError):
                 entry['reason'] = 'unknown/inaccessible; retained'
         # Interrupted hash attempts are independent of worktree payload age.
@@ -579,9 +592,16 @@ def gc(apply=False, if_due=False, now=None):
                         shutil.rmtree(attempt)
             except (OSError, DelegationError):
                 pass
+        from .patterns import prune
         for repo in state_root.iterdir():
             if not repo.is_dir() or repo.is_symlink() or len(repo.name) != 64:
                 continue
+            try:
+                pruned = prune(repo, apply, now)
+            except (DelegationError, OSError, KeyError, ValueError):
+                pruned = {'path': str(repo / 'patterns.jsonl'), 'action': 'retain', 'reason': 'unreadable pattern log; inspect it'}
+            if pruned:
+                result['entries'].append(pruned)
             worktrees = repo / 'worktrees'
             if worktrees.exists() and any(worktrees.iterdir()):
                 continue
@@ -605,7 +625,7 @@ def gc(apply=False, if_due=False, now=None):
             if now < since + WEEK or not locks_idle(repo / 'locks'):
                 continue
             result['entries'].append({'path': str(repo), 'action': 'remove', 'reason': 'retired repository, no holders/waiters'})
-            if apply and all(p.name in {'identity.json', 'worktrees', 'locks'} for p in repo.iterdir()):
+            if apply and all(p.name in {'identity.json', 'worktrees', 'locks', 'kinds.json', 'patterns.jsonl'} for p in repo.iterdir()):
                 shutil.rmtree(repo)
         if apply:
             for item in sorted(cache_root.glob('*/worktrees/*/hashing'), reverse=True):

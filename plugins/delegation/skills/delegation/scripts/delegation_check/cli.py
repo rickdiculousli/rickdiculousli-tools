@@ -10,8 +10,8 @@ from pathlib import Path
 
 from . import DelegationError
 from .brief import footer, task_line, tier_instructions
-from . import locks, state
-from .ledger import OUTCOMES, TIERS, close_delegation, execute, load_brief, open_delegation, pending, query, run_validator
+from . import locks, patterns, state
+from .ledger import OUTCOMES, TIERS, close_delegation, execute, load_brief, open_delegation, pending, query, read_events, run_validator
 from .overlay import Validator, load_overlay
 from .tree import repo_root, tree_hash
 
@@ -37,13 +37,27 @@ def _open(root: Path, args: argparse.Namespace) -> int:
         raise DelegationError('overlay lint problems: ' + '; '.join(overlay.problems))
     for warning in overlay.warnings:
         print("warning: " + warning, file=sys.stderr)
+    paths = state.Paths(root)
+    role_hint = args.role
+    if args.continued_from and not role_hint:
+        role_hint = next((e.get("role") for e in read_events(root)
+                          if e.get("event") == "open" and e.get("delegation") == args.continued_from), None)
+    kind, description, notes = patterns.choose(paths, args.kind, args.new_kind, role_hint)
     event = open_delegation(
         root, args.delegation, args.tier, args.brief, args.writes,
         overlay.parallel_limit, overlay.extra_inputs,
         args.continued_from, args.role, overlay.roles,
     )
+    brief = args.brief if args.brief.is_absolute() else root.resolve() / args.brief
+    try:
+        notes += patterns.record_open(paths, event, kind, description, brief.read_bytes())
+    except (DelegationError, OSError) as error:
+        notes.append(f"pattern log not updated: {error}")
+    for note in notes:
+        print("note: " + note, file=sys.stderr)
     role = "writer" if args.writes else "reader"
-    print(f"opened {args.delegation} ({args.tier}, {role}) at {event['tree'][:12]}")
+    labelled = f", kind {kind}" if kind else ""
+    print(f"opened {args.delegation} ({args.tier}, {role}{labelled}) at {event['tree'][:12]}")
     print(f"task: {task_line(root, args.delegation)}")
     print(f"task with instructions: {task_line(root, args.delegation, with_instructions=True)}")
     if args.continued_from:
@@ -68,6 +82,10 @@ def _brief(root: Path, args: argparse.Namespace) -> int:
 
 def _close(root: Path, args: argparse.Namespace) -> int:
     close_delegation(root, args.delegation, args.outcome, args.note)
+    try:
+        patterns.record_close(state.Paths(root), args.delegation, args.outcome)
+    except (DelegationError, OSError) as error:
+        print(f"note: pattern log not updated: {error}", file=sys.stderr)
     print(f"closed {args.delegation} ({args.outcome})")
     return 0
 
@@ -161,6 +179,83 @@ def _locks(root: Path, args: argparse.Namespace) -> int:
     return 0
 
 
+def _plural(count: int, noun: str) -> str:
+    return f"{count} {noun}{'s' if count != 1 else ''}"
+
+
+def _count(item: dict) -> str:
+    return f"{_plural(item['count'], 'use')}, {_plural(item['worktrees'], 'worktree')}, {_plural(item['days'], 'day')}"
+
+
+def _outcomes(item: dict) -> str:
+    return ", ".join(f"{name} {count}" for name, count in sorted(item["outcomes"].items())) or "no uses in window"
+
+
+def _kinds(root: Path, args: argparse.Namespace) -> int:
+    paths = state.Paths(root)
+    if args.kinds_command == "merge":
+        print(patterns.merge(paths, args.old, args.into))
+        return 0
+    if args.kinds_command == "rename":
+        print(patterns.rename(paths, args.old, args.new))
+        return 0
+    if args.kinds_command == "mark":
+        print(patterns.mark(paths, args.kind, args.status, args.note))
+        return 0
+    data = patterns.summary(paths, set(load_overlay(root).roles))
+    kinds = data["kinds"]
+    if not args.all:
+        kinds = [item for item in kinds if item["status"] != "declined" and item["last"]]
+    if args.json:
+        print(json.dumps({"kinds": kinds, "aliases": data["aliases"]}))
+        return 0
+    if not kinds:
+        hidden = len(data["kinds"])
+        print(f"No active kinds ({hidden} declined or idle; --all lists them)." if hidden else
+              'No kinds yet. Open with --kind <label> --new-kind "<one-line description>" to register one.')
+        return 0
+    shown = kinds if args.all else kinds[:patterns.LIST_LIMIT]
+    for item in shown:
+        extras = [_plural(item["count"], "use"), _plural(item["worktrees"], "worktree"),
+                  "role: " + (item["kind"] if item["role"] else "none")]
+        if item["status"]:
+            extras.append(item["status"])
+        print(f"{item['kind']} ({', '.join(extras)}): {item['description']}")
+    if len(kinds) > len(shown):
+        print(f"... {len(kinds) - len(shown)} more (--all)")
+    return 0
+
+
+def _patterns(root: Path, args: argparse.Namespace) -> int:
+    overlay = load_overlay(root)
+    data = patterns.summary(state.Paths(root), set(overlay.roles), args.since, args.min)
+    data["authoring"] = overlay.authoring
+    if args.json:
+        print(json.dumps(data))
+        return 0
+    print("Authoring: " + ", ".join(f"{k}={v}" for k, v in overlay.authoring.items()) + " (overlay ## Authoring)")
+    window = f" in the last {args.since:g} days" if args.since else ""
+    candidates = [item for item in data["kinds"] if item["candidate"]]
+    print(f"Candidates (>= {args.min} uses{window}, no role, not approved or declined):")
+    for item in candidates:
+        print(f"  {item['kind']}: {_count(item)}; "
+              f"{_outcomes(item)}; tiers {', '.join(item['tiers']) or 'n/a'}{'; ' + item['status'] if item['status'] else ''}")
+    if not candidates:
+        print("  none")
+    others = [item for item in data["kinds"] if not item["candidate"] and item["count"]]
+    if others:
+        print("Other kinds:")
+        for item in others:
+            state_note = "role" if item["role"] else (item["status"] or f"below {args.min}")
+            print(f"  {item['kind']}: {_plural(item['count'], 'use')} ({state_note}); {_outcomes(item)}")
+    if data["unlabeled"]:
+        print(f"Unlabeled shapes (>= {args.min} uses; give them a --kind):")
+        for item in data["unlabeled"]:
+            print(f"  shape {item['fingerprint']}: {_count(item)}; "
+                  f"{_outcomes(item)}; tiers {', '.join(item['tiers'])}")
+    return 0
+
+
 def _result_line(result: dict) -> str:
     status = "PASS" if result["ok"] else "FAIL"
     code = "timeout" if result["timed_out"] else result["exit"]
@@ -219,6 +314,8 @@ def build_parser() -> argparse.ArgumentParser:
     opener.add_argument("--writes", action="store_true", help="The delegation may edit the worktree")
     opener.add_argument("--role", help="Role declared in the overlay")
     opener.add_argument("--continue", dest="continued_from", help="Prior role delegation id; reuse its agent")
+    opener.add_argument("--kind", help="Registered work label (check.py kinds lists them)")
+    opener.add_argument("--new-kind", metavar="DESCRIPTION", help="Register --kind as a new label with this one-line description")
     loader = commands.add_parser("brief", help="Print an open delegation's brief, checked against its hash")
     loader.add_argument("--delegation", required=True)
     loader.add_argument("--with-instructions", action="store_true",
@@ -241,6 +338,24 @@ def build_parser() -> argparse.ArgumentParser:
     execer.add_argument("--delegation", help="Open caller delegation for command evidence and lock holder")
     execer.add_argument("argv", nargs=argparse.REMAINDER, metavar="-- command", help="The command and its arguments")
     commands.add_parser("locks", help="List declared locks and who holds each slot")
+    kinds = commands.add_parser("kinds", help="List, merge, rename or mark repository-wide work labels")
+    kinds.add_argument("--all", action="store_true", help="Include declined, idle and overflow labels")
+    kinds.add_argument("--json", action="store_true")
+    kind_commands = kinds.add_subparsers(dest="kinds_command")
+    merger = kind_commands.add_parser("merge", help="Count OLD as INTO from now on, history included")
+    merger.add_argument("old")
+    merger.add_argument("into")
+    renamer = kind_commands.add_parser("rename", help="Rename a label; the old name becomes an alias")
+    renamer.add_argument("old")
+    renamer.add_argument("new")
+    marker = kind_commands.add_parser("mark", help="Record a role/script proposal decision for a label")
+    marker.add_argument("kind")
+    marker.add_argument("status", choices=patterns.STATUSES)
+    marker.add_argument("--note")
+    finder = commands.add_parser("patterns", help="Repeated work across worktrees and sessions")
+    finder.add_argument("--min", type=int, default=patterns.DEFAULT_MIN, help="Uses before a kind is a candidate")
+    finder.add_argument("--since", type=float, metavar="DAYS", help="Only count opens from the last DAYS days")
+    finder.add_argument("--json", action="store_true")
     asker = commands.add_parser("query", help="List recorded validator results")
     asker.add_argument("--delegation", required=True)
     asker.add_argument("--tree", help='A tree hash, or "current" to recompute it')
@@ -287,6 +402,12 @@ def main(argv: list[str] | None = None) -> int:
             return _exec(root, args)
         if args.command == "locks":
             return _locks(root, args)
+        if args.command == "kinds":
+            return _kinds(root, args)
+        if args.command == "patterns":
+            if args.min < 1:
+                raise DelegationError("--min needs a positive integer")
+            return _patterns(root, args)
     except DelegationError as error:
         print(f"check.py: {error}", file=sys.stderr)
         return 2

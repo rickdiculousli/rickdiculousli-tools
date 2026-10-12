@@ -52,7 +52,9 @@ applies it, including outside a checkout. Normal writes sweep at most weekly.
 Confirmed deleted, unregistered worktrees have a seven-day recovery window;
 existing unfinished work, ledger inputs, role runbooks and uncertain owners stay.
 Unreferenced briefs/context expire after 30 days; dead hash attempts are collected
-weekly. Cleanup never touches durable tracked evidence or legacy copies.
+weekly. Cleanup never touches durable tracked evidence or legacy copies. Scratch
+files untouched for 30 days are removed; pattern-log lines older than 180 days are
+folded into per-kind counts ([reference/patterns.md](reference/patterns.md)).
 
 
 ## 1. Load the overlay
@@ -62,14 +64,23 @@ The repo's overlay is `.agents/delegation.md`; its format is in
 and run `check.py lint`. Fix or report any problems it lists. If there is no
 overlay, say once that base defaults apply (parallel limit 3, return cap 400
 words, no validators, findings go to the execution log) and carry on. To create
-or change an overlay, use the `setup` skill from this plugin.
+an overlay, or to rework one broadly, use the `setup` skill from this plugin. To
+add one role or rote script, follow [Growing roles and scripts](#growing-roles-and-scripts).
+
+Also run `check.py kinds` once: it lists this repository's work labels, shared by
+every worktree and session. Use them when you open delegations (see
+[Labels and patterns](#labels-and-patterns)).
 
 ## 2. Rules
 
 1. **Delegate when the work's tokens far exceed the brief plus the review**: bulk
    reading, work a mechanical oracle verifies, or independent items that can run
    in parallel. Keep work yourself when it is short, depends on your accumulated
-   hypotheses, or is a ruling.
+   hypotheses, or is a ruling. **Script it** when the work is deterministic and
+   repetitive (the same edit across many files, a run-verify-import loop): a short
+   script in the scratch directory (`check.py paths --json` → `scratch_directory`)
+   is cheaper and more reliable than hand edits by any tier. Write it yourself or
+   brief a tier to write and run it; scratch scripts need no approval.
 2. **Pick the tier.** `execute` for work that needs reasoning but is pinned by a
    spec or oracle. `routine` for work with an obvious right answer. Use the
    overlay's `## Tier hints`. Neither tier guesses: `execute` stops and reports
@@ -107,17 +118,17 @@ or change an overlay, use the `setup` skill from this plugin.
    `## Single writer` resources. Only you apply them.
 10. **Write findings as they happen** to the overlay's `## Findings` sink (else the
     execution log): id, date, claim, status (including `refuted`), evidence. Do it
-    when a discovery or dead end is established, not at handoff. On the second
-    similar brief, or at handoff, record a concrete script or reusable-role
-    proposal in the repo findings/handoff sink (fallback: execution log), rather
-    than only in session memory. Use `name: command; what it replaces` for
-    deterministic rote scripts under `.agents/delegation/scripts/` by default;
-    writing repository scripts needs explicit approval; if the sink is
+    when a discovery or dead end is established, not at handoff. If the sink is
     tracked and delegations are open, see the hold in section 3, step 5.
-11. **Check; don't redo.** Review ledger results and the diff. Read raw material
+11. **Grow the toolkit from repeated work.** Label every delegation with `--kind`.
+    When `check.py patterns` lists a candidate, or you write a second brief like
+    an earlier one, add a role or repository script and tell the user, or propose
+    it first where the overlay's `## Authoring` says `ask` (see
+    [Growing roles and scripts](#growing-roles-and-scripts)); don't only log it.
+12. **Check; don't redo.** Review ledger results and the diff. Read raw material
     only to dig into a specific doubt. A failed result keeps its full output in
     the file `log` names; read it there instead of rerunning the command.
-12. **Quota zones**, when a relay or a soft limit is in play. You learn the zone
+13. **Quota zones**, when a relay or a soft limit is in play. You learn the zone
     from the relay or the user. At `last-task`, open no new implementation work:
     spend what's left on review, the broad check (rule 8) and findings. At
     `wrap`, close every open delegation before handing off (see section 6), and
@@ -134,10 +145,13 @@ or change an overlay, use the `setup` skill from this plugin.
 2. **Open.**
 
    ```sh
-   python3 <skill-dir>/scripts/check.py open --delegation <id> --tier execute|routine --brief "<brief-directory>/<id>.md" [--writes]
+   python3 <skill-dir>/scripts/check.py open --delegation <id> --tier execute|routine --brief "<brief-directory>/<id>.md" [--writes] --kind <label> [--new-kind "<description>"]
    ```
 
-   Pass `--writes` if the subagent may edit the worktree. Exit 2 means refused:
+   Pass `--writes` if the subagent may edit the worktree. Pass `--kind` with an
+   existing label, or a new one plus `--new-kind` (see
+   [Labels and patterns](#labels-and-patterns)); `--role` records the role's name
+   as the kind. Read any `note:` lines `open` prints. Exit 2 means refused:
    a writer is open, a writer was asked for while others are open, the parallel
    limit is reached, or the id was used. Wait for a close, or keep the work.
 3. **Start the tier agent** (section 4). Its task is one line `open` printed,
@@ -195,8 +209,9 @@ to `.agents/delegation/runbooks/`, and approved rote scripts to
 `open` materializes role sources into external context, sharing unchanged bytes
 and refusing changed bytes while any open delegation pins them. See
 [layout, migration and the public lock interface](reference/overlay.md) for
-source validation, nonfatal warnings and migration steps. Script creation needs
-explicit approval; an overlay proposal grants no permission.
+source validation, nonfatal warnings and migration steps. Adding repository
+scripts and roles follows the overlay's `## Authoring` policy (see
+[Growing roles and scripts](#growing-roles-and-scripts)).
 
 The optional `## Roles` section registers a tier, runbook and at least one reuse
 cap. Open a first use with `open --delegation <new-id> --tier execute --role capture --brief
@@ -223,6 +238,58 @@ only for the already-authorized runbook. Send its loader to the existing host
 agent solely to refresh, close the refresh delegation, then start a fresh role
 session. Do not reuse the capped agent for more task work or reload an old closed
 brief. Refreshing grants no additional tracked-file permissions.
+
+### Labels and patterns
+
+A kind labels a task type that one runbook could cover (`name-module-functions`),
+not one instance (`name-player-c-functions`). Labels are lowercase words joined by
+hyphens. The registry and the pattern log are shared by every worktree and session
+of the repository; details are in [reference/patterns.md](reference/patterns.md).
+
+- **Before labeling,** compare the brief with the labels from `check.py kinds`
+  and reuse one that fits. Deciding that two tasks are the same is your call; the
+  checker only suggests close names.
+- **An unknown label is refused** (exit 2) with the closest existing labels. Mint
+  one only after checking them: `--kind <label> --new-kind "<one-line description>"`.
+- **A shape note** (`brief shape matches kind "X"`) means this brief reads, writes
+  and checks the same places as earlier briefs under X. If they are the same task,
+  `check.py kinds merge <this> <X>`; history is kept and counted under X. Use
+  `check.py kinds rename <old> <new>` to improve a name.
+- `check.py patterns` groups uses by kind across worktrees and sessions and lists
+  **candidates**: three or more uses (`--min`), no role, and no recorded decision.
+  It also groups unlabeled briefs by shape. Run it at session start and after
+  reviewing a batch.
+
+### Growing roles and scripts
+
+When a candidate appears, or you notice a repeated brief or rote sequence:
+
+1. **Check the authoring policy** (`check.py patterns` prints it). By default,
+   and with `roles: allowed` / `scripts: allowed`, the user has approved additions
+   of that kind: add it, and tell them in one short message what you added and
+   why (role: name, tier, runbook path, `max-uses`, what it may write; script:
+   path, default `.agents/delegation/scripts/<name>`, what it replaces, how it was
+   proved). They can veto it.
+2. **Where the overlay says `ask`,** propose at once while the user is present,
+   in one message they can accept with a yes, with the same details. If they are
+   away or decline, record the proposal in the findings sink and run
+   `check.py kinds mark <kind> proposed|declined [--note]`, so a declined kind
+   stops coming back. If they veto an addition made under `allowed`, remove it
+   and mark the kind `declined`.
+3. **To add it,** wait until no delegations are open (tracked edits move the
+   tree hash). Draft the runbook yourself or through one `execute` delegation
+   that reads that kind's recent briefs, returns and findings. Then, as the single
+   writer of the overlay: write the runbook or script, add its `## Roles` or
+   `## Rote scripts` line, run `check.py lint`, `git add` the new sources, and
+   prove a script once through a validator or `check.py exec`. Finish with
+   `check.py kinds mark <kind> approved`. Use the role's name as the kind it
+   replaces (`check.py kinds rename` first if needed) so its history carries over.
+4. Promote a scratch script only through this path. Scratch scripts never need
+   approval; repository scripts and roles need it only where the overlay says
+   `ask`.
+
+This does not create new tiers or agent types: a role is a tier plus a runbook.
+Don't edit `tiers.json` or agent definitions for a repository's needs.
 
 ### Asynchronous peer role calls
 

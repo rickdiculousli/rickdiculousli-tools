@@ -106,7 +106,24 @@ python3 plugins/delegation/skills/delegation/scripts/check.py query --help
 python3 plugins/delegation/skills/delegation/scripts/check.py brief --help
 python3 plugins/delegation/skills/delegation/scripts/check.py locks
 python3 plugins/delegation/skills/delegation/scripts/check.py exec --help
+python3 plugins/delegation/skills/delegation/scripts/check.py kinds
+python3 plugins/delegation/skills/delegation/scripts/check.py patterns
 ```
+
+Since 0.8.0 the judge labels each delegation with a work kind
+(`open --kind <label>`, or `--kind <label> --new-kind "<description>"` to register
+one; an unknown label is refused with the closest existing ones). Labels and a
+pattern log are shared by every worktree and session of a repository.
+`check.py patterns` lists kinds used three or more times that have no role, plus
+unlabeled briefs grouped by shape. The judge then adds a role or repository
+script, or proposes it where you asked to approve; `kinds merge`, `kinds rename` and
+`kinds mark <kind> proposed|approved|declined` keep labels and decisions tidy.
+By default the judge adds such roles and scripts itself and tells you; an
+overlay `## Authoring` section with `roles: ask` or `scripts: ask` makes it ask
+first (setup asks which you want). Briefs also name a per-delegation scratch directory
+outside the worktree for throwaway scripts. Pattern lines are kept 180 days, then
+folded into per-kind counts; untouched scratch files are kept 30 days. See
+[the patterns reference](plugins/delegation/skills/delegation/reference/patterns.md).
 
 Optional overlay sections add script proposals (`name: command; what it
 replaces`), host-side never-write restrictions, and reusable roles:
@@ -161,7 +178,7 @@ and approved rote scripts default to `.agents/delegation/runbooks/` and
 refuses changes while any open delegation pins those bytes, and refreshes after
 all pins close. Edit tracked sources on final use. Legacy state references remain
 supported with migration warnings. General tools may stay in their own location;
-script creation requires explicit approval. See the
+the judge adds scripts and roles per the overlay's `## Authoring` policy. See the
 [layout and migration guide](plugins/delegation/skills/delegation/reference/overlay.md#repository-material-and-migration).
 
 Wrap each native process with one foreground
@@ -194,9 +211,10 @@ Windows uses standard-library byte locks; macOS/Linux use `flock`. Host peer sup
 use, with judge relay as the fallback.
 
 Setup proposes deterministic repository helpers but writes scripts only with
-explicit approval. On a second similar brief or handoff, the judge records a
-script or role proposal in the repository findings/handoff sink, falling back to
-the execution log. `needs-human` checks require user notification before work and
+explicit approval. Later, the judge adds roles and scripts for repeated work
+under the overlay's `## Authoring` policy (default `allowed`); where it says
+`ask`, it proposes them and records unaccepted proposals in the findings/handoff
+sink, falling back to the execution log. `needs-human` checks require user notification before work and
 early while the user is present, without infinite retries. Existing
 overlays remain valid. Brief footers prohibit commits unless explicitly allowed,
 first-person committed text, and host changes named by a nonempty restrictions

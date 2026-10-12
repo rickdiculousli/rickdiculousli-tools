@@ -81,6 +81,19 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
             f"    {exec_line}",
             "",
         ]
+    from .state import paths_for
+    area = paths_for(root).cache / "scratch" / delegation
+    scratch = [
+        "Scratch: throwaway scripts and intermediate files go here, outside the worktree.",
+        "Create it if needed. It is not evidence, and untouched files expire after 30 days:",
+        "",
+        f"    {shlex.quote(str(area))}",
+        "",
+        "Prefer a short script there to repeating the same edit or command by hand. If one",
+        "would help future briefs, name it under Surprises; don't copy it into the worktree",
+        "unless \"May write\" covers that path.",
+        "",
+    ]
     return "\n".join(
         [
             f"Delegation id: {delegation}",
@@ -103,6 +116,7 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
             *hosts,
             *locks,
             *safety,
+            *scratch,
             "Return format:",
             "",
             "```",

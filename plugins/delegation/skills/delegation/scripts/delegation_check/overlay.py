@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import shlex
@@ -22,7 +22,10 @@ KNOWN_HEADINGS: tuple[str, ...] = (
     "Roles",
     "Rote scripts",
     "Host side effects",
+    "Authoring",
 )
+AUTHORING_KEYS = ("roles", "scripts")
+AUTHORING_VALUES = ("ask", "allowed")
 DEFAULT_PARALLEL_LIMIT = 3
 DEFAULT_RETURN_CAP = 400
 
@@ -71,6 +74,7 @@ class Overlay:
     problems: tuple[str, ...]
     roles: dict[str, Role]
     warnings: tuple[str, ...] = ()
+    authoring: dict[str, str] = field(default_factory=lambda: dict.fromkeys(AUTHORING_KEYS, "allowed"))
 
 
 def overlay_path(root: Path) -> Path:
@@ -308,4 +312,16 @@ def load_overlay(root: Path) -> Overlay:
                 if '/' in executable or '\\' in executable or Path(executable).suffix in {'.py', '.sh', '.js', '.rb', '.pl', '.ps1', '.bat', '.cmd'}:
                     if not normalized.startswith('.agents/delegation/'):
                         warnings.append(f'line {number}: rote script outside .agents/delegation/: {executable}; general tools may stay in their own location')
-    return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems), roles, tuple(warnings))
+    authoring = dict.fromkeys(AUTHORING_KEYS, "allowed")
+    seen_authoring: set[str] = set()
+    for number, text in bodies.get("Authoring", []):
+        name, sep, value = (p.strip().lower() for p in text.partition(":"))
+        if not sep or name not in AUTHORING_KEYS or value not in AUTHORING_VALUES:
+            problems.append(f'line {number}: authoring needs "roles: ask|allowed" or "scripts: ask|allowed", got "{text}"')
+        elif name in seen_authoring:
+            problems.append(f'line {number}: duplicate authoring entry "{name}"')
+        else:
+            seen_authoring.add(name)
+            authoring[name] = value
+    return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems), roles,
+                   tuple(warnings), authoring)

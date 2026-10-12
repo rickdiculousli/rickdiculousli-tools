@@ -38,6 +38,8 @@ and the overlay's return fields and cap. The footer also prohibits commits unles
 the brief explicitly authorizes them, first-person language in committed files,
 and host-side never-write changes outside the isolated worktree when the overlay
 section is nonempty. These are agent instructions, not filesystem enforcement.
+It names the delegation's scratch directory for throwaway scripts, so `May write`
+doesn't need to list it.
 
 ```markdown
 # Delegation <id>
