@@ -107,7 +107,11 @@ def _input_digest(root: Path, relative: str) -> str:
 
 
 def tree_hash(root: Path, extra_inputs: Sequence[str] = ()) -> str:
-    tree = git_tree(root)
+    return with_extra_inputs(root, git_tree(root), extra_inputs)
+
+
+def with_extra_inputs(root: Path, tree: str, extra_inputs: Sequence[str] = ()) -> str:
+    """Combine a precomputed Git tree with current inputs without acquiring a mutex."""
     if not extra_inputs:
         return tree
     parts = [f"git {tree}\n"]

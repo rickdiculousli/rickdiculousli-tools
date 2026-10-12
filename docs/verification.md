@@ -618,3 +618,50 @@ user's `.claude/plugins/cache/rickdiculousli-tools/long-horizon/0.3.0` and
 loads the declared local source folder. Restart/reload Claude plugins and start
 a new Codex session to consume updated skill instructions. Installation and CLI
 verification do not claim that running model sessions reloaded their skills.
+
+## Delegation repository material — 0.7.2 (2026-10-11)
+
+The overlay remains `.agents/delegation.md`. Optional tracked role sources and
+approved rote scripts default to `.agents/delegation/runbooks/` and
+`.agents/delegation/scripts/`. `open --role` and continuations validate tracked
+sources and materialize them atomically into external context. Any open brief's
+context pin, including equivalent paths and in-state symlinks, prevents changed
+bytes from replacing its runbook. Final-use refresh edits the authorized tracked
+source; subsequent use rematerializes after all pins close. Legacy state-only
+roles remain supported. Layout warnings are nonfatal, so general tools can stay
+in their existing location and remain independent of the checker.
+
+The supported lock interface is the existing public `exec --lock NAME
+--timeout SECONDS -- CMD` CLI, with one foreground wrapper per native process,
+declared `slots=N`, and one shared XDG state root across repository worktrees.
+Private `delegation_check` modules are not an import API. Migration instructions
+cover moving reviewed material, updating overlay paths, removing startup copying
+and private imports, and rerunning validators; no consuming repository was edited.
+
+Verification on this Apple Silicon Mac:
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed.
+  Source and generated host manifests/Claude marketplace declare 0.7.2.
+- `TMPDIR=/private/tmp python3 -m unittest discover -s tests -v`: **362 tests
+  passed**, 90.893 seconds. Log: `/private/tmp/delegation-full-tests-final.log`.
+  Canonical TMPDIR avoids the previously documented macOS fixture path issue.
+  The 25 role tests cover tracked-source copying/sharing/refresh, pinning by
+  non-role briefs and path/symlink aliases, first and refreshed brief loads,
+  unsafe/untracked sources, literal Git pathspecs, symlink destinations, context
+  Extra-input fingerprints, legacy roles, and nonfatal layout warnings including
+  quoted scripts, bare scripts and `uv run --script`. Added regressions were
+  observed failing before their fixes. Existing real-process tests cover shared
+  locks across worktrees, multiple slots, waiting, exit codes and timeouts.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  passed at **2026-10-12T02:40:36.104413+00:00**, on **Codex 0.162.1** and
+  **Claude Code 2.1.296**. All seven plugins were installed in disposable
+  profiles, compared to sources, inspected, uninstalled, and their marketplace
+  removed without cleanup errors. Normal profiles were untouched by these tests.
+- Independent review found brief context alias handling; failing-then-passing
+  regressions verified the corrections for normalized paths and in-state
+  symlinks. Fresh-context comparison of old and new skill instructions recovered
+  the intended script home, checker-owned copying, tracked-source final refresh,
+  optional standalone tools, and six separate foreground lock wrappers.
+
+No native Windows, GUI, or sustained host role/model execution pilot was
+performed for this update. Installation results are recorded below separately.

@@ -28,7 +28,7 @@ Resolve directories with `python3 "<skill-dir>/scripts/check.py" paths --json`
 `context_directory`, and `log_directory`; quote every returned shell path.
 Inspection creates no payload. Plugin-owned bytes live under the resolved state root, and Git
 hash scratch under the resolved cache root, outside the checkout and installation. In briefs
-and role declarations name context as `state:context/<relative-path>`; `brief`
+name context as `state:context/<relative-path>`; roles name tracked sources; `brief`
 checks its bytes and prints the resolved quoted path. Keep a pinned context
 single-writer and immutable until its active briefs have closed.
 
@@ -111,7 +111,8 @@ or change an overlay, use the `setup` skill from this plugin.
     similar brief, or at handoff, record a concrete script or reusable-role
     proposal in the repo findings/handoff sink (fallback: execution log), rather
     than only in session memory. Use `name: command; what it replaces` for
-    deterministic rote scripts; writing repository scripts needs explicit approval; if the sink is
+    deterministic rote scripts under `.agents/delegation/scripts/` by default;
+    writing repository scripts needs explicit approval; if the sink is
     tracked and delegations are open, see the hold in section 3, step 5.
 11. **Check; don't redo.** Review ledger results and the diff. Read raw material
     only to dig into a specific doubt. A failed result keeps its full output in
@@ -188,6 +189,15 @@ prints that path. `check.py tree` prints the current tree hash.
 
 ### Reusable roles and continuations
 
+Keep the overlay at `.agents/delegation.md`. Optional tracked role sources default
+to `.agents/delegation/runbooks/`, and approved rote scripts to
+`.agents/delegation/scripts/`. General tools may remain in their own location.
+`open` materializes role sources into external context, sharing unchanged bytes
+and refusing changed bytes while any open delegation pins them. See
+[layout, migration and the public lock interface](reference/overlay.md) for
+source validation, nonfatal warnings and migration steps. Script creation needs
+explicit approval; an overlay proposal grants no permission.
+
 The optional `## Roles` section registers a tier, runbook and at least one reuse
 cap. Open a first use with `open --delegation <new-id> --tier execute --role capture --brief
 <brief-directory>/<new-id>.md`; continue it with `open --delegation <new-id> --tier execute
@@ -203,8 +213,9 @@ outputs, rather than measuring actual model context. Prefer a use-count cap.
 `collaboration.followup_task`. The judge maintains the mapping from delegation
 ids to host agent ids; the checker does not know it. Preserve the original
 tracked-file write permissions. Proactively refresh the runbook during the final
-allowed use, after work and checks complete and before close. That change
-invalidates the current brief's recorded hash; do not reload it afterward.
+allowed use by editing its tracked source after work and checks complete and
+before close. Keep the pinned external context unchanged so the current brief
+remains readable. Legacy state-only roles should migrate before refreshing.
 
 A cap refusal happens after the prior use is already closed. Open a separate
 short refresh delegation without `--role` or `--continue`, granting `May write`

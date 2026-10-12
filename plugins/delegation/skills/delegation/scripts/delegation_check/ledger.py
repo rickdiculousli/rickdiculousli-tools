@@ -6,7 +6,7 @@ import contextlib
 from datetime import datetime, timezone
 import hashlib
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import os
 import platform
 import re
@@ -14,12 +14,13 @@ import signal
 import subprocess
 import sys
 import time
+import tempfile
 from typing import Sequence
 
 from . import DelegationError
 from . import locks, state
-from .overlay import Lock, Role, Validator
-from .tree import state_dir, tree_hash
+from .overlay import Lock, Role, Validator, _escapes
+from .tree import state_dir, tree_hash, git_tree, with_extra_inputs
 
 SCHEMA = 1
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
@@ -111,6 +112,25 @@ def pending(root: Path) -> list[dict]:
     return _pending(read_events(root))
 
 
+def _runbook_source(root: Path, reference: str) -> tuple[Path, bytes]:
+    """Validate before reading; literal pathspecs cannot authorize wildcard aliases."""
+    if not reference or _escapes(reference):
+        raise DelegationError(f"unsafe role runbook source: {reference}")
+    source = root / reference.replace('\\', '/')
+    try:
+        resolved_name = source.resolve().relative_to(root).as_posix()
+    except ValueError:
+        raise DelegationError(f"role runbook source escapes repository: {reference}")
+    for name in {reference.replace('\\', '/'), resolved_name}:
+        tracked = subprocess.run(['git', 'ls-files', '--error-unmatch', '--', ':(literal)' + name],
+                                 cwd=root, capture_output=True)
+        if tracked.returncode:
+            raise DelegationError(f"role runbook source and resolved target must be tracked: {name}")
+    if not source.is_file():
+        raise DelegationError(f"role runbook source must be a tracked file: {reference}")
+    return source, source.read_bytes()
+
+
 def open_delegation(
     root: Path,
     delegation: str,
@@ -143,14 +163,25 @@ def open_delegation(
             brief_name = str(brief.resolve())
     brief_bytes = brief.read_bytes()
     brief_sha = hashlib.sha256(brief_bytes).hexdigest()
-    context = _context_hashes(root, brief_bytes)
-    tree = tree_hash(root, extra_inputs)
-    with ledger_lock(root, write=True):
+    selected_role = role_name
+    if continued_from and not selected_role:
+        prior_open = next((event for event in read_events(root)
+                           if event.get('event') == 'open' and event.get('delegation') == continued_from), {})
+        selected_role = prior_open.get('role')
+    selected = (roles or {}).get(selected_role)
+    source_snapshot = None
+    if selected and not selected.runbook.startswith('state:'):
+        source_snapshot = _runbook_source(root_resolved, selected.runbook)[1]
+    state.opportunistic()
+    tree = git_tree(root)
+    with ledger_lock(root):
         events = _read_events_unlocked(root)
         if any(e.get("event") == "open" and e.get("delegation") == delegation for e in events):
             raise DelegationError(f"delegation id already used: {delegation}")
         active = _pending(events)
         metadata = {}
+        material = None
+        context = {}
         prior = None
         if continued_from:
             prior = next((e for e in events if e.get("event") == "open"
@@ -166,23 +197,59 @@ def open_delegation(
             role = (roles or {}).get(role_name)
             if role is None or role.tier != tier:
                 raise DelegationError(f"unknown role or wrong tier: {role_name}")
-            target = state.context_path(root, role.runbook)
-            if not target.is_file():
-                raise DelegationError(f"role runbook not found or escapes context directory: {role.runbook}")
-            context[role.runbook] = hashlib.sha256(target.read_bytes()).hexdigest()
+            source_name = None
+            runbook_ref = role.runbook
+            if not runbook_ref.startswith('state:context/'):
+                source_name = PurePosixPath(runbook_ref.replace('\\', '/')).as_posix()
+                source, source_bytes = _runbook_source(root_resolved, runbook_ref)
+                if source_snapshot != source_bytes:
+                    raise DelegationError("role runbook source changed while hashing tree; retry")
+                runbook_ref = 'state:context/' + source_name
+                target = state.context_path(root, runbook_ref)
+                if target.is_symlink():
+                    raise DelegationError(f"materialized runbook destination must not be a symlink: {target}")
+                digest = hashlib.sha256(source_bytes).hexdigest()
+                pins = [recorded_digest for event in active
+                        for reference, recorded_digest in event.get('context', {}).items()
+                        if state.context_path(root, reference).resolve() == target.resolve()]
+                if pins and (not target.is_file() or target.read_bytes() != source_bytes
+                             or any(recorded_digest != digest for recorded_digest in pins)):
+                    raise DelegationError(f"role runbook context is pinned by open delegations; close all pins before rematerializing {source_name}")
+                material = (target, source_bytes, source)
+            else:
+                target = state.context_path(root, runbook_ref)
+                if not target.is_file():
+                    raise DelegationError(f"role runbook not found or escapes context directory: {runbook_ref}")
+                source_bytes = target.read_bytes()
+                digest = hashlib.sha256(source_bytes).hexdigest()
+            # Hash references under the transaction, allowing a new role context reference
+            # without writing its proposed bytes until all admission checks pass.
+            for ref in sorted(set(CONTEXT_REF.findall(brief_bytes.decode('utf-8', errors='replace')))):
+                if state.context_path(root, ref).resolve() == target.resolve():
+                    context[ref] = digest
+                else:
+                    context.update(_context_hashes(root, ref.encode()))
+            context[runbook_ref] = digest
             session = prior.get('agent_session', continued_from) if prior else delegation
             chain = [e for e in events if e.get('event') == 'open' and e.get('agent_session') == session]
             if any(e.get('agent_session') == session for e in active):
                 raise DelegationError("role agent has an open brief; review and close it before continuing")
             uses = len(chain) + 1
-            size = len(brief_bytes) + sum(state.context_path(root, ref).stat().st_size for ref in context)
+            size = len(brief_bytes) + sum(
+                len(source_bytes) if state.context_path(root, ref).resolve() == target.resolve()
+                else state.context_path(root, ref).stat().st_size
+                for ref in context
+            )
             context_bytes = sum(e.get('context_bytes_added', 0) for e in chain) + size
             if ((role.max_uses is not None and uses > role.max_uses)
                     or (role.max_context_bytes is not None and context_bytes > role.max_context_bytes)):
                 raise DelegationError(f"reuse cap hit for role {role_name}; have the agent refresh the role runbook first, then start a fresh agent")
-            metadata = {'role': role_name, 'role_runbook': role.runbook,
+            metadata = {'role': role_name, 'role_runbook': runbook_ref,
+                        **({'role_runbook_source': source_name} if source_name else {}),
                         'agent_session': session, 'continued_from': continued_from,
                         'uses': uses, 'context_bytes': context_bytes, 'context_bytes_added': size}
+        else:
+            context = _context_hashes(root, brief_bytes)
         if writes and active:
             raise DelegationError(
                 f"a writer needs the worktree to itself; open: {', '.join(e['delegation'] for e in active)}"
@@ -195,6 +262,27 @@ def open_delegation(
                 raise DelegationError(
                     f"parallel limit reached ({len(active)} of {parallel_limit} readers open)"
                 )
+        if material and _runbook_source(root_resolved, source_name)[1] != material[1]:
+            raise DelegationError("role runbook source changed while opening; retry")
+        # Reject unsafe extra inputs before committing proposed context bytes.
+        with_extra_inputs(root, tree, extra_inputs)
+        state.Paths(root).ensure()
+        if material:
+            target, source_bytes, source = material
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.is_file() or target.read_bytes() != source_bytes:
+                temporary = None
+                try:
+                    with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as handle:
+                        temporary = handle.name
+                        handle.write(source_bytes)
+                        handle.flush()
+                        os.fsync(handle.fileno())
+                    os.replace(temporary, target)
+                finally:
+                    if temporary and os.path.exists(temporary):
+                        os.unlink(temporary)
+        tree = with_extra_inputs(root, tree, extra_inputs)
         return _append(
             root,
             {

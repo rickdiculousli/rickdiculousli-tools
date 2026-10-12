@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
+import shlex
 
 KNOWN_HEADINGS: tuple[str, ...] = (
     "Bulk work",
@@ -69,6 +70,7 @@ class Overlay:
     return_cap: int
     problems: tuple[str, ...]
     roles: dict[str, Role]
+    warnings: tuple[str, ...] = ()
 
 
 def overlay_path(root: Path) -> Path:
@@ -76,7 +78,7 @@ def overlay_path(root: Path) -> Path:
 
 
 def _escapes(path: str) -> bool:
-    if PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute():
+    if PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute() or PureWindowsPath(path).drive:
         return True
     return ".." in PurePosixPath(path.replace("\\", "/")).parts
 
@@ -125,7 +127,7 @@ def _validator(number: int, command: str, attributes: str | None, problems: list
     return Validator(command, cheap, timeout, lock, requires, needs_human)
 
 
-def _roles(lines: list[tuple[int, str]], problems: list[str]) -> dict[str, Role]:
+def _roles(lines: list[tuple[int, str]], problems: list[str], warnings: list[str]) -> dict[str, Role]:
     roles = {}
     for number, text in lines:
         name, sep, attributes = (p.strip() for p in text.partition(":"))
@@ -140,9 +142,13 @@ def _roles(lines: list[tuple[int, str]], problems: list[str]) -> dict[str, Role]
             problems.append(f'line {number}: invalid or duplicate role name "{name}"')
         if tier not in {"execute", "routine"}:
             problems.append(f'line {number}: role tier must be execute or routine')
-        if (_escapes(runbook.removeprefix("state:context/")) or not runbook.startswith("state:context/")
-                or not runbook[len("state:context/"):]):
-            problems.append(f'line {number}: role runbook must use state:context/<relative-path>')
+        relative = runbook.removeprefix("state:context/")
+        if (not relative or _escapes(relative) or (runbook.startswith("state:") and not runbook.startswith("state:context/"))):
+            problems.append(f'line {number}: role runbook needs a safe repository-relative source or state:context/<relative-path>')
+        elif runbook.startswith("state:context/"):
+            warnings.append(f'line {number}: legacy runbook {runbook}; migrate to a tracked .agents/delegation/runbooks/ source')
+        elif not PurePosixPath(runbook.replace("\\", "/")).as_posix().startswith(".agents/delegation/"):
+            warnings.append(f'line {number}: runbook source outside .agents/delegation/: {runbook}; general tool references are supported')
         caps = []
         for key in ("max-uses", "max-context-bytes"):
             value = values.get(key)
@@ -197,6 +203,7 @@ def _lock(number: int, attributes: str, problems: list[str]) -> Lock:
 def load_overlay(root: Path) -> Overlay:
     path = overlay_path(root)
     problems: list[str] = []
+    warnings: list[str] = []
     if not path.is_file():
         return Overlay(path, False, {}, {}, (), {}, DEFAULT_PARALLEL_LIMIT, DEFAULT_RETURN_CAP, (), {})
 
@@ -276,9 +283,29 @@ def load_overlay(root: Path) -> Overlay:
                 problems.append(f'line {number}: unregistered validator "{match.group(1)}"')
 
     sections = {name: "\n".join(text for _, text in lines) for name, lines in bodies.items()}
-    roles = _roles(bodies.get("Roles", []), problems)
+    roles = _roles(bodies.get("Roles", []), problems, warnings)
     for number, text in bodies.get("Rote scripts", []):
         name, sep, body = (p.strip() for p in text.partition(":"))
         if not sep or not _NAME.fullmatch(name) or not body:
             problems.append(f'line {number}: rote script needs "name: command; what it replaces"')
-    return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems), roles)
+        else:
+            command = body.partition(';')[0].strip()
+            try:
+                words = shlex.split(command)
+            except ValueError:
+                warnings.append(f'line {number}: cannot inspect rote command quoting: {command}')
+                continue
+            if words:
+                executable = words[0]
+                if re.fullmatch(r'(?:python(?:\d+(?:\.\d+)*)?|sh|bash|zsh|node|ruby|perl)(?:\.exe)?', Path(executable).name):
+                    # Interpreter options and ordinary command arguments are not script locations.
+                    candidates = [word for word in words[1:] if not word.startswith('-')]
+                    executable = '' if any(word in {'-c', '-m', '-e'} for word in words[1:]) else (candidates[0] if candidates else '')
+                if Path(words[0]).name in {'uv', 'uv.exe'} and '--script' in words:
+                    position = words.index('--script') + 1
+                    executable = words[position] if position < len(words) else ''
+                normalized = PurePosixPath(executable.replace('\\', '/')).as_posix()
+                if '/' in executable or '\\' in executable or Path(executable).suffix in {'.py', '.sh', '.js', '.rb', '.pl', '.ps1', '.bat', '.cmd'}:
+                    if not normalized.startswith('.agents/delegation/'):
+                        warnings.append(f'line {number}: rote script outside .agents/delegation/: {executable}; general tools may stay in their own location')
+    return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems), roles, tuple(warnings))

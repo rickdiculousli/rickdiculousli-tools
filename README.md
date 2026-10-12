@@ -111,11 +111,11 @@ python3 plugins/delegation/skills/delegation/scripts/check.py exec --help
 Optional overlay sections add script proposals (`name: command; what it
 replaces`), host-side never-write restrictions, and reusable roles:
 
-```text
-Delegation 0.7.0 uses `check.py paths --json` (or the text view) to resolve
+Delegation 0.7.2 uses `check.py paths --json` (or the text view) to resolve
 `brief_directory`, `context_directory`, `log_directory`, the repository resource
 locks and permanent root mutex. Quote returned paths. Context references in
-briefs, roles and `Extra inputs` use `state:context/<relative-path>`; the checker
+briefs and `Extra inputs` use `state:context/<relative-path>`; roles name tracked
+repository-relative sources. The checker
 rejects traversal and symlink escapes. Recorded generated paths are state-relative
 with `location: state`; caller brief paths may remain absolute.
 
@@ -148,11 +148,28 @@ fail with a diagnostic and never switch lock domains. Workspace sandboxes must
 allow both configured external XDG roots; grant those paths through the host’s
 permission configuration rather than changing roots for individual commands.
 
+```text
 ## Roles
-capture: tier=execute, runbook=state:context/capture.md, max-uses=8, max-context-bytes=100000
+capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md, max-uses=8, max-context-bytes=100000
 ## Locks
 games: slots=6, wait=3600
 ```
+
+The overlay stays at `.agents/delegation.md`; optional tracked runbook sources
+and approved rote scripts default to `.agents/delegation/runbooks/` and
+`.agents/delegation/scripts/`. `open` copies role sources into external context,
+refuses changes while any open delegation pins those bytes, and refreshes after
+all pins close. Edit tracked sources on final use. Legacy state references remain
+supported with migration warnings. General tools may stay in their own location;
+script creation requires explicit approval. See the
+[layout and migration guide](plugins/delegation/skills/delegation/reference/overlay.md#repository-material-and-migration).
+
+Wrap each native process with one foreground
+`python3 "$DELEGATION_CHECKER" exec --lock games --timeout 300 -- <command>`.
+Configure the checker path from an installed skill or any checkout and quote
+paths with spaces. Slots apply across worktrees sharing the same XDG state root;
+keep children in the foreground. Outer orchestration is optional, and validators
+and general tools remain usable standalone through their existing commands.
 
 Roles require at least one cap; prefer `max-uses`. Counts include the first brief
 and all ancestor branches. Byte caps accumulate brief/context file sizes per use,

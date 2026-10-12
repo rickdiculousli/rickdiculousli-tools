@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from delegation_support import git_repo, run_cli, write_overlay
+from delegation_support import git, git_repo, run_cli, write_overlay
 from delegation_check.ledger import read_events
 from delegation_check.overlay import load_overlay
 
@@ -50,6 +50,170 @@ games: slots=6, wait=2
 
     def close(self, name):
         self.assertEqual(run_cli(self.root, 'close', '--delegation', name, '--outcome', 'done').returncode, 0)
+
+    def source_role(self, path='.agents/delegation/runbooks/capture.md'):
+        source = self.root / path
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_text('tracked runbook\n')
+        git(self.root, 'add', path)
+        write_overlay(self.root, f'## Roles\ncapture: tier=execute, runbook={path}, max-uses=2\n')
+        return source
+
+    def test_source_materializes_shares_and_refreshes_after_all_pins_close(self):
+        source = self.source_role()
+        self.assertEqual(self.open('a').returncode, 0)
+        event = read_events(self.root)[0]
+        target = state_payload(self.root) / event['role_runbook'][6:]
+        self.assertEqual(target.read_text(), 'tracked runbook\n')
+        self.assertEqual(self.open('b').returncode, 0)
+        self.close('a')
+        source.write_text('refreshed source\n')
+        before = target.read_bytes()
+        result = self.open('c')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('pinned', result.stderr)
+        self.assertEqual(target.read_bytes(), before)
+        self.assertEqual(run_cli(self.root, 'brief', '--delegation', 'b').returncode, 0)
+        self.close('b')
+        self.assertEqual(self.open('fresh').returncode, 0)
+        self.assertEqual(target.read_text(), 'refreshed source\n')
+        text = run_cli(self.root, 'brief', '--delegation', 'fresh').stdout
+        self.assertIn(str(source), text)
+
+    def test_nonrole_context_pin_prevents_source_overwrite(self):
+        source = self.source_role()
+        self.assertEqual(self.open('seed').returncode, 0)
+        ref = read_events(self.root)[0]['role_runbook']
+        self.close('seed')
+        self.brief.write_text('Read ' + ref + '\n')
+        self.assertEqual(self.open('plain', role=None).returncode, 0)
+        source.write_text('updated\n')
+        result = self.open('role')
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('pinned', result.stderr)
+
+    def test_alias_nonrole_context_pin_prevents_overwrite(self):
+        source = self.source_role()
+        self.assertEqual(self.open('seed').returncode, 0)
+        self.close('seed')
+        self.brief.write_text('Read state:context/./.agents/delegation/runbooks/capture.md\n')
+        self.assertEqual(self.open('plain', role=None).returncode, 0)
+        source.write_text('updated\n')
+        self.assertEqual(self.open('role').returncode, 2)
+        self.assertEqual(run_cli(self.root, 'brief', '--delegation', 'plain').returncode, 0)
+
+    def test_tree_extra_context_digest_reflects_new_materialization(self):
+        self.source_role()
+        with (self.root / '.agents/delegation.md').open('a') as handle:
+            handle.write('## Extra inputs\nstate:context/.agents/delegation/runbooks/\n')
+        self.assertEqual(self.open('a').returncode, 0)
+        self.assertEqual(read_events(self.root)[0]['tree'], run_cli(self.root, 'tree').stdout.strip())
+
+    def test_role_brief_alias_reads_first_materialization(self):
+        self.source_role()
+        self.brief.write_text('Read state:context/./.agents/delegation/runbooks/capture.md\n')
+        result = self.open('first')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(run_cli(self.root, 'brief', '--delegation', 'first').returncode, 0)
+
+    def test_role_brief_alias_reads_refreshed_materialization(self):
+        source = self.source_role()
+        self.assertEqual(self.open('seed').returncode, 0)
+        self.close('seed')
+        source.write_text('refreshed runbook\n')
+        self.brief.write_text('Read state:context/./.agents/delegation/runbooks/capture.md\n')
+        result = self.open('fresh')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        loaded = run_cli(self.root, 'brief', '--delegation', 'fresh')
+        self.assertEqual(loaded.returncode, 0, loaded.stderr)
+
+    def test_context_symlink_pin_prevents_source_overwrite(self):
+        source = self.source_role()
+        self.assertEqual(self.open('seed').returncode, 0)
+        target = state_payload(self.root) / read_events(self.root)[0]['role_runbook'][6:]
+        self.close('seed')
+        (state_payload(self.root) / 'context/alias.md').symlink_to(target)
+        self.brief.write_text('Read state:context/alias.md\n')
+        self.assertEqual(self.open('plain', role=None).returncode, 0)
+        source.write_text('changed source\n')
+        result = self.open('role')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(run_cli(self.root, 'brief', '--delegation', 'plain').returncode, 0)
+
+    def test_role_brief_symlink_reads_first_and_refreshed_materialization(self):
+        source = self.source_role()
+        target = state_payload(self.root) / 'context/.agents/delegation/runbooks/capture.md'
+        (state_payload(self.root) / 'context/alias.md').symlink_to(target)
+        self.brief.write_text('Read state:context/alias.md\n')
+        for name in ('first', 'fresh'):
+            result = self.open(name)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            loaded = run_cli(self.root, 'brief', '--delegation', name)
+            self.assertEqual(loaded.returncode, 0, loaded.stderr)
+            self.close(name)
+            source.write_text('refreshed source\n')
+
+    def test_materialization_refuses_symlink_destination(self):
+        self.source_role()
+        target = state_payload(self.root) / 'context/.agents/delegation/runbooks/capture.md'
+        target.parent.mkdir(parents=True)
+        target.symlink_to(self.context)
+        before = self.context.read_bytes()
+        result = self.open('role')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertTrue(target.is_symlink())
+        self.assertEqual(self.context.read_bytes(), before)
+
+    def test_source_must_be_tracked_contained_and_safe_on_windows(self):
+        source = self.source_role()
+        git(self.root, 'reset', '--', str(source))
+        self.assertEqual(self.open('untracked').returncode, 2)
+        git(self.root, 'add', str(source))
+        source.unlink()
+        outside = self.root.parent / 'outside.md'
+        outside.write_text('outside')
+        source.symlink_to(outside)
+        self.assertEqual(self.open('symlink').returncode, 2)
+        for path in ('../x.md', r'..\x.md', r'C:\x.md', r'C:x.md', '/x.md'):
+            write_overlay(self.root, f'## Roles\ncapture: tier=execute, runbook={path}, max-uses=2\n')
+            self.assertEqual(run_cli(self.root, 'lint').returncode, 1, path)
+
+    def test_tracked_symlink_cannot_load_untracked_target(self):
+        source = self.source_role()
+        source.unlink()
+        target = self.root / 'untracked.md'
+        target.write_text('untracked secret')
+        source.symlink_to(target)
+        git(self.root, 'add', str(source))
+        result = self.open('a')
+        self.assertEqual(result.returncode, 2)
+
+    def test_literal_source_name_cannot_match_other_tracked_files(self):
+        self.source_role()
+        source = self.root / '.agents/delegation/runbooks/capt*.md'
+        source.write_text('untracked')
+        write_overlay(self.root, '## Roles\ncapture: tier=execute, runbook=.agents/delegation/runbooks/capt*.md, max-uses=2\n')
+        self.assertEqual(self.open('a').returncode, 2)
+
+    def test_layout_warnings_do_not_block_and_ignore_interpreter_arguments(self):
+        self.source_role('docs/capture.md')
+        with (self.root / '.agents/delegation.md').open('a') as handle:
+            handle.write('## Rote scripts\nlocal: python3 ".agents/delegation/scripts/a b.py" --output docs/result.md; approved\ngeneral: python3 "tools/a b.py" --flag; general tool\n')
+        result = run_cli(self.root, 'lint')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('warning:', result.stdout)
+        self.assertIn('docs/capture.md', result.stdout)
+        self.assertIn('tools/a b.py', result.stdout)
+        self.assertNotIn('docs/result.md', result.stdout)
+        self.assertEqual(self.open('a').returncode, 0)
+
+    def test_rote_warning_detects_uv_and_bare_scripts_without_dot_prefix_false_positive(self):
+        write_overlay(self.root, '## Rote scripts\nbare: python3 capture.py; approved\nuv: uv run --script "tools/a b.py" --flag; approved\nlocal: python3 "./.agents/delegation/scripts/a b.py"; approved\n')
+        result = run_cli(self.root, 'lint')
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('capture.py', result.stdout)
+        self.assertIn('tools/a b.py', result.stdout)
+        self.assertNotIn('./.agents/delegation/scripts/a b.py', result.stdout)
 
     def test_optional_sections_and_safety_footer(self):
         self.assertEqual(run_cli(self.root, 'lint').returncode, 0)

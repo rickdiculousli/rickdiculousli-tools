@@ -21,6 +21,8 @@ def _lint(root: Path) -> int:
     if not overlay.exists:
         print(f"No overlay at {overlay.path}; base defaults apply.")
         return 0
+    for warning in overlay.warnings:
+        print("warning: " + warning)
     if overlay.problems:
         for problem in overlay.problems:
             print(problem)
@@ -33,6 +35,8 @@ def _open(root: Path, args: argparse.Namespace) -> int:
     overlay = load_overlay(root)
     if overlay.problems:
         raise DelegationError('overlay lint problems: ' + '; '.join(overlay.problems))
+    for warning in overlay.warnings:
+        print("warning: " + warning, file=sys.stderr)
     event = open_delegation(
         root, args.delegation, args.tier, args.brief, args.writes,
         overlay.parallel_limit, overlay.extra_inputs,
@@ -56,6 +60,8 @@ def _brief(root: Path, args: argparse.Namespace) -> int:
     head = f"{tier_instructions(event['tier'])}\n\n" if args.with_instructions else ""
     if event.get('role'):
         text += '\n\nRole runbook (' + event['role_runbook'] + '): read ' + shlex.quote(str(state.context_path(root, event['role_runbook'])))
+        if event.get('role_runbook_source'):
+            text += '\nRefresh the tracked source on final use: ' + shlex.quote(str(root / event['role_runbook_source'])) + '; keep the pinned external context unchanged.'
     print(f"{head}{text}\n\n{footer(root, args.delegation, load_overlay(root))}", end="")
     return 0
 

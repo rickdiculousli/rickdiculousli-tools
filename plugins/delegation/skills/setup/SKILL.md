@@ -25,7 +25,7 @@ Resolve directories with `python3 "<skill-dir>/scripts/check.py" paths --json`
 `context_directory`, and `log_directory`; quote every returned shell path.
 Inspection creates no payload. Plugin-owned bytes live under the resolved state root, and Git
 hash scratch under the resolved cache root, outside the checkout and installation. In briefs
-and role declarations name context as `state:context/<relative-path>`; `brief`
+name context as `state:context/<relative-path>`; roles name tracked sources; `brief`
 checks its bytes and prints the resolved quoted path. Keep a pinned context
 single-writer and immutable until its active briefs have closed.
 
@@ -71,8 +71,8 @@ source in bulk. Collect:
 | Overlay heading | Look for |
 |---|---|
 | `## Validators` | Commands that pass or fail mechanically: test suites, linters, type checks, consistency scripts. Each must run from the root, exit 0 on success, not edit tracked files (that makes results `unstable`), and finish in minutes. Prefer offline ones. Mark fast linters and format checks `[cheap]`; give slow suites `[timeout=<seconds>]`; give builds that compete for memory or a device the same `[lock=<name>]`. Mark checks requiring human action `[needs-human]` and notify the user before work and early while the user is present. |
-| `## Rote scripts` | Deterministic multi-step rote sequences (run N jobs → verify → import → index) that could become repository helpers. Propose `name: command; what it replaces`, with the proposed script path and steps. Ask which repeated sequences the user wants automated; write scripts only with explicit approval. |
-| `## Roles` | Repeated specialist briefs that can share a runbook. Propose tier, runbook path and at least one cap; prefer a use-count cap. |
+| `## Rote scripts` | Deterministic multi-step rote sequences (run N jobs → verify → import → index) that could become repository helpers. Propose `name: command; what it replaces`, with default path `.agents/delegation/scripts/<name>` and steps; keep general tools where they are. Ask which repeated sequences the user wants automated; write scripts only with explicit approval. |
+| `## Roles` | Repeated specialist briefs that can share a runbook. Propose tier, tracked `.agents/delegation/runbooks/<role>.md` source and at least one cap; prefer a use-count cap. |
 | `## Host side effects` | User-wide configuration, live saves and other host paths outside the worktree that delegated work must never change. Record one prohibited change per line. |
 | `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. |
 | `## Oracle` | What ultimately says work is right (golden files, reference traces, a spec suite). Tie prose to checks with `validator:<name>`. |
@@ -98,7 +98,8 @@ Show the user, in chat:
    and where it goes (`AGENTS.md`, plus `CLAUDE.md` if it doesn't import `AGENTS.md`).
 3. Ignore-rule suggestions from the survey.
 4. Script and role proposals, including what each script replaces and which
-   runbook each role reads. Confirm explicit approval for writing repository
+   tracked source each role reads, defaulting to `.agents/delegation/runbooks/`
+   and scripts to `.agents/delegation/scripts/`. Confirm explicit approval for writing repository
    scripts separately from approval to record a proposal in the overlay.
 5. Open questions only for what the repo cannot establish: unknown rote
    procedures worth scripting; role, runbook and reuse-cap preferences; which
@@ -117,7 +118,11 @@ Wait for approval or edits.
 - Apply the ignore rules the user approved.
 - Create repository scripts only when explicitly approved, at the approved paths
   and scope. Recording `## Rote scripts` proposals alone does not authorize them.
-- Create approved role runbooks with bounded inputs and write permissions; retain
+- Create approved tracked role sources under `.agents/delegation/runbooks/`,
+  and approved rote scripts under `.agents/delegation/scripts/` by default.
+  Keep general repository tools in their existing location. Runbooks need bounded
+  inputs and write permissions. Review and `git add` approved sources before their
+  first role open; the checker does not stage them automatically. Retain
   existing tracked-file permissions. All new overlay sections are optional.
 - Don't commit unless the user asks.
 
@@ -155,3 +160,10 @@ Later docs-only edits retain historical scoped evidence, not a new current-tree
 checked result. Delegation owns workers, pending handback, locks, ledger and tree
 hash; long-horizon owns selection, durable acceptance and authorized batch closure.
 The optional quota plugin sizes one bounded batch with at most one opt-in read.
+
+
+Keep the overlay at `.agents/delegation.md`; the material directories are optional.
+For reviewed migration of existing approved material, source pinning, lint
+warnings and the public CLI wrapper, follow
+[the overlay reference](../delegation/reference/overlay.md). Do not automatically
+rewrite consuming repositories or copy runbooks into runtime state at startup.

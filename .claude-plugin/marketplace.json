@@ -47,7 +47,7 @@
     },
     {
       "name": "delegation",
-      "version": "0.7.1",
+      "version": "0.7.2",
       "description": "Pods of judge, execute and routine agents: route bulk work to cheaper tiers and keep evidence by tree hash.",
       "author": {
         "name": "Rick Li"

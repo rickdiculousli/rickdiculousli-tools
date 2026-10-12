@@ -556,6 +556,8 @@ def gc(apply=False, if_due=False, now=None):
                 for role in overlay.roles.values():
                     if role.runbook.startswith('state:'):
                         pinned.add(role.runbook[6:])
+                    else:
+                        pinned.add('context/' + PurePosixPath(role.runbook.replace('\\', '/')).as_posix())
                 for folder in ('briefs', 'context'):
                     for item in (path / folder).rglob('*'):
                         if item.is_file() and not any(item.relative_to(path).as_posix() == ref or item.relative_to(path).as_posix().startswith(ref.rstrip('/') + '/') for ref in pinned) and now - item.stat().st_mtime >= MONTH:

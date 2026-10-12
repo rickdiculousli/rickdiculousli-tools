@@ -101,11 +101,12 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 - **`## Roles`.** One named role per line, for example:
 
   ```text
-  capture: tier=execute, runbook=state:context/capture.md, max-uses=8, max-context-bytes=100000
+  capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md, max-uses=8, max-context-bytes=100000
   ```
 
-  `tier` is `execute` or `routine`; `runbook` names a context file inside the
-  worktree. At least one positive cap is required. Prefer `max-uses`: it counts
+  `tier` is `execute` or `routine`; `runbook` names a tracked repository-relative
+  source, normally `.agents/delegation/runbooks/<role>.md`. Legacy
+  `state:context/<path>` remains compatible with a migration warning. At least one positive cap is required. Prefer `max-uses`: it counts
   the first brief and every continuation, including all ancestor branches.
   `max-context-bytes` accumulates the sizes of the brief and context files loaded
   on every use, including repeated reads across uses. Outputs are excluded; this
@@ -183,3 +184,52 @@ routine: probe batches (--jobs 6 max); first-divergence triage; export_functions
 
 `trace-diff` is registered once the Rust plan's Task 1 produces golden traces, and
 the trace manifest then goes under `## Extra inputs`.
+
+
+## Repository material and migration
+
+Delegation material defaults to tracked `.agents/delegation/runbooks/` role
+sources and `.agents/delegation/scripts/` approved rote scripts. The overlay stays
+at `.agents/delegation.md`. These sections and directories are optional; general
+repository tools stay in their own location and may be referenced intentionally.
+Creating or changing scripts requires explicit approval; recording a proposal
+alone grants no permission.
+
+A role's `runbook` is a repository-relative tracked source. `open` validates
+tracking and containment (including symlinks), then copies it under external
+`state:context/<source-path>` while holding the ledger lock. Every open delegation
+that names that context pins its bytes, including delegations without a role.
+Equivalent paths and in-state symlink references share the same pin; the
+materialized destination itself must be a regular file, not a symlink.
+Unchanged sources may share the pin; changed sources refuse to open until all
+pins close. Refresh the tracked source on final use, preserving the current
+external context; the next open after all pins close rematerializes it.
+Legacy `state:context/` role declarations remain supported with a migration
+warning. Lint warnings for material outside `.agents/delegation/` are nonfatal
+and separate from unsafe-path errors. They allow intentional general tool refs.
+Rote command inspection recognizes direct scripts, common interpreters and
+`uv run --script`; complex shell wrappers receive best-effort inspection.
+Review and stage approved source files before the first role open; the checker
+does not stage repository material.
+
+To migrate, review and move approved role sources and scripts into these default
+locations, update overlay and caller paths, remove startup copying into state
+and private checker imports, then rerun registered validators. There is no
+automatic rewrite of consuming repositories. Review script permissions before
+creating or moving helpers.
+
+## Public lock interface
+
+The public lock interface is
+`python3 "$DELEGATION_CHECKER" --root "$PROJECT" exec --lock games --timeout 300 -- <command>`.
+Configure `DELEGATION_CHECKER` as an installed skill's `scripts/check.py` or any
+checkout's `plugins/delegation/skills/delegation/scripts/check.py`; quote paths
+containing spaces. Use one foreground `exec` for each native process, with no
+detached children. A declared `slots=N` permits N foreground processes across
+worktrees of one repository. All coordinating processes must share the same
+XDG state root. Optional outer orchestration wraps commands through this public
+CLI; validators and general tools remain usable standalone without importing
+checker internals.
+
+The CLI is the supported compatibility surface; internal `delegation_check`
+imports are not a supported API.
