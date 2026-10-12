@@ -15,7 +15,10 @@ checkout, Git directory or installed plugin. Each plugin is self-contained.
 
 Layout: permanent `state.lock`, `gc.json`, then SHA-256(canonical Git common dir)/
 worktrees/SHA-256(canonical worktree)/identity.json, closure.json, evidence/*.json,
-snapshots/*.json and trailers.txt. Identity records canonical paths, device/inode,
+snapshots/*.json, manifests/*.json and trailers.txt. Snapshots hold only check
+snapshots; closure manifests live in manifests/. Manifests and closure archives
+that older versions left in snapshots/ are ignored by evidence prepare and expire
+like other snapshots. Identity records canonical paths, device/inode,
 birth time where available, volume, created/last mutation and first missing time.
 Recreated directories cannot inherit old state; mutation quarantines an old
 identity generation with a unique retired suffix. Unknown/unavailable identities
@@ -43,7 +46,7 @@ Confirmed deletion starts an independent seven-day recovery window, then the
 whole payload can expire including unfinished closure/pending evidence, which GC
 lists. Cleanup is abandonment, never completion. Existing worktrees retain pending
 records and referenced snapshots/unfinished closure regardless of age. Unreferenced
-snapshots/drafts expire after 30 days without use; the next sweep removes them.
+snapshots/manifests/drafts expire after 30 days without use; the next sweep removes them.
 Cleanup confines recognized payloads, skips symlinks/unknown files and tolerates
 partial failures. Committed evidence/goals/archives and live locks survive.
 

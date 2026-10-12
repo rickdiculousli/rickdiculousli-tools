@@ -98,7 +98,7 @@ unignored files (narrow with repeated `--path <pathspec>` to leave unrelated dir
 work out), their current byte digests, and the pending records that currently
 accept their check (or explicit repeated `--pending`). It reports stale pending
 records as `unused_pending`, prints the batch ID and writes the manifest to XDG
-state (or `--output` outside the checkout). Review it, then pass the reported path
+state `manifests/<batch>.json` (or `--output` outside the checkout). Review it, then pass the reported path
 to the first `closure record --manifest`. That record reports the expected ID if
 mismatched. First closure record requires manifest. Ordered steps come only
 from approved integration policy. `closure record` accepts step validate/commit/

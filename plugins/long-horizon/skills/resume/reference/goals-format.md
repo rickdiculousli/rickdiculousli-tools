@@ -14,10 +14,12 @@ Reason and Policy-Approval lines. Metadata belongs to the preceding heading/task
 All named checks in criteria plus Checks are required. Free text alone displays
 but cannot auto-pass. Do not reword adopted criteria to accommodate the parser.
 `Done when:` needs its colon and goes directly under its heading, before any
-tasks: metadata after a task belongs to that task. Lint warns about a `Done when`
+tasks: metadata after a task belongs to that task. A criterion is a paragraph: the
+`Done when` line plus the non-blank lines directly after it, up to a blank line,
+heading, task or metadata key line, so it may wrap. Lint warns about a `Done when`
 without a colon (it is otherwise ignored) and about a milestone with tasks but no
 criteria, naming the task a trailing criterion attached to. `lint --fix` adds the
-colon and moves that trailing line above the tasks. The gate treats whitespace,
+colon and moves that trailing paragraph intact, wrapping included, above the tasks. The gate treats whitespace,
 `.,;:` and that move as formatting, not a criteria change; changed words still need
 Policy-Approval. Evidence recorded under the old layout goes stale because it names
 the criterion it proves; carry it over with `evidence rerecord`.

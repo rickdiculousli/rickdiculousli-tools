@@ -69,7 +69,12 @@ def prepare(git, policy, check, attempt=None, probe=False):
     # Same attempt identifies one execution; it cannot be silently retargeted.
     if state.path.exists() and state.compatible():
         for path in (state.path / 'snapshots').glob('*.json'):
+            # Older versions also kept manifests and closure archives here; only snapshots count.
+            if not HEX.fullmatch(path.stem):
+                continue
             old = state.get('snapshots/' + path.name)
+            if not isinstance(old, dict) or old.get('id') != path.stem or 'attempt' not in old:
+                continue
             if old['attempt'] == value['attempt']:
                 if old['id'] != value['id']:
                     raise Invalid('Attempt contents changed; choose a new --attempt and rerun the check.')

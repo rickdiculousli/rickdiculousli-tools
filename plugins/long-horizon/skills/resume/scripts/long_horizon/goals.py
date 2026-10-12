@@ -6,6 +6,7 @@ from .model import finding
 
 TOKENS = re.compile(r'\b(?:validator|observation):[\w.-]*\w')
 LOOSE = re.compile(r'^(?i:done when)\b(?!\s*:)\s*[-\u2013\u2014]?\s*')
+KEYS = {'ID', 'Done when', 'Checks', 'Evidence', 'Context', 'Signed-off', 'Archive', 'Reason', 'Policy-Approval', 'Completion', 'Exception'}
 
 
 def outside(text):
@@ -43,6 +44,9 @@ def parse(text, policy, path=''):
     goals, findings, ids = [], [], set()
     goal = milestone = current = None
     parked = False
+    # A criterion is a paragraph: its Done when line plus directly following lines
+    # up to a blank line, heading, task or metadata key.
+    paragraph = None
     if not any(re.match(r'^# Goal:', raw) for _, raw in outside(text)):
         first = next((number for number, raw in outside(text) if re.match(r'^## \d', raw.strip())), None)
         if first:
@@ -50,6 +54,14 @@ def parse(text, policy, path=''):
                 'Add "# Goal: <title>" with an ID: line above the first milestone.', 'error', path, first))
     for number, raw in outside(text):
         line = raw.strip()
+        if paragraph and (not line or number != paragraph['criteria_end'] + 1 or line.startswith('#')
+                          or re.match(r'^- \[[ xX]\]', line) or LOOSE.match(line) or line.split(':', 1)[0].strip() in KEYS):
+            paragraph = None
+        if paragraph:
+            key = 'criteria' if paragraph['criteria'] else 'loose_criteria'
+            paragraph[key] += ' ' + line
+            paragraph['criteria_end'] = number
+            continue
         if line.startswith('# Goal:'):
             goal = node(line[7:].strip(), 'goal', number, markers)
             goals.append(goal)
@@ -83,7 +95,8 @@ def parse(text, policy, path=''):
         elif current and LOOSE.match(line):
             # Without its colon the criterion would silently vanish; keep it for lint and the gate.
             current['loose_criteria'] = LOOSE.sub('', line, count=1).strip()
-            current['criteria_line'] = number
+            current['criteria_line'] = current['criteria_end'] = number
+            paragraph = current
             findings.append(finding('criteria-format', 'Done when needs a colon; this criterion is ignored.',
                 'Write "Done when: ..." (lint --fix previews it).', 'warning', path, number))
         elif current and ':' in line:
@@ -93,7 +106,8 @@ def parse(text, policy, path=''):
                 current['id'] = value
             elif key == 'Done when':
                 current['criteria'] = value
-                current['criteria_line'] = number
+                current['criteria_line'] = current['criteria_end'] = number
+                paragraph = current if value else None
             elif key == 'Checks':
                 try:
                     checks = json.loads(value)
@@ -156,16 +170,16 @@ def validate_node(item, ids, findings, path, policy):
 def recovered(item):
     """Criteria text the author evidently meant for a milestone, and where it sits."""
     if item.get('criteria'):
-        return {'criteria': item['criteria'], 'line': item.get('criteria_line'), 'source': 'criteria'}
+        return {'criteria': item['criteria'], 'line': item.get('criteria_line'), 'end': item.get('criteria_end'), 'source': 'criteria'}
     if item.get('loose_criteria'):
-        return {'criteria': item['loose_criteria'], 'line': item['criteria_line'], 'source': 'loose'}
+        return {'criteria': item['loose_criteria'], 'line': item['criteria_line'], 'end': item['criteria_end'], 'source': 'loose'}
     tasks = item.get('children', [])
     last = tasks[-1] if tasks else None
     # A Done when after the task list attaches to the last task. Only treat it as the
     # milestone's when no other task carries criteria, so per-task criteria stay put.
     if last and (last['criteria'] or last.get('loose_criteria')) and not any(x['criteria'] or x.get('loose_criteria') for x in tasks[:-1]):
         return {'criteria': last['criteria'] or last['loose_criteria'], 'line': last['criteria_line'],
-                'source': 'task', 'task': last['id'], 'loose': not last['criteria']}
+                'end': last['criteria_end'], 'source': 'task', 'task': last['id'], 'loose': not last['criteria']}
     return None
 
 
@@ -175,7 +189,7 @@ def check_criteria(milestone, findings, path):
     found = recovered(milestone)
     if found and found['source'] == 'task':
         message = 'Milestone has no criteria; the Done when after its tasks attached to task ' + found['task'] + '.'
-        remedy = 'Move that Done when line directly under the milestone heading, before the tasks (lint --fix previews it).'
+        remedy = 'Move that Done when paragraph directly under the milestone heading, before the tasks (lint --fix previews it).'
     elif found:
         return  # the colon warning already covers it
     else:

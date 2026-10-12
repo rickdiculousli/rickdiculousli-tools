@@ -88,9 +88,10 @@ def manifest(git, policy, base, paths=(), pending=None, output=None):
         atomic(target, value)
         result['path'] = str(target)
     else:
+        # Manifests are not check snapshots; keep them out of the snapshot scan.
         state = State(git)
-        state.put('snapshots/manifest-' + batch + '.json', value)
-        result['path'] = str(state.path / 'snapshots' / ('manifest-' + batch + '.json'))
+        state.put('manifests/' + batch + '.json', value)
+        result['path'] = str(state.path / 'manifests' / (batch + '.json'))
     return result
 
 

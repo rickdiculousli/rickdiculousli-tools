@@ -8,6 +8,10 @@
 - Generate host manifests and marketplaces with
   `python3 scripts/sync_marketplaces.py`. Do not edit generated metadata by hand.
   Commit generated output alongside its sources.
+- Anonymize other client and consuming repositories in all text: code, comments,
+  docs, tests, fixtures, commit messages and verification notes. Do not name them,
+  their paths or worktrees, or describe what they are for; say "a consuming
+  repository" or use a generic, invented example instead.
 - Keep development scripts on Python 3.10+ standard library; consumer installation
   must not require a build or extra dependencies.
 - Plugin scripts may be PEP 723 scripts run with `uv run --script`; `uv` is

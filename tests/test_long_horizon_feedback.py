@@ -1,5 +1,6 @@
 import hashlib
 import json
+from pathlib import Path
 from long_horizon_support import RepoTest, GOALS, OVERLAY
 
 # Milestone 2's criterion has no colon and sits after its tasks, so it once attached to task 2.1.
@@ -36,6 +37,36 @@ class DoneWhenFormatTests(RepoTest):
         self.assertNotIn('criteria-format', codes(output))
         self.assertNotIn('missing-criteria', codes(output))
         self.assertNotIn('policy-approval', codes(self.cli('gate')))
+
+    def test_fix_moves_wrapped_criterion_paragraph_intact(self):
+        wrapped = ['observation:review passes when the whole call returns the', 'original value for every fixture.',
+                   'Records stay byte-equal to the corpus.']
+        for count in (1, 2, 3):
+            with self.subTest(lines=count):
+                text = '\n'.join(wrapped[:count])
+                tasks = '- [ ] [2.1] Exercise the whole call. (any)\n- [ ] [2.2] Compare records. (any)\n'
+                before = GOALS.replace('## 2. Integrate\nDone when: observation:review\n- [ ] [2.1] Exercise the whole call. (any)\n',
+                                       '## 2. Integrate\n\n' + tasks + '\nDone when ' + text + '\n')
+                expected = GOALS.replace('## 2. Integrate\nDone when: observation:review\n- [ ] [2.1] Exercise the whole call. (any)\n',
+                                         '## 2. Integrate\n\nDone when: ' + text + '\n\n' + tasks)
+                self.write('docs/goals.md', before)
+                self.commit('Wrapped criteria ' + str(count))
+                diff = self.cli('lint', '--fix')['diff']
+                for line in wrapped[1:count]:
+                    self.assertIn('+' + line, diff)
+                self.cli('lint', '--fix', '--apply')
+                self.assertEqual((self.root / 'docs/goals.md').read_text(), expected)
+                output = self.cli('lint')
+                self.assertNotIn('criteria-format', codes(output))
+                self.assertNotIn('missing-criteria', codes(output))
+                self.assertNotIn('policy-approval', codes(self.cli('gate')))
+
+    def test_wrapped_criterion_continuation_is_policy(self):
+        base = GOALS.replace('Done when: observation:review\n', 'Done when: observation:review passes for\nevery fixture.\n')
+        self.write('docs/goals.md', base)
+        self.commit('Wrapped criterion')
+        self.write('docs/goals.md', base.replace('every fixture.', 'some fixtures.'))
+        self.assertIn('policy-approval', codes(self.cli('gate', code=1)))
 
     def test_whitespace_and_punctuation_are_not_policy_but_words_are(self):
         self.write('docs/goals.md', GOALS.replace('Done when: validator:unit\n- [ ] [1.1]', 'Done when:   validator:unit.\n- [ ] [1.1]'))
@@ -107,6 +138,28 @@ class ClosureManifestTests(RepoTest):
         self.assertEqual(self.cli('closure', 'verify')['state'], 'complete')
         only = self.cli('closure', 'manifest', '--base', commit, '--path', 'tiny.py', '--pending', output['record']['id'], code=2)
         self.assertIn('No changed paths', only['findings'][0]['message'])
+
+    def test_prepare_after_completed_closure_batch(self):
+        # A completed batch once left its manifest in snapshots/, and prepare crashed on it.
+        self.write('.agents/long-horizon.md', OVERLAY + '\n## Integration\nsteps: ["commit"]\nauthorization: "Fixture authorizes local commits."\n')
+        base = self.commit('Authorize closure')
+        self.write('tiny.py', 'def tiny():\n    return 2\n')
+        built = self.cli('closure', 'manifest', '--base', base, '--pending', 'a' * 64)
+        state = self.cli('status')['state_directory']
+        self.assertEqual(built['path'], state + '/manifests/' + built['batch'] + '.json')
+        commit = self.commit('Batch')
+        self.cli('closure', 'record', '--batch', built['batch'], '--step', 'commit', '--outcome', 'success',
+                 '--commit', commit, '--manifest', built['path'])
+        self.assertEqual(self.cli('closure', 'verify')['state'], 'complete')
+        # Older versions' layout: a manifest and a closure archive under snapshots/.
+        legacy = Path(state) / 'snapshots'
+        legacy.mkdir(exist_ok=True)
+        (legacy / ('manifest-' + built['batch'] + '.json')).write_text(json.dumps(built['manifest']))
+        (legacy / ('closure-' + built['batch'] + '.json')).write_text(json.dumps({'batch': built['batch'], 'created': 1}))
+        first = self.prepare()
+        self.assertEqual(self.prepare(first['attempt'])['id'], first['id'])
+        self.prepare('named')
+        self.assertEqual(self.cli('closure', 'verify')['state'], 'complete')
 
 
 class RerecordTests(RepoTest):

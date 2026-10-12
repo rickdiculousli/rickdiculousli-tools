@@ -223,7 +223,7 @@ def registered(common, worktree):
 
 
 def safe_payload(path):
-    allowed = {'identity.json', 'closure.json', 'evidence', 'snapshots', 'drafts', 'trailers.txt'}
+    allowed = {'identity.json', 'closure.json', 'evidence', 'snapshots', 'manifests', 'drafts', 'trailers.txt'}
     for item in path.iterdir():
         if item.is_symlink() or item.name not in allowed:
             return False
@@ -338,7 +338,7 @@ def collect(root, apply, now, result, registrations):
                 content = read(record, {})
                 if content.get('snapshot'):
                     referenced.add(content['snapshot'])
-            for directory in ('snapshots', 'drafts'):
+            for directory in ('snapshots', 'manifests', 'drafts'):
                 for item in (path / directory).glob('*.json'):
                     value = read(item, {})
                     if item.stem not in referenced and now - value.get('last_use', value.get('created', item.stat().st_mtime)) >= MONTH:

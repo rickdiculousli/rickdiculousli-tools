@@ -899,3 +899,43 @@ Verification on macOS 26.5.2 (Apple Silicon), Python 3.14.7:
 - `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
   PASS at **2026-10-12T22:08:13.429482+00:00** on **codex-cli 0.162.1** and **Claude Code 2.1.296**, in
   disposable profiles.
+
+## Closure manifests and wrapped criteria — long-horizon 0.5.1
+
+Date: 2026-10-12. Evidence: `checked`.
+
+Two bugs found while using the plugin in a consuming repository are fixed:
+
+- `closure manifest` wrote `manifest-<batch>.json` into the worktree's
+  `snapshots/` directory, and `evidence prepare` then failed with
+  `KeyError: 'attempt'` while scanning it. Manifests are now written to a sibling
+  `manifests/<batch>.json`. The snapshot scan only reads records named by their
+  own SHA-256 ID that contain an attempt. Manifests and closure archives that older
+  versions left under `snapshots/` are therefore ignored instead of crashing, and
+  are not moved: the 30-day expiry for unreferenced snapshots still collects them.
+  `closure record --manifest` takes the path the manifest command reports, so old
+  and new locations both work. `state gc` and `state clear` accept the
+  `manifests/` directory and expire unreferenced manifests after 30 days.
+- `lint --fix` moved only the first line of a wrapped trailing `Done when`
+  criterion. A criterion is now a paragraph: the `Done when` line plus the
+  non-blank lines directly after it, up to a blank line, heading, task or
+  metadata key line. The fix moves the paragraph intact, with its blank-line
+  separator, and the gate's formatting-only check compares the full paragraph.
+  Continuation lines are now part of the criterion text. Evidence recorded
+  against a wrapped criterion whose later lines used to be ignored may show stale
+  once, and needs `evidence rerecord`.
+
+Verification on Linux 7.0.0-38-generic, Python 3.14.4:
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  manifests declare long-horizon 0.5.1.
+- `python3 scripts/run_tests.py`: 410 tests passed in 14.6 seconds. The new tests
+  in `test_long_horizon_feedback` cover `evidence prepare` after a completed
+  closure batch, including legacy files under `snapshots/`; one-, two- and
+  three-line criteria moves; and a policy change on a continuation line. Each
+  new test failed against the 0.5.0 code.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  PASS at **2026-10-12T22:28:45.601116+00:00** on **codex-cli 0.162.1** and **Claude Code 2.1.296**, in
+  disposable profiles.
+
+No consuming repository's state was changed or re-recorded.

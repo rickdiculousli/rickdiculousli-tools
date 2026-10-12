@@ -59,11 +59,19 @@ def repair(policy, parsed, apply=False):
             lines[offset] = indent + LOOSE.sub('Done when: ', lines[offset][len(indent):], count=1)
         found = recovered(item) if item['kind'] == 'milestone' and not item['criteria'] else None
         if found and found['source'] == 'task':
-            # A trailing criterion moves above the first task, keeping its text unchanged.
-            moves[item['children'][0]['line'] - 1] = found['line'] - 1
-    for target, source in sorted(moves.items(), reverse=True):
-        line = lines.pop(source)
-        lines.insert(target, line if line.endswith(('\n', '\r')) else line + ('\r\n' if lines[target - 1].endswith('\r\n') else '\n'))
+            # A trailing criterion moves above the first task, keeping its text and wrapping unchanged.
+            moves[item['children'][0]['line'] - 1] = (found['line'] - 1, found['end'])
+    for target, (start, end) in sorted(moves.items(), reverse=True):
+        block = lines[start:end]
+        newline = '\r\n' if lines[target - 1].endswith('\r\n') else '\n'
+        if not block[-1].endswith(('\n', '\r')):
+            block[-1] += newline
+        # A blank line that separated the criterion from the tasks now separates it from them above.
+        if start > target and not lines[start - 1].strip():
+            start -= 1
+            block.append(lines[start])
+        del lines[start:end]
+        lines[target:target] = block
     after = ''.join(lines).encode()
     diff = ''.join(difflib.unified_diff(text.splitlines(True), after.decode().splitlines(True), fromfile=str(path), tofile=str(path)))
     if apply and after != before:
