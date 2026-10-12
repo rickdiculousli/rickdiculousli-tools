@@ -17,17 +17,23 @@ Resolve `../resume/scripts/lh.py` relative to this skill directory or an explici
    the observed result afterward. The CLI runs no validator. External checks need
    authorized `--probe-inputs` before and after. Record failures, skips and unstable
    runs honestly. A current delegation claim needs the exact-tree registered
-   stable result; convert it before changing goals/handoff. Subsequent docs edits
-   retain historical scoped provenance, not new current-tree checked results.
+   stable result; convert it before changing goals/handoff. To run a registered
+   validator yourself use delegation's `check.py run <name> --judge`; it records a
+   `judge-*` delegation that closes with the run. Reviewed observations record
+   `--reviewer-kind`; only a check with `"reviewer": "any"` accepts an agent.
+   Subsequent docs edits retain historical scoped provenance, not new current-tree
+   checked results.
 3. Honor the user’s checkpoint boundary: when asked to keep tasks open, record
    evidence only and leave every checkbox open. Completion defaults do not override
    that instruction. Review record's proposed durable JSON/log recovery files and write only those
-   owned paths. Add adjacent task citations. A task done is not a milestone PASS:
+   owned paths (`--write-proposed` writes exactly them; `--trailers-file` accumulates
+   the batch's trailers). After an approved criteria change use `evidence rerecord`. Add adjacent task citations. A task done is not a milestone PASS:
    whole-call milestone criteria need their named fresh checks. At a milestone
    boundary triage parked work and refine the next coarse milestone according to
    ownership; obtain actual approval for reserved order/scope/criteria changes.
-4. Update only owned goals/handoff/findings. A tiny batch needs one continuation
-   line. On last milestone build a completion archive with every ordered milestone,
+4. Update only owned goals/handoff/findings. Before writing the handoff read its
+   `lines`/`budget` from status and trim first if it is near or over. A tiny batch
+   needs one continuation line. On last milestone build a completion archive with every ordered milestone,
    criteria, evidence/exceptions, limitations, refuted ideas and follow-ups; wait
    for actual required user sign-off. Rejection reopens the rejected work. Shelve,
    drop, unshelve and wind-down follow setup's preserved-record flow.
@@ -36,8 +42,9 @@ Resolve `../resume/scripts/lh.py` relative to this skill directory or an explici
    A missing gate proof offers run-check, task-only completion with milestone open,
    or an explicitly accepted targeted exception. No automatic PASS from prose,
    readiness, missing ledger, skipped tests or sign-off text.
-6. Review the exact owned path/content manifest and assemble commit message with
-   canonical trailers. Stage only owned paths, preserving unrelated dirty work.
+6. Build the owned path/content manifest with `closure manifest --base <pre-batch>`
+   (`--path` to exclude unrelated dirty work), review it, and assemble the commit
+   message with canonical trailers. Stage only owned paths, preserving unrelated dirty work.
    Perform only the recorded authorized integration steps in order. `lh.py` never
    commits/merges/fetches/pushes/syncs. Record actual outcomes and verify before
    retrying. Dirty/unavailable target worktree means a precise remaining merge,
@@ -56,12 +63,13 @@ Standalone walkthrough (variables are explicit paths/IDs from reviewed output):
 python3 "$LONG_HORIZON_SCRIPT" state gc --apply --if-due
 python3 "$LONG_HORIZON_SCRIPT" evidence prepare validator:unit --root "$PROJECT" --attempt "$ATTEMPT" --json
 # Run the project's actually authorized unit check now.
-python3 "$LONG_HORIZON_SCRIPT" evidence record validator:unit --root "$PROJECT" --snapshot "$SNAPSHOT" --outcome PASS --command "$OBSERVED_COMMAND" --exit 0 --log "regenerate:the declared unit check against this commit" --trailers-file "$TRAILERS" --json
-# Review and write proposed detail files; add task Evidence and owned handoff edits.
+python3 "$LONG_HORIZON_SCRIPT" evidence record validator:unit --root "$PROJECT" --snapshot "$SNAPSHOT" --outcome PASS --command "$OBSERVED_COMMAND" --exit 0 --log "regenerate:the declared unit check against this commit" --trailers-file "$TRAILERS" --write-proposed --json
+# Review the written detail files; add task Evidence and owned handoff edits.
 python3 "$LONG_HORIZON_SCRIPT" evidence find validator:unit --root "$PROJECT" --pending "$EVIDENCE" --json
 python3 "$LONG_HORIZON_SCRIPT" gate --root "$PROJECT" --pending "$EVIDENCE"
 python3 "$LONG_HORIZON_SCRIPT" lint --root "$PROJECT"
-# Review manifest and message containing the contents of TRAILERS; stage owned paths.
+python3 "$LONG_HORIZON_SCRIPT" closure manifest --root "$PROJECT" --base "$BASE" --json
+# Review the manifest (path, batch) and a message containing TRAILERS; stage owned paths.
 # When authorized: git -C "$PROJECT" commit --file "$MESSAGE"
 python3 "$LONG_HORIZON_SCRIPT" closure record --root "$PROJECT" --batch "$BATCH" --step commit --outcome success --commit "$COMMIT" --manifest "$MANIFEST"
 python3 "$LONG_HORIZON_SCRIPT" evidence cleanup --root "$PROJECT" --commit "$COMMIT" --id "$EVIDENCE" --json
@@ -70,13 +78,15 @@ python3 "$LONG_HORIZON_SCRIPT" closure verify --root "$PROJECT" --json
 
 If policy starts with validate, record that step first with the same manifest and
 explicit accepted IDs. Batch is the SHA-256 digest reported by manifest validation
-(see evidence reference). Validate against the pre-batch base for committed goals.
+(see evidence reference); `closure manifest` reports both. Validate against the
+pre-batch base for committed goals.
 
 Combined walkthrough, using delegation's declared public checker:
 
 ```sh
 python3 "$LONG_HORIZON_SCRIPT" evidence prepare validator:unit --root "$PROJECT" --json
-# Run the registered validator via delegation; do not restate its command here.
+# Run the registered validator via delegation (a worker's run, or the judge's own
+# `check.py run unit --judge`, whose judge-* ID is the delegation); do not restate its command.
 python3 "$LONG_HORIZON_SCRIPT" evidence record validator:unit --root "$PROJECT" --snapshot "$SNAPSHOT" --outcome PASS --delegation "$DELEGATION" --result "$RESULT" --log "regenerate:registered unit validator via the declared checker" --json
 ```
 

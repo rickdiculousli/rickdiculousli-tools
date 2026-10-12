@@ -542,6 +542,16 @@ Legacy readiness paths keep working with a lint warning. Readiness remains
 unknown when missing/stale/for another checkout. Weekly GC recognises readiness
 JSON and applies the deleted-worktree recovery window.
 
+Long-horizon 0.4.0 lints `Done when` lines without a colon and milestones whose
+criteria are missing or sit after their tasks, and `lint --fix` repairs both; the
+gate ignores whitespace/punctuation-only criteria moves. Status lists uncommitted
+pending evidence and the handoff's line count against its budget. `evidence record
+--write-proposed` writes the record's detail file and `--trailers-file` accumulates
+a batch's trailers. `evidence rerecord <id>` carries an unchanged observation onto
+revised criteria. `closure manifest --base <commit>` builds the reviewed batch
+manifest and ID. Reviewed observations record `--reviewer-kind human|agent`; agents
+review only checks declaring `"reviewer": "any"`.
+
 | Project | Composition |
 | --- | --- |
 | Goal spans sessions, solo work | long-horizon |

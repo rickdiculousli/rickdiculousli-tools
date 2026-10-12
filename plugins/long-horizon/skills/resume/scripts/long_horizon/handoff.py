@@ -14,7 +14,8 @@ def inspect(policy, git, parsed):
     path = Path(policy['_handoff'])
     findings, blockers, decisions, links = [], {}, [], []
     if not path.is_file():
-        return {'state': 'missing', 'blockers': {}, 'decisions': [], 'context': []}, [finding('handoff-missing', 'Handoff is missing.', 'Create the handoff from the setup template.', 'warning', path)]
+        return {'state': 'missing', 'blockers': {}, 'decisions': [], 'context': [], 'lines': 0,
+                'budget': policy['continuation']['handoff-budget']}, [finding('handoff-missing', 'Handoff is missing.', 'Create the handoff from the setup template.', 'warning', path)]
     text = path.read_text(encoding='utf-8')
     ids = flatten(parsed['goals'])
     section = ''
@@ -41,15 +42,17 @@ def inspect(policy, git, parsed):
             findings.append(finding('handoff-secret', 'Credential-shaped value redacted.', 'Remove it, revoke exposed credentials and retain only a recovery reference.', path=path, line=number))
         if re.search(LIVE, line):
             findings.append(finding('handoff-live-agent', 'Live agent identifier redacted.', 'Use a durable delegation result ID instead.', path=path, line=number))
-    if len(text.splitlines()) > policy['continuation']['handoff-budget']:
-        findings.append(finding('handoff-budget', 'Handoff exceeds its line budget.', 'Move durable detail to findings/context and retain a short continuation.', 'warning', path))
+    size = {'lines': len(text.splitlines()), 'budget': policy['continuation']['handoff-budget']}
+    if size['lines'] > size['budget']:
+        findings.append(finding('handoff-budget', 'Handoff has %(lines)d lines, over its %(budget)d-line budget.' % size,
+            'Move durable detail to findings/context and retain a short continuation before adding more.', 'warning', path))
     for heading in ('blockers', 'pending decisions'):
         if '## ' + heading not in text.lower():
             findings.append(finding('handoff-template', 'Missing handoff section: ' + heading, 'Add ## ' + heading.title() + '.', 'warning', path))
     try:
         relative = path.relative_to(git.root).as_posix()
     except ValueError:
-        return {'state': 'draft', 'blockers': blockers, 'decisions': decisions, 'context': links}, findings
+        return {'state': 'draft', 'blockers': blockers, 'decisions': decisions, 'context': links, **size}, findings
     last = git.run('log', '-1', '--format=%H', '--', relative, check=False).strip()
     committed = git.read('HEAD', relative).replace('\r\n', '\n')
     state = 'new' if not last else 'dirty' if committed != text else 'current'
@@ -70,4 +73,4 @@ def inspect(policy, git, parsed):
         if changed_goals or any(not noncode(name, policy) for name in later):
             state = 'stale'
             findings.append(finding('handoff-stale', 'Relevant code or roadmap changed after the handoff commit.', 'Reconcile the handoff against the later changes.', 'warning', path))
-    return {'state': state, 'last_commit': last or None, 'blockers': blockers, 'decisions': decisions, 'context': links}, findings
+    return {'state': state, 'last_commit': last or None, 'blockers': blockers, 'decisions': decisions, 'context': links, **size}, findings

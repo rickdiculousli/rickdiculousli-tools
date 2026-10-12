@@ -1,9 +1,10 @@
 import hashlib
+import os
 import re
 from pathlib import Path
 import time
 from .model import Invalid, digest, finding
-from .state import State, read
+from .state import State, atomic, read
 from .git import confined
 
 
@@ -41,6 +42,56 @@ def content_matches(git, commit, manifest):
         if actual != item['digest']:
             return False
     return True
+
+
+def manifest(git, policy, base, paths=(), pending=None, output=None):
+    """Build the reviewed batch manifest from the worktree, for closure record --manifest."""
+    oid = git.oid(base)
+    if not oid:
+        raise Invalid('Base must name an existing pre-batch commit.')
+    spec = ['--', *paths] if paths else []
+    names = set(x for x in git.run('diff', '--name-only', '-z', '--no-renames', oid, *spec, binary=True).split(b'\0') if x)
+    names |= set(x for x in git.run('ls-files', '--others', '--exclude-standard', '-z', *spec, binary=True).split(b'\0') if x)
+    items = []
+    for raw in sorted(names):
+        name = raw.decode('utf-8', 'surrogateescape')
+        path = git.root / name
+        if path.is_symlink():
+            data = os.fsencode(os.readlink(path))
+        elif path.is_file():
+            data = path.read_bytes()
+        elif path.exists():
+            raise Invalid('Unsupported changed entry: ' + name)
+        else:
+            data = None
+        items.append({'path': name, 'digest': hashlib.sha256(data).hexdigest() if data is not None else None})
+    if not items:
+        raise Invalid('No changed paths since ' + base + '; nothing to close.')
+    from .evidence import find, local_pending
+    unused = []
+    if pending is None:
+        # Default to pending records that currently accept their check; stale ones are listed, not included.
+        ids = [x['id'] for x in local_pending(git)]
+        checks = find(git, policy, pending=ids)[0]['checks']
+        accepted = [x['record']['id'] for x in checks if x['status'] == 'fresh' and x['pending']]
+        unused = [x for x in ids if x not in accepted]
+        ids = accepted
+    else:
+        ids = list(dict.fromkeys(pending))
+    value = {'version': 1, 'base': oid, 'paths': items, 'evidence_ids': ids}
+    batch = validate_manifest(git, value)
+    result = {'manifest': value, 'batch': batch, 'unused_pending': unused}
+    if output:
+        target = Path(output).resolve()
+        if target == git.root or git.root in target.parents:
+            raise Invalid('Write the manifest outside the checkout; inside it would join the batch.')
+        atomic(target, value)
+        result['path'] = str(target)
+    else:
+        state = State(git)
+        state.put('snapshots/manifest-' + batch + '.json', value)
+        result['path'] = str(state.path / 'snapshots' / ('manifest-' + batch + '.json'))
+    return result
 
 
 def record(git, policy, args):

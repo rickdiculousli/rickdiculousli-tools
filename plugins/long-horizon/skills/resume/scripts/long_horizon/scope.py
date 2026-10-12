@@ -41,9 +41,9 @@ def criterion_policy(policy, check):
     return criteria
 
 
-def policy_digest(policy, check):
+def policy_digest(policy, check, criteria=None):
     spec = definition(policy, check)
-    criteria = criterion_policy(policy, check)
+    criteria = criterion_policy(policy, check) if criteria is None else criteria
     validator = policy['evidence'].get('validator-policy')
     if not validator and (policy['evidence'].get('delegation-script') or policy['evidence'].get('delegation-env')):
         validator = '.agents/delegation.md'

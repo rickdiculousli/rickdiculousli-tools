@@ -60,3 +60,21 @@ class DelegationTests(RepoTest):
             output = json.loads(self.checker('query', '--delegation', 'd1', '--json'))
             result = output['results'][-1]['id']
             self.cli('evidence', 'record', 'validator:unit', '--snapshot', before['id'], '--outcome', 'PASS', '--delegation', 'd1', '--result', result, '--log', 'regenerate:negative actual validator', code=2)
+
+    def test_gate_names_close_command_and_judge_run_records_evidence(self):
+        self.write('.agents/delegation.md', '## Validators\nunit: echo fixture validator\n## Parallel limit\n1\n')
+        self.write('.agents/long-horizon.md', OVERLAY + 'delegation-script: ' + json.dumps(str(CHECKER)) + '\n')
+        self.commit('Actual checker fixture')
+        brief = self.base / 'brief.md'
+        brief.write_text('Read only\n')
+        self.checker('open', '--delegation', 'd1', '--tier', 'routine', '--brief', str(brief))
+        pending = next(x for x in self.cli('gate', code=1)['findings'] if x['code'] == 'delegation-pending')
+        self.assertIn('d1', pending['message'])
+        self.assertIn('close --delegation d1 --outcome', pending['remedy'])
+        self.checker('close', '--delegation', 'd1', '--outcome', 'done')
+        before = self.prepare()
+        result = self.checker('run', 'unit', '--judge').split()[0]
+        self.assertNotIn('delegation-pending', [x['code'] for x in self.cli('gate')['findings']])
+        output = self.cli('evidence', 'record', 'validator:unit', '--snapshot', before['id'], '--outcome', 'PASS',
+                          '--delegation', result.split('#')[0], '--result', result, '--log', 'regenerate:registered unit validator via judge run')
+        self.assertEqual(output['record']['claim'], 'checked')

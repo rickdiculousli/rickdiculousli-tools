@@ -341,7 +341,7 @@ def collect(root, apply, now, result, registrations):
             for directory in ('snapshots', 'drafts'):
                 for item in (path / directory).glob('*.json'):
                     value = read(item, {})
-                    if item.stem not in referenced and now - value.get('last_use', value.get('created', now)) >= MONTH:
+                    if item.stem not in referenced and now - value.get('last_use', value.get('created', item.stat().st_mtime)) >= MONTH:
                         result['entries'].append({'path': str(item), 'action': 'remove', 'reason': 'unreferenced for 30 days'})
                         if apply:
                             item.unlink()

@@ -15,7 +15,7 @@ permission. The final review presents the concrete files and operation policy.
 
 Full mode adds readiness levels/all-of capability tags, validator scope/domain,
 external read-only SHA-256 probes/timeout/recovery, allowed skips, observation
-reviewers, archives/limitations, shared-document ownership, startup effects,
+reviewers (human only, or `"reviewer": "any"` to accept an agent), archives/limitations, shared-document ownership, startup effects,
 stop conditions, sync and opt-in quota path. Unknown input is a blocker with a
 specific recovery choice; untagged tasks remain usable. Do not ask about machine
 nicknames or subscription budget unless relevant.

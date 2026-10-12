@@ -13,6 +13,14 @@ A goal has `ID: stable-id`, `Done when: prose with named tokens`, optional
 Reason and Policy-Approval lines. Metadata belongs to the preceding heading/task.
 All named checks in criteria plus Checks are required. Free text alone displays
 but cannot auto-pass. Do not reword adopted criteria to accommodate the parser.
+`Done when:` needs its colon and goes directly under its heading, before any
+tasks: metadata after a task belongs to that task. Lint warns about a `Done when`
+without a colon (it is otherwise ignored) and about a milestone with tasks but no
+criteria, naming the task a trailing criterion attached to. `lint --fix` adds the
+colon and moves that trailing line above the tasks. The gate treats whitespace,
+`.,;:` and that move as formatting, not a criteria change; changed words still need
+Policy-Approval. Evidence recorded under the old layout goes stale because it names
+the criterion it proves; carry it over with `evidence rerecord`.
 
 Tasks: `- [ ] [1.1] Task text. (fixtures, native)`; `- [x]` means done. Trailing
 capability tags are comma-separated and all required. Without an explicit ID the
@@ -56,8 +64,8 @@ Golden continuation states:
 | Dormant overlay | dormant; no automatic task |
 | All goals terminal | no-active-goal |
 
-`lint --fix` previews unambiguous task ID additions. `lint --fix --apply` authorizes
-only that mechanical diff, checks original bytes and preserves line endings.
+`lint --fix` previews unambiguous task ID additions and the `Done when` repairs
+above. `lint --fix --apply` authorizes only that mechanical diff, checks original bytes and preserves line endings.
 Conflicting markers, missing accepted proof and policy changes need manual repair.
 
 Archive filenames use UTC date plus normalized goal slug. Reuse an existing record

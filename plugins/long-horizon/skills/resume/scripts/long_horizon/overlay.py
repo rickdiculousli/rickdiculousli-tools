@@ -128,8 +128,10 @@ def validate(data):
     if 'sync' in steps and not data['integration'].get('sync'):
         raise Invalid('Sync requires its configured operation.')
     for name, spec in data['evidence']['checks'].items():
-        if not isinstance(spec, dict) or set(spec) - {'scope', 'inputs', 'domain', 'allowed-skips', 'validator'}:
+        if not isinstance(spec, dict) or set(spec) - {'scope', 'inputs', 'domain', 'allowed-skips', 'validator', 'reviewer'}:
             raise Invalid('Invalid check definition: ' + name)
+        if 'reviewer' in spec and (not name.startswith('observation:') or spec['reviewer'] not in ('human', 'any')):
+            raise Invalid('Check reviewer must be "human" or "any", on observation: checks only: ' + name)
         for key in ('scope', 'inputs', 'allowed-skips'):
             if key in spec and (not isinstance(spec[key], list) or not all(isinstance(x, str) for x in spec[key])):
                 raise Invalid('Check ' + key + ' must be a string list.')

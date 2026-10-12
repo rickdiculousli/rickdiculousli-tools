@@ -788,3 +788,39 @@ Installed `check.py open --help` (showing `--kind` and `--new-kind`),
 `kinds --help` and `patterns --help` ran from both copies. The Mac was not
 touched; its owner is updating it separately. Restart Claude Code and start a
 new Codex session to load the updated skills.
+
+### Long-horizon 0.4.0 and delegation 0.9.0 — session feedback
+
+Changes from a long-horizon/delegation session's feedback. Long-horizon: lint
+warns about `Done when` without a colon and milestones with tasks but no criteria
+(naming the task a trailing criterion attached to), and `lint --fix` repairs both;
+the gate treats whitespace, `.,;:` and that move as formatting, not a criteria
+change, and check tokens no longer swallow trailing punctuation. Status lists
+uncommitted pending evidence (`pending_evidence`, `pending: true` on acceptance)
+and the handoff's `lines`/`budget`. `evidence record --write-proposed` writes the
+record's own detail file; `--trailers-file` appends and deduplicates.
+`evidence rerecord <id>` carries an unchanged observation onto revised criteria
+and removes a superseded pending proposal. `closure manifest --base <commit>`
+builds the batch manifest and ID. Reviewed observations require
+`--reviewer-kind human|agent`; agents review only checks declaring
+`"reviewer": "any"`. The gate's pending-delegation finding names each open
+delegation and its exact `close` command. Delegation: `check.py run <name>
+--judge` records a `judge-*` delegation that opens and closes with the run; the
+validator attribute `paths=<glob>|<glob>` feeds the new `check.py suggest`.
+
+Verification on macOS (Darwin 25.5.0, Python 3.14.7):
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  manifests declare long-horizon 0.4.0 and delegation 0.9.0.
+- `python3 -m unittest discover -s tests`: 396 tests ran in 124.2 seconds;
+  384 passed and 12 failed. All 12 also fail on an export of the preceding
+  commit on this Mac: they compare macOS temporary paths (`/private/var/...`
+  versus `/var/...`) in `test_delegation_state`, `test_long_horizon_overlay`
+  and `test_windows_state_defaults`. The 17 new tests (`test_delegation_judge`,
+  `test_long_horizon_feedback`, one in `test_long_horizon_delegation`) pass.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  PASS at **2026-10-12T18:15:38.044248+00:00** on **codex-cli 0.162.1** and
+  **Claude Code 2.1.296**, in disposable profiles, with new files staged.
+
+No host model session was run against the new procedures, and no normal-profile
+reinstall was performed.

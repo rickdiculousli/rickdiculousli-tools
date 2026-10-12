@@ -131,11 +131,17 @@ def record(git, policy, args):
             value.update(command=args.command, exit=args.exit, claim='observed')
         elif args.reviewer:
             if not check.startswith('observation:') or not args.review_note:
-                raise Invalid('Human provenance requires observation:<name> and --review-note.')
+                raise Invalid('Reviewed provenance requires observation:<name> and --review-note.')
+            # Who reviewed is recorded, never inferred; agents review only where the check allows it.
+            allowed = definition(policy, check).get('reviewer', 'human')
+            if args.reviewer_kind not in ('human', 'agent'):
+                raise Invalid('Reviewed provenance requires --reviewer-kind human or agent.')
+            if args.reviewer_kind == 'agent' and allowed != 'any':
+                raise Invalid(check + ' requires a human reviewer; an agent review needs "reviewer": "any" in its check definition.')
             note = confined(git.root, args.review_note)
             if not note.is_file() or not re.search(r'\b\d{4}-\d{2}-\d{2}\b', note.read_text(encoding='utf-8')):
                 raise Invalid('Review note must be a durable dated file.')
-            value.update(reviewer=args.reviewer, review_note=args.review_note,
+            value.update(reviewer=args.reviewer, reviewer_kind=args.reviewer_kind, review_note=args.review_note,
                          review_digest=hashlib.sha256(note.read_bytes()).hexdigest(), exit=0, claim='reviewed')
         else:
             if not args.result or not before.get('tree'):
@@ -148,6 +154,13 @@ def record(git, policy, args):
                 raise Blocked('Delegated failure/timeout cannot be recorded as PASS.')
         if args.outcome == 'PASS' and (not stable or value['exit'] != 0):
             raise Blocked('PASS requires stable before/after scope, policy, inputs and exit 0; record FAIL/UNSTABLE or rerun.')
+    if not args.exception:
+        before['last_use'] = time.time()
+        state.put('snapshots/' + before['id'] + '.json', before)
+    return store(git, policy, state, value, args)
+
+
+def store(git, policy, state, value, args):
     value['id'] = record_id(value)
     detail = args.detail or policy['continuation']['evidence'].rstrip('/') + '/' + value['id'] + '.json'
     confined(git.root, detail)
@@ -157,13 +170,101 @@ def record(git, policy, args):
     if existing:
         value = existing
     state.put('evidence/' + value['id'] + '.json', value, immutable=True)
-    if not args.exception:
-        before['last_use'] = time.time()
-        state.put('snapshots/' + before['id'] + '.json', before)
-    output = trailer(value) + '\n'
+    line = trailer(value)
+    files = {value['detail']: proposed(value)}
+    output = {'record': value, 'trailer': line, 'proposed_files': files, 'pending': True}
     if args.trailers_file:
-        atomic(Path(args.trailers_file), output.encode(), raw=True)
-    return {'record': value, 'trailer': output.strip(), 'proposed_files': {value['detail']: json.dumps(value, sort_keys=True, indent=2) + '\n'}, 'pending': True}
+        add_trailer(Path(args.trailers_file), line)
+    if args.write_proposed:
+        output['written'] = write_files(git, files)
+    return output
+
+
+def proposed(value):
+    return json.dumps(value, sort_keys=True, indent=2) + '\n'
+
+
+def add_trailer(path, line, remove=()):
+    """Accumulate one batch's trailers: append once, keep order, drop superseded lines."""
+    lines = path.read_text(encoding='utf-8').splitlines() if path.is_file() else []
+    lines = [x for x in lines if x and x not in remove]
+    if line and line not in lines:
+        lines.append(line)
+    atomic(path, ('\n'.join(lines) + '\n' if lines else '').encode(), raw=True)
+
+
+def write_files(git, files):
+    """Write only the record's own detail paths; never overwrite different bytes."""
+    written = []
+    for name, content in files.items():
+        path = confined(git.root, name)
+        data = content.encode()
+        if path.exists() and (path.is_symlink() or not path.is_file() or path.read_bytes() != data):
+            raise Invalid('Refusing to overwrite different content at ' + name + '; review it and remove it explicitly.')
+        if not path.exists():
+            atomic(path, data, raw=True)
+            written.append(name)
+    return written
+
+
+def lookup(git, id_):
+    if not HEX.fullmatch(id_ or ''):
+        raise Invalid('Evidence ID must be SHA-256.')
+    durable = next((x for x in committed(git)[0] if x['id'] == id_), None)
+    if durable:
+        return durable
+    value = State(git).get('evidence/' + id_ + '.json')
+    if not value or record_id(value) != id_:
+        raise Invalid('No committed or pending record ' + id_ + '; use evidence find.')
+    return dict(value, pending=True, carrying_commit=None)
+
+
+def rerecord(git, policy, args):
+    """Carry an unchanged observation onto revised criteria with a fresh snapshot."""
+    old = lookup(git, args.id)
+    if old.get('exception'):
+        raise Invalid('Exceptions approve one criterion revision; obtain a new approval and record a new exception.')
+    check = old['name']
+    if policy_digest(policy, check, old['criteria']) != old['policy']:
+        raise Invalid('The check definition, inputs or validator policy changed, not only its criteria; prepare and run the check again.')
+    if old['criteria'] == criterion_policy(policy, check):
+        raise Invalid('Criteria are unchanged; the record is already current for this policy.')
+    snap = prepare(git, policy, check, args.attempt, args.probe_inputs)
+    if snap['scope'] != old['scope'] or snap['inputs'] != old['inputs'] or snap['domain'] != old['domain']:
+        raise Invalid('Scope, inputs or domain changed since the record; prepare and run the check again.')
+    if recovery(git, policy, old['log']) != old['log_digest']:
+        raise Invalid('The recorded log changed or is missing; prepare and run the check again.')
+    if old['claim'] == 'checked':
+        if snap.get('tree') != old['tree']:
+            raise Invalid('Delegation tree changed; the registered result no longer describes this tree.')
+        result = Checker(git, policy).result(old['delegation'], old['result'],
+                     definition(policy, check).get('validator', check.removeprefix('validator:')), old['tree'])
+        if digest(result) != old['result_digest']:
+            raise Invalid('Registered result changed; prepare and run the check again.')
+    elif old['claim'] == 'reviewed':
+        note = confined(git.root, old['review_note'])
+        if not note.is_file() or hashlib.sha256(note.read_bytes()).hexdigest() != old['review_digest']:
+            raise Invalid('Review note changed or is missing; obtain and record a new review.')
+    value = {k: v for k, v in old.items() if k not in ('id', 'created', 'last_use', 'detail', 'snapshot', 'carrying_commit', 'pending')}
+    value.update(policy=snap['policy'], criteria=snap['criteria'], attempt=snap['attempt'], snapshot=snap['id'], rerecorded_from=old['id'])
+    state = State(git)
+    trailers = args.trailers_file
+    args.trailers_file = None
+    output = store(git, policy, state, value, args)
+    superseded = {'id': old['id'], 'committed': not old['pending'], 'removed': []}
+    if old['pending']:
+        # An uncommitted superseded proposal goes; committed history is never touched.
+        detail = confined(git.root, old['detail'])
+        relative = detail.relative_to(git.root).as_posix()
+        tracked = git.run('ls-files', '--', relative).strip()
+        if detail.is_file() and not detail.is_symlink() and not tracked and detail.read_bytes() == proposed({k: v for k, v in old.items() if k not in ('pending', 'carrying_commit')}).encode():
+            detail.unlink()
+            superseded['removed'].append(old['detail'])
+        state.remove('evidence/' + old['id'] + '.json')
+    if trailers:
+        add_trailer(Path(trailers), output['trailer'], remove=(trailer(old),) if old['pending'] else ())
+    output['superseded'] = superseded
+    return output
 
 
 
@@ -192,6 +293,8 @@ def validate_durable(git, commit, value):
         if not git.run('ls-tree', commit, '--', path).strip() or hashlib.sha256(content).hexdigest() != value.get('log_digest'):
             raise Invalid('Durable log is missing or altered.')
     if value['claim'] == 'reviewed':
+        if value.get('reviewer_kind', 'human') not in ('human', 'agent'):
+            raise Invalid('Reviewer kind must be human or agent.')
         path = confined(git.root, value['review_note']).relative_to(git.root).as_posix()
         content = git.run('show', commit + ':' + path, binary=True, check=False)
         if not value.get('reviewer') or not re.search(rb'\b\d{4}-\d{2}-\d{2}\b', content) or hashlib.sha256(content).hexdigest() != value.get('review_digest'):
@@ -242,6 +345,18 @@ def candidates(git, pending):
     return records, findings
 
 
+def local_pending(git):
+    """Uncommitted records in this worktree's XDG state, newest last; status shows them as pending."""
+    state = State(git)
+    folder = state.path / 'evidence'
+    if not folder.is_dir():
+        return []
+    durable = {x['id'] for x in committed(git)[0]}
+    values = [state.get('evidence/' + path.name) for path in folder.glob('*.json')]
+    values = [x for x in values if isinstance(x, dict) and x.get('id') == record_id(x) and x['id'] not in durable]
+    return sorted(values, key=lambda x: x.get('created', 0))
+
+
 def find(git, policy, check=None, probe=False, pending=()):
     records, findings = candidates(git, pending)
     result = []
@@ -267,7 +382,7 @@ def find(git, policy, check=None, probe=False, pending=()):
                 status = 'fresh' if outcome == 'PASS' and accepted.get('stable') is True and accepted.get('exit') == 0 else outcome.lower()
         elif any(x.get('name') == name for x in records) and status != 'unknown':
             status = 'stale'
-        result.append({'check': name, 'status': status, 'record': accepted,
+        result.append({'check': name, 'status': status, 'record': accepted, 'pending': bool(accepted and accepted['pending']),
                        'recovery': 'evidence prepare ' + name + (' --probe-inputs' if current['inputs'] else '')})
     return {'checks': result, 'records': records}, findings
 

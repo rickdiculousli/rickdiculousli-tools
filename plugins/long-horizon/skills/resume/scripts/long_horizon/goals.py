@@ -4,7 +4,8 @@ import hashlib
 import re
 from .model import finding
 
-TOKENS = re.compile(r'\b(?:validator|observation):[\w.-]+')
+TOKENS = re.compile(r'\b(?:validator|observation):[\w.-]*\w')
+LOOSE = re.compile(r'^(?i:done when)\b(?!\s*:)\s*[-\u2013\u2014]?\s*')
 
 
 def outside(text):
@@ -82,13 +83,20 @@ def parse(text, policy, path=''):
                     'Add [' + task['id'] + '] after its checkbox.', 'warning', path, number))
             milestone['children'].append(task)
             current = task
+        elif current and LOOSE.match(line):
+            # Without its colon the criterion would silently vanish; keep it for lint and the gate.
+            current['loose_criteria'] = LOOSE.sub('', line, count=1).strip()
+            current['criteria_line'] = number
+            findings.append(finding('criteria-format', 'Done when needs a colon; this criterion is ignored.',
+                'Write "Done when: ..." (lint --fix previews it).', 'warning', path, number))
         elif current and ':' in line:
             key, value = line.split(':', 1)
-            value = value.strip()
+            key, value = key.strip(), value.strip()
             if key == 'ID':
                 current['id'] = value
             elif key == 'Done when':
                 current['criteria'] = value
+                current['criteria_line'] = number
             elif key == 'Checks':
                 try:
                     checks = json.loads(value)
@@ -115,6 +123,8 @@ def parse(text, policy, path=''):
             goal['criteria'] = goal['children'][-1]['criteria']
             goal['checks'] = goal['children'][-1]['checks'][:]
         validate_node(goal, ids, findings, path, policy)
+        for milestone in goal['children']:
+            check_criteria(milestone, findings, path)
     for siblings in [goals] + [x['children'] for x in goals]:
         current_nodes = [x for x in siblings if x['status'] == 'current']
         if len(current_nodes) > 1:
@@ -147,6 +157,47 @@ def validate_node(item, ids, findings, path, policy):
         findings.append(finding('missing-stop-record', 'Shelved/dropped goals need a reason and preserved record.', 'Add Reason and Archive after actual user instruction.', path=path, line=item['line']))
     for child in children:
         validate_node(child, ids, findings, path, policy)
+
+
+def recovered(item):
+    """Criteria text the author evidently meant for a milestone, and where it sits."""
+    if item.get('criteria'):
+        return {'criteria': item['criteria'], 'line': item.get('criteria_line'), 'source': 'criteria'}
+    if item.get('loose_criteria'):
+        return {'criteria': item['loose_criteria'], 'line': item['criteria_line'], 'source': 'loose'}
+    tasks = item.get('children', [])
+    last = tasks[-1] if tasks else None
+    # A Done when after the task list attaches to the last task. Only treat it as the
+    # milestone's when no other task carries criteria, so per-task criteria stay put.
+    if last and (last['criteria'] or last.get('loose_criteria')) and not any(x['criteria'] or x.get('loose_criteria') for x in tasks[:-1]):
+        return {'criteria': last['criteria'] or last['loose_criteria'], 'line': last['criteria_line'],
+                'source': 'task', 'task': last['id'], 'loose': not last['criteria']}
+    return None
+
+
+def check_criteria(milestone, findings, path):
+    if milestone['criteria'] or not milestone['children']:
+        return
+    found = recovered(milestone)
+    if found and found['source'] == 'task':
+        message = 'Milestone has no criteria; the Done when after its tasks attached to task ' + found['task'] + '.'
+        remedy = 'Move that Done when line directly under the milestone heading, before the tasks (lint --fix previews it).'
+    elif found:
+        return  # the colon warning already covers it
+    else:
+        message, remedy = 'Milestone has tasks but no Done when criteria.', 'Add "Done when: ..." under the milestone heading, before the tasks.'
+    findings.append(finding('missing-criteria', message, remedy, 'warning', path, milestone['line']))
+
+
+def normalized(text):
+    """Criteria identity for policy changes: whitespace and .,;: punctuation are not wording."""
+    return re.sub(r'[\s.,;:]+', ' ', text or '').strip()
+
+
+def effective_policy(item):
+    found = recovered(item) if item['kind'] == 'milestone' else None
+    text = found['criteria'] if found else item['criteria']
+    return normalized(text), sorted(set(item['checks']) | set(TOKENS.findall(text or ''))), item['title']
 
 
 def flatten(goals):

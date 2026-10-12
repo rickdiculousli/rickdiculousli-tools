@@ -21,6 +21,11 @@ python3 "$LONG_HORIZON_SCRIPT" status --root "$PROJECT" --json
 python3 "$LONG_HORIZON_SCRIPT" state gc --apply --if-due --json
 ```
 
+Status also lists this worktree's uncommitted pending evidence (`pending_evidence`,
+and `pending: true` on acceptance it would satisfy) and the handoff's `lines` and
+`budget`. Pending records still reach the gate only through explicit `--pending`.
+An over-budget handoff is trimmed before this session adds to it.
+
 Reconcile new/missing/stale/dirty handoff against relevant commits and dirty
 changes. Do not discard work or read full history unnecessarily. Load only the
 current goal/milestone/task and their context/recovery links. Malformed policy or

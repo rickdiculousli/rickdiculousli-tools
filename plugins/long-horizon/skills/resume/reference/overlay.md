@@ -79,7 +79,7 @@ readiness: "cache:readiness.json"
 ## Capabilities
 tags: {"any": [], "fixtures": ["fixtures"], "native": ["fixtures", "native"]}
 ## Evidence
-checks: {"validator:unit": {"scope": ["src/**", "tests/**"], "domain": "fixtures-v1", "inputs": ["corpus"], "allowed-skips": [], "validator": "unit"}, "observation:review": {"domain": "design-v1"}}
+checks: {"validator:unit": {"scope": ["src/**", "tests/**"], "domain": "fixtures-v1", "inputs": ["corpus"], "allowed-skips": [], "validator": "unit"}, "observation:review": {"domain": "design-v1", "reviewer": "human"}}
 inputs: {"corpus": {"command": ["python3", "tools/input_digest.py"], "timeout": 10, "recover": "docs/capture.md#corpus"}}
 delegation-env: "DELEGATION_CHECK_SCRIPT"
 validator-policy: ".agents/delegation.md"
@@ -94,6 +94,9 @@ remote: "origin"
 stop-conditions: ["dirty target checkout", "rejected push"]
 authorization: "User approved these named local/remote operations on 2026-10-11."
 ```
+
+An `observation:` check takes an optional `reviewer`: `"human"` (the default) or
+`"any"`, which also accepts an agent reviewer. Other checks reject the key.
 
 Every leaf command accepts `--root`, `--overlay`, `--json`, `--draft-root`,
 `--goals`, `--handoff` after its name (e.g. `evidence prepare validator:unit --root

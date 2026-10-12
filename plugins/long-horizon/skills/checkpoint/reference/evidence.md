@@ -12,6 +12,10 @@ Prepare captures before-scope/inputs/policy/domain and attempt; it runs no check
 Repeated attempt with unchanged contents reuses it; changed attempt contents fail.
 Record captures after-state and requires one provenance: observed command+exit,
 registered delegation+result, or dated reviewer+durable review-note for observation.
+Reviewed records also need `--reviewer-kind human|agent`, stored as `reviewer_kind`.
+An observation check accepts only human reviewers unless its definition sets
+`"reviewer": "any"`. Milestone ownership decides who may mark work done, not who
+may review it.
 PASS requires stable inputs and exit 0; delegated PASS also requires registered
 validator, checker tree, stable true, ok true, exit 0 and no timeout. Arbitrary
 checker exec is observed only. FAIL/SKIP/UNSTABLE remain their actual outcomes.
@@ -32,13 +36,14 @@ Accepted-Check: id=<sha256> name=validator:unit outcome=PASS scope=<sha256> poli
 ```
 
 Parser rejects malformed/repeated fields. Durable detail path defaults under
-configured evidence sink. Review/write those files before committing; record
-never writes tracked files, stages, commits or amends. Log must be a checkout file
+configured evidence sink. Review/write those files before committing. Record
+writes a file only with `--write-proposed`, and then only the record's own detail
+path; it refuses to overwrite different bytes. It never stages, commits or amends. Log must be a checkout file
 or a specific persistent http(s)/regenerate route, never scratch-only state.
 Copied logs can use their own content digest name; the evidence ID must not hash
 its own ID or a path containing it. Reviewer note is a durable dated record;
-skill verifies the actual human review. A recorded observation is not authenticated
-by the CLI. Sign-off/exception text cannot authenticate approval either.
+the skill verifies the actual review and records which kind of reviewer signed.
+A recorded observation is not authenticated by the CLI. Sign-off/exception text cannot authenticate approval either.
 
 Reachable history only; newest matching scope/domain/policy/input result supersedes
 older outcomes in ancestry order. Original introduction orders IDs; copying an old
@@ -47,6 +52,21 @@ a new reviewed run. Fresh clone can reconstruct trailers/details with no XDG sta
 Pending acceptance is accepted only through explicit repeated `--pending <id>`;
 it remains pending, never already committed. Missing proof is data in find and an
 error when required by gate.
+
+Re-record after a criteria-only change. Records name the criterion they prove, so
+an approved criteria edit (or the `Done when` layout repair) makes them stale:
+
+```sh
+python3 "$LONG_HORIZON_SCRIPT" evidence rerecord "$EVIDENCE" --root "$PROJECT" --write-proposed --trailers-file "$TRAILERS" --json
+```
+
+It prepares a fresh snapshot and carries the same observation onto the current
+criteria only if scope, inputs, domain, log, check definition and validator policy
+are unchanged; a delegated record also needs the same checker tree and its still
+registered result, a reviewed one the same note. Otherwise rerun the check. A
+superseded pending record loses its XDG copy, its untracked unchanged detail file
+and its line in the trailers file; committed history is never touched. Update
+any `Evidence:` citation of the old ID to the new one.
 
 Exceptions after actual approval:
 
@@ -58,7 +78,8 @@ Exception trailer: Accepted-Exception with id/check/target/reason/by/policy/deta
 It is targeted to the exact required check and criterion revision; does not waive
 sign-off, unrelated milestone checks or remote policy. List exceptions in archive.
 
-Commit assembly: record optionally writes `--trailers-file "$TRAILERS"` atomically.
+Commit assembly: `--trailers-file "$TRAILERS"` accumulates a batch: each record
+appends its trailer once, in order, atomically; reruns do not duplicate it.
 Review a message containing those exact lines and use `git commit --file "$MESSAGE"`
 under authorization, staging only owned paths. Do not amend or add an automatic
 empty commit. Cleanup verifies IDs in the exact carrying commit before removing
@@ -71,9 +92,15 @@ Closure manifest JSON:
 ```
 
 Batch ID = SHA-256 canonical sorted-key JSON of `{"evidence_ids": <sorted IDs>,
-"paths": <paths sorted by relative path>}`. Generate it with the bundled model.digest
-helper or an equivalent stdlib JSON/SHA-256 call; first record reports the expected
-ID if mismatched. First closure record requires manifest. Ordered steps come only
+"paths": <paths sorted by relative path>}`. `closure manifest --base <pre-batch>`
+builds both from the worktree: every path changed since base plus untracked,
+unignored files (narrow with repeated `--path <pathspec>` to leave unrelated dirty
+work out), their current byte digests, and the pending records that currently
+accept their check (or explicit repeated `--pending`). It reports stale pending
+records as `unused_pending`, prints the batch ID and writes the manifest to XDG
+state (or `--output` outside the checkout). Review it, then pass the reported path
+to the first `closure record --manifest`. That record reports the expected ID if
+mismatched. First closure record requires manifest. Ordered steps come only
 from approved integration policy. `closure record` accepts step validate/commit/
 merge/push/sync, outcome success/failed/pending, exact --commit, optional
 --integrated-commit for reviewed squash mapping, --observation and --manifest.

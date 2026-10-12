@@ -2,7 +2,7 @@ import difflib
 import hashlib
 from pathlib import Path
 import re
-from .goals import flatten
+from .goals import LOOSE, flatten, recovered
 from .model import finding, Invalid
 from .state import atomic
 
@@ -51,6 +51,19 @@ def repair(policy, parsed, apply=False):
         if item['kind'] == 'task' and any(x.code == 'missing-task-id' and x.line == item['line'] for x in parsed['findings']):
             offset = item['line'] - 1
             lines[offset] = re.sub(r'(^\s*- \[[ xX]\]\s+)', lambda m: m[1] + '[' + item['id'] + '] ', lines[offset], count=1)
+    moves = {}
+    for item in flatten(parsed['goals']).values():
+        offset = (item.get('criteria_line') or 0) - 1
+        if item.get('loose_criteria') and offset >= 0:
+            indent = re.match(r'\s*', lines[offset])[0]
+            lines[offset] = indent + LOOSE.sub('Done when: ', lines[offset][len(indent):], count=1)
+        found = recovered(item) if item['kind'] == 'milestone' and not item['criteria'] else None
+        if found and found['source'] == 'task':
+            # A trailing criterion moves above the first task, keeping its text unchanged.
+            moves[item['children'][0]['line'] - 1] = found['line'] - 1
+    for target, source in sorted(moves.items(), reverse=True):
+        line = lines.pop(source)
+        lines.insert(target, line if line.endswith(('\n', '\r')) else line + ('\r\n' if lines[target - 1].endswith('\r\n') else '\n'))
     after = ''.join(lines).encode()
     diff = ''.join(difflib.unified_diff(text.splitlines(True), after.decode().splitlines(True), fromfile=str(path), tofile=str(path)))
     if apply and after != before:

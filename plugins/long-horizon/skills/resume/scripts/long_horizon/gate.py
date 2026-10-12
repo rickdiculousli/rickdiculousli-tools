@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 from .evidence import find
 from .git import confined
-from .goals import flatten, parse, TOKENS
+from .goals import effective_policy, flatten, parse, TOKENS
 from .model import Invalid, finding
 from .scope import policy_digest
 
@@ -52,8 +52,8 @@ def run(git, policy, parsed, base='HEAD', pending=(), probe=False):
     changed = []
     for id_, before in old.items():
         after = proposed.get(id_)
-        if after and before['kind'] in ('goal', 'milestone') and (
-                before['criteria'] != after['criteria'] or before['checks'] != after['checks'] or before['title'] != after['title']):
+        # Reformatting the same criterion (colon, whitespace, moving it above the tasks) is not a policy change.
+        if after and before['kind'] in ('goal', 'milestone') and effective_policy(before) != effective_policy(after):
             changed.append(id_)
             if policy['goals and ownership']['milestone-policy'] == 'user' and not after['metadata'].get('Policy-Approval'):
                 findings.append(finding('policy-approval', 'Reserved scope/criteria changed: ' + id_,

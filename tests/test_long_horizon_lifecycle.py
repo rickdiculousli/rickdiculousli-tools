@@ -52,7 +52,7 @@ class LifecycleTests(RepoTest):
         before = self.prepare(check='observation:review')
         self.write('docs/evidence/review.md', 'User reviewed the whole calling context, 2026-10-11.\n')
         output = self.cli('evidence', 'record', 'observation:review', '--snapshot', before['id'], '--outcome', 'PASS',
-                          '--reviewer', 'user', '--review-note', 'docs/evidence/review.md',
+                          '--reviewer', 'user', '--reviewer-kind', 'human', '--review-note', 'docs/evidence/review.md',
                           '--log', 'docs/evidence/review.md')
         self.carry(output)
         self.assertEqual(self.cli('evidence', 'find', 'observation:review')['checks'][0]['status'], 'fresh')

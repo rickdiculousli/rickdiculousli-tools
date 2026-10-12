@@ -1,6 +1,7 @@
 import argparse
 import json
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 from . import closure, evidence, gate, goals, handoff, lint, overlay, readiness, state
@@ -40,10 +41,18 @@ def parser():
     record.add_argument('check')
     for key in ('snapshot', 'domain', 'log', 'detail', 'command', 'delegation', 'result', 'reviewer', 'review-note', 'trailers-file', 'target', 'reason', 'by'):
         record.add_argument('--' + key, dest='observed_command' if key == 'command' else key.replace('-', '_'))
+    record.add_argument('--reviewer-kind', choices=('human', 'agent'))
     record.add_argument('--outcome', choices=('PASS', 'FAIL', 'SKIP', 'UNSTABLE'))
     record.add_argument('--exit', type=int)
     record.add_argument('--probe-inputs', action='store_true')
     record.add_argument('--exception', action='store_true')
+    record.add_argument('--write-proposed', action='store_true')
+    again = common(ev.add_parser('rerecord'))
+    again.add_argument('id')
+    for key in ('attempt', 'detail', 'trailers-file'):
+        again.add_argument('--' + key, dest=key.replace('-', '_'))
+    again.add_argument('--probe-inputs', action='store_true')
+    again.add_argument('--write-proposed', action='store_true')
     cleanup = common(ev.add_parser('cleanup'))
     cleanup.add_argument('--commit', required=True)
     cleanup.add_argument('--id', action='append', required=True)
@@ -52,6 +61,11 @@ def parser():
     find.add_argument('--probe-inputs', action='store_true')
     find.add_argument('--pending', action='append', default=[])
     cl = commands.add_parser('closure').add_subparsers(dest='action', required=True)
+    build = common(cl.add_parser('manifest'))
+    build.add_argument('--base', required=True)
+    build.add_argument('--path', action='append', default=[])
+    build.add_argument('--pending', action='append')
+    build.add_argument('--output')
     record = common(cl.add_parser('record'))
     record.add_argument('--batch', required=True)
     record.add_argument('--new-batch', action='store_true')
@@ -86,8 +100,16 @@ def inspect(args, git, policy, parsed):
     findings = list(parsed['findings']) + reports + warnings
     if not policy['_installed'] and not args.draft_root:
         findings.append(finding('setup-missing', 'No installed long-horizon overlay.', 'Use long-horizon:setup or proceed with explicit session instructions.', 'warning'))
-    acceptance, acceptance_findings = evidence.find(git, policy)
+    try:
+        pending = evidence.local_pending(git)
+    except Invalid as error:
+        pending = []
+        findings.append(finding('pending-unreadable', 'Pending evidence is unreadable: ' + str(error), 'Inspect state gc and recover the records explicitly.', 'warning'))
+    # Status shows local pending records; the gate still accepts only explicit --pending IDs.
+    acceptance, acceptance_findings = evidence.find(git, policy, pending=[x['id'] for x in pending])
     findings += acceptance_findings
+    pending = [{'id': x['id'], 'check': x.get('name') or x.get('check'), 'outcome': x.get('outcome', 'EXCEPTION'),
+                'detail': x['detail'], 'pending': True} for x in pending]
     archived = [x for x in parsed['goals'] if x['status'] == 'done' and not x['children']]
     if archived:
         records, history_findings = evidence.candidates(git, [])
@@ -122,6 +144,7 @@ def inspect(args, git, policy, parsed):
     # Unfinished closure is status data, not a failed inspection.
     findings += [finding(x.code, x.message, x.remedy, 'warning', x.path, x.line) for x in closure_findings]
     return {'selection': selection, 'handoff': continuation, 'needs_you': needs, 'acceptance': acceptance['checks'],
+            'pending_evidence': pending,
             'closure': cl, 'state_directory': str(state.State(git).path), 'cache_directory': str(state.State(git).cache),
             'git': {'root': str(git.root), 'common_dir': str(git.common), 'branch': git.branch(),
                     'head': git.oid(), 'target': policy['integration'].get('target') or git.target(), 'dirty': git.dirty()}}, findings
@@ -162,14 +185,23 @@ def execute(args):
             # Keep argparse's command discriminator separate from provenance.
             args.command = args.observed_command
             return evidence.record(git, policy, args), []
+        if args.action == 'rerecord':
+            return evidence.rerecord(git, policy, args), []
         return evidence.find(git, policy, args.check, args.probe_inputs, args.pending)
     if args.command == 'gate':
         findings = []
         checker = evidence.Checker(git, policy)
-        if checker.path and checker.pending():
-            findings.append(finding('delegation-pending', 'Delegation has pending workers.', 'Hand workers back through delegation before checkpoint closure.'))
+        open_ = checker.pending() if checker.path else []
+        if open_:
+            ids = [str(x.get('delegation')) for x in open_]
+            findings.append(finding('delegation-pending', 'Delegation has open delegations: ' + ', '.join(ids) + '.',
+                'Review and hand them back, then close each: ' + '; '.join(
+                    'python3 ' + shlex.quote(str(checker.path)) + ' --root ' + shlex.quote(str(git.root)) +
+                    ' close --delegation ' + shlex.quote(x) + ' --outcome done|stuck|abandoned' for x in ids) + '.'))
         data, more = gate.run(git, policy, parsed, args.base, args.pending, args.probe_inputs)
         return data, findings + more
+    if args.action == 'manifest':
+        return closure.manifest(git, policy, args.base, args.path, args.pending, args.output), []
     if args.action == 'record':
         return {'closure': closure.record(git, policy, args)}, []
     return closure.verify(git, policy, args.state)
@@ -199,6 +231,11 @@ def main(argv=None):
                   (f" ({progress['done']}/{progress['total']} tasks)" if progress else ''))
             print('Next: ' + (task['id'] + ' ' + task['title'] if task else selection['mode']) +
                   '; Needs you: ' + ('; '.join(output.get('needs_you', [])) or 'none'))
+            handoff = output.get('handoff', {})
+            if 'lines' in handoff:
+                print('Handoff: %d/%d lines' % (handoff['lines'], handoff['budget']) + (' (over budget)' if handoff['lines'] > handoff['budget'] else ''))
+            for item in output.get('pending_evidence', []):
+                print('Pending evidence: ' + item['check'] + ' ' + item['outcome'] + ' ' + item['id'] + ' (uncommitted; pass --pending to gate)')
         elif not output.get('findings'):
             print(json.dumps({k: v for k, v in output.items() if k not in ('version', 'command', 'ok', 'findings')}, indent=2))
         if output.get('diff'):
