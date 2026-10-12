@@ -323,6 +323,48 @@ class RunTests(unittest.TestCase):
         self.assertIn('unknown lock "ghost"; declared: mem', r.stderr)
         self.assertNotEqual(run_cli(self.root, "exec", "--lock", "mem", "--", "true").returncode, 0)
 
+    def _exec_child(self, child_code):
+        import signal, time
+        write_overlay(self.root, "## Locks\nmem:\n")
+        pidfile = self.root.parent / "child.pid"
+        holder = subprocess.Popen(
+            [sys.executable, str(SCRIPTS / "check.py"), "exec", "--lock", "mem", "--timeout", "30", "--",
+             sys.executable, "-c", child_code, str(pidfile)],
+            cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        deadline = time.monotonic() + 5
+        while not pidfile.exists() or not pidfile.read_text():
+            self.assertLess(time.monotonic(), deadline)
+            time.sleep(0.02)
+        child = int(pidfile.read_text())
+        started = time.monotonic()
+        holder.send_signal(signal.SIGTERM)
+        holder.communicate(timeout=10)
+        return holder.returncode, child, time.monotonic() - started
+
+    def assert_gone(self, pid):
+        with self.assertRaises(ProcessLookupError):
+            os.kill(pid, 0)
+
+    @unittest.skipUnless(os.name == "posix", "signal forwarding is POSIX-only")
+    def test_exec_forwards_termination_to_its_child_group(self):
+        code = "import os,sys,time; open(sys.argv[1],'w').write(str(os.getpid())); time.sleep(30)"
+        returncode, child, elapsed = self._exec_child(code)
+        self.assertEqual(returncode, 143)
+        self.assertLess(elapsed, 5)
+        self.assert_gone(child)
+        self.assertEqual(run_cli(self.root, "locks").stdout, "mem: 1 slot\n  mem.0 free\n")
+
+    @unittest.skipUnless(os.name == "posix", "signal forwarding is POSIX-only")
+    def test_exec_kills_a_child_that_ignores_termination_after_grace(self):
+        code = ("import os,signal,sys,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+                "open(sys.argv[1],'w').write(str(os.getpid())); time.sleep(30)")
+        returncode, child, elapsed = self._exec_child(code)
+        self.assertEqual(returncode, 143)
+        self.assertLess(elapsed, 5)
+        self.assert_gone(child)
+        self.assertEqual(run_cli(self.root, "locks").stdout, "mem: 1 slot\n  mem.0 free\n")
+
     def test_failed_run_prints_full_log_path(self):
         write_overlay(self.root, "## Validators\nlong: seq 1 500; exit 1\n")
         self.open()

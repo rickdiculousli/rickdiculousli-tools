@@ -15,6 +15,7 @@ import subprocess
 import sys
 import time
 import tempfile
+import threading
 from typing import Sequence
 
 from . import DelegationError
@@ -336,10 +337,24 @@ TAIL_LINES = 40
 TAIL_CHARS = 4000
 
 
+FORWARDED = ("SIGTERM", "SIGINT", "SIGHUP")
+FORWARD_GRACE = 1.0
+
+
+class _Forwarded(BaseException):
+    """Unwinds communicate() after a caller's signal was passed to the child group."""
+
+
 def execute(
     root: Path, command: str | Sequence[str], timeout: float | None, capture: bool = True
 ) -> tuple[int | None, bool, bytes]:
-    """Run a shell command string (or an argv list), killing its process group on timeout."""
+    """Run a shell command string (or an argv list), killing its process group on timeout.
+
+    The child runs in its own session, so on POSIX a SIGTERM/SIGINT/SIGHUP sent to
+    this process is forwarded to the child's process group. If the group is still
+    alive after FORWARD_GRACE seconds it is killed; the process then exits with
+    128 + signal, releasing any lock it holds.
+    """
     posix = os.name == "posix"
     process = subprocess.Popen(
         command,
@@ -350,17 +365,44 @@ def execute(
         stderr=subprocess.STDOUT if capture else None,
         start_new_session=posix,
     )
+    received: list[int] = []
+
+    def forward(signum, _frame):
+        received.append(signum)
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signum)
+        raise _Forwarded()
+
+    previous = {}
     try:
-        output, _ = process.communicate(timeout=timeout)
-        return process.returncode, False, output or b""
-    except subprocess.TimeoutExpired:
-        if posix:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
-        else:
-            process.kill()
-        output, _ = process.communicate()
-        return None, True, output or b""
+        try:
+            if posix and threading.current_thread() is threading.main_thread():
+                for name in FORWARDED:
+                    number = getattr(signal, name)
+                    previous[number] = signal.signal(number, forward)
+            output, _ = process.communicate(timeout=timeout)
+            return process.returncode, False, output or b""
+        except subprocess.TimeoutExpired:
+            if posix:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+            output, _ = process.communicate()
+            return None, True, output or b""
+        except _Forwarded:
+            for number in previous:
+                signal.signal(number, signal.SIG_IGN)
+            try:
+                process.communicate(timeout=FORWARD_GRACE)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            raise SystemExit(128 + received[0])
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
 
 
 def log_path(root: Path, result_id: str) -> Path:

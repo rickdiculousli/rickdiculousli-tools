@@ -168,7 +168,9 @@ Wrap each native process with one foreground
 `python3 "$DELEGATION_CHECKER" exec --lock games --timeout 300 -- <command>`.
 Configure the checker path from an installed skill or any checkout and quote
 paths with spaces. Slots apply across worktrees sharing the same XDG state root;
-keep children in the foreground. Outer orchestration is optional, and validators
+keep children in the foreground. Since 0.7.3, on POSIX, signalling `check.py`
+(SIGTERM, SIGINT, SIGHUP) forwards to the wrapped process group, kills it after
+a one-second grace, and releases the lock. Outer orchestration is optional, and validators
 and general tools remain usable standalone through their existing commands.
 
 Roles require at least one cap; prefer `max-uses`. Counts include the first brief

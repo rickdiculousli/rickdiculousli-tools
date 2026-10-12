@@ -225,7 +225,12 @@ The public lock interface is
 Configure `DELEGATION_CHECKER` as an installed skill's `scripts/check.py` or any
 checkout's `plugins/delegation/skills/delegation/scripts/check.py`; quote paths
 containing spaces. Use one foreground `exec` for each native process, with no
-detached children. A declared `slots=N` permits N foreground processes across
+detached children. On POSIX, `exec` and `run` forward SIGTERM, SIGINT and SIGHUP
+to the command's process group, kill the group if it is still alive one second
+later, then exit with 128 + signal and release the lock; an orchestrator can
+therefore cancel or time out a wrapped native process by signalling `check.py`.
+Allow at least that grace before escalating to SIGKILL, which cannot be
+forwarded. A declared `slots=N` permits N foreground processes across
 worktrees of one repository. All coordinating processes must share the same
 XDG state root. Optional outer orchestration wraps commands through this public
 CLI; validators and general tools remain usable standalone without importing

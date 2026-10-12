@@ -694,3 +694,21 @@ and `.codex/plugins/cache/rickdiculousli-tools/delegation/0.7.2`. Claude also lo
 the declared local source folder. Reload Claude plugins and start a new Codex
 session to consume the updated instructions; the reinstall does not establish
 that running model sessions reloaded skills.
+
+### Delegation 0.7.3 — exec/run signal forwarding
+
+`execute` (used by `exec` and `run`) now forwards SIGTERM, SIGINT and SIGHUP on
+POSIX to the wrapped command's process group, kills the group after a one-second
+grace, and exits with 128 + signal, releasing the held lock. This lets an
+orchestrator (game-decomp capture) cancel or time out a game wrapped in
+`exec --lock games` without orphaning it in its separate session.
+
+- Two new `test_delegation_run` tests (a child that exits on SIGTERM and one that
+  ignores it) failed against 0.7.2 and pass with 0.7.3; all 25 run tests pass.
+- Full suite on the Mac: 364 tests, 12 failures, the same 12 as the unchanged
+  tree (`/var` vs `/private/var` temp-path comparisons in Windows-default, XDG
+  and linked-worktree tests); none involve this change.
+- `sync_marketplaces.py --check` current; `verify_lifecycle.py` PASS for
+  codex-cli 0.162.1 and Claude Code 2.1.296 in disposable profiles.
+
+Not yet reinstalled on the Mac or linux normal profiles; not pushed.
