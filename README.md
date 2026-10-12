@@ -589,3 +589,7 @@ snapshot/draft expiry. Existing worktrees retain unfinished work. Read-only
 inspection creates no state. Approved wind-down clears only the displayed current
 payload; durable Git evidence and other plugins survive. Manual `state gc` works
 outside Git. No scheduler, hooks, background workers or consumer build are needed.
+
+## License
+
+[MIT](LICENSE).
