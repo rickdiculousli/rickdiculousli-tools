@@ -770,3 +770,21 @@ Verification on Linux (linux, Python 3.14.4):
 
 No host model session was run against the new procedures, and no normal-profile
 reinstall was performed.
+
+### Requested push and delegation 0.8.0 reinstall — linux only
+
+Commit `077d7b6` was pushed to `origin/main`. On linux, the local-checkout
+marketplace was refreshed and delegation was uninstalled and reinstalled in the
+normal user profiles: Claude Code with `--scope user`, Codex with
+`plugin remove`/`plugin add` (Codex's `marketplace upgrade` reports a local
+folder marketplace as not Git-backed, which is expected).
+
+| Machine | Host CLI | Delegation | Portable source comparison |
+| --- | --- | --- | --- |
+| linux | Claude Code 2.1.296 | 0.8.0 | all 24 files match |
+| linux | Codex 0.162.1 | 0.8.0 | all 24 files match |
+
+Installed `check.py open --help` (showing `--kind` and `--new-kind`),
+`kinds --help` and `patterns --help` ran from both copies. The Mac was not
+touched; its owner is updating it separately. Restart Claude Code and start a
+new Codex session to load the updated skills.
