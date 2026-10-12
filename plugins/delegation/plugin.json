@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "delegation",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Pods of judge, execute and routine agents: route bulk work to cheaper tiers and keep evidence by tree hash.",
   "author": {
     "name": "Rick Li"

@@ -27,7 +27,7 @@ SCHEMA = 1
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 TIERS = ("execute", "routine")
 OUTCOMES = ("done", "stuck", "abandoned")
-CONTEXT_REF = re.compile(r"(?:state:context/|\.delegation/context/)[^\s`\"\'<>),;]+")
+CONTEXT_REF = re.compile(r"state:context/[^\s`\"\'<>),;]+")
 
 
 def _context_hashes(root: Path, brief: bytes) -> dict[str, str]:
@@ -171,7 +171,7 @@ def open_delegation(
         selected_role = prior_open.get('role')
     selected = (roles or {}).get(selected_role)
     source_snapshot = None
-    if selected and not selected.runbook.startswith('state:'):
+    if selected:
         source_snapshot = _runbook_source(root_resolved, selected.runbook)[1]
     state.opportunistic()
     tree = git_tree(root)
@@ -198,31 +198,22 @@ def open_delegation(
             role = (roles or {}).get(role_name)
             if role is None or role.tier != tier:
                 raise DelegationError(f"unknown role or wrong tier: {role_name}")
-            source_name = None
-            runbook_ref = role.runbook
-            if not runbook_ref.startswith('state:context/'):
-                source_name = PurePosixPath(runbook_ref.replace('\\', '/')).as_posix()
-                source, source_bytes = _runbook_source(root_resolved, runbook_ref)
-                if source_snapshot != source_bytes:
-                    raise DelegationError("role runbook source changed while hashing tree; retry")
-                runbook_ref = 'state:context/' + source_name
-                target = state.context_path(root, runbook_ref)
-                if target.is_symlink():
-                    raise DelegationError(f"materialized runbook destination must not be a symlink: {target}")
-                digest = hashlib.sha256(source_bytes).hexdigest()
-                pins = [recorded_digest for event in active
-                        for reference, recorded_digest in event.get('context', {}).items()
-                        if state.context_path(root, reference).resolve() == target.resolve()]
-                if pins and (not target.is_file() or target.read_bytes() != source_bytes
-                             or any(recorded_digest != digest for recorded_digest in pins)):
-                    raise DelegationError(f"role runbook context is pinned by open delegations; close all pins before rematerializing {source_name}")
-                material = (target, source_bytes, source)
-            else:
-                target = state.context_path(root, runbook_ref)
-                if not target.is_file():
-                    raise DelegationError(f"role runbook not found or escapes context directory: {runbook_ref}")
-                source_bytes = target.read_bytes()
-                digest = hashlib.sha256(source_bytes).hexdigest()
+            source_name = PurePosixPath(role.runbook.replace('\\', '/')).as_posix()
+            source, source_bytes = _runbook_source(root_resolved, role.runbook)
+            if source_snapshot != source_bytes:
+                raise DelegationError("role runbook source changed while hashing tree; retry")
+            runbook_ref = 'state:context/' + source_name
+            target = state.context_path(root, runbook_ref)
+            if target.is_symlink():
+                raise DelegationError(f"materialized runbook destination must not be a symlink: {target}")
+            digest = hashlib.sha256(source_bytes).hexdigest()
+            pins = [recorded_digest for event in active
+                    for reference, recorded_digest in event.get('context', {}).items()
+                    if state.context_path(root, reference).resolve() == target.resolve()]
+            if pins and (not target.is_file() or target.read_bytes() != source_bytes
+                         or any(recorded_digest != digest for recorded_digest in pins)):
+                raise DelegationError(f"role runbook context is pinned by open delegations; close all pins before rematerializing {source_name}")
+            material = (target, source_bytes, source)
             # Hash references under the transaction, allowing a new role context reference
             # without writing its proposed bytes until all admission checks pass.
             for ref in sorted(set(CONTEXT_REF.findall(brief_bytes.decode('utf-8', errors='replace')))):
@@ -246,7 +237,7 @@ def open_delegation(
                     or (role.max_context_bytes is not None and context_bytes > role.max_context_bytes)):
                 raise DelegationError(f"reuse cap hit for role {role_name}; have the agent refresh the role runbook first, then start a fresh agent")
             metadata = {'role': role_name, 'role_runbook': runbook_ref,
-                        **({'role_runbook_source': source_name} if source_name else {}),
+                        'role_runbook_source': source_name,
                         'agent_session': session, 'continued_from': continued_from,
                         'uses': uses, 'context_bytes': context_bytes, 'context_bytes_added': size}
         else:

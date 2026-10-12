@@ -1,4 +1,4 @@
-"""Self-contained XDG identities, lifecycle transactions, collection and migration.
+"""Self-contained XDG identities, lifecycle transactions and collection.
 
 Storage keys identify local paths; they never establish validator acceptance.
 """
@@ -7,7 +7,6 @@ from __future__ import annotations
 from contextlib import contextmanager, ExitStack
 from contextvars import ContextVar
 import hashlib
-import difflib
 import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -229,9 +228,6 @@ class Paths:
         self.path = self.repo / 'worktrees' / self.worktree_key
         self.cache = self.cache_root / self.repo_key / 'worktrees' / self.worktree_key
         self.locks = self.repo / 'locks'
-        self.legacy = self.root / '.delegation'
-        legacy_key = self.repo_key[:16]
-        self.legacy_locks = None if sys_platform() == 'win32' else Path('/tmp') / ('delegation-locks-' + legacy_key)
         verify_location(self)
         # Capture Git discovery and identity before entering bookkeeping locks.
         self.identity = {'version': 1, 'worktree': str(self.root), 'common': str(self.common), 'git': str(self.git),
@@ -261,14 +257,6 @@ class Paths:
             raise DelegationError('Worktree identity changed; inspect state gc and recover the old generation explicitly.')
         if saved is None and self.path.exists() and (not safe_payload(self.path) or (self.path / 'ledger.jsonl').exists()):
             raise DelegationError('Unknown worktree payload without identity; inspect ' + str(self.path))
-        receipt = read(self.path / 'migration.json')
-        if (self.legacy / 'ledger.jsonl').exists():
-            if sys_platform() == 'win32':
-                raise DelegationError('Legacy .delegation history is unsupported on Windows; review copied history on its original POSIX host before removing it.')
-            if receipt is None:
-                raise DelegationError('Legacy .delegation ledger detected; stop old checker sessions, close open delegations, then run state migrate --apply. No fresh XDG history was opened.')
-            if manifest(self.legacy)[0] != receipt['source_digests']:
-                raise DelegationError('Legacy files changed after migration; stop old sessions and recover explicitly. Refusing split histories.')
 
     def ensure(self):
         """Caller holds mutex. No validators or Git processes run here."""
@@ -315,14 +303,6 @@ def context_path(root, ref):
     paths = paths_for(root)
     if ref.startswith('state:context/'):
         return confined(paths.path / 'context', ref[len('state:context/'):])
-    if ref.startswith('.delegation/context/'):
-        # Legacy refs are read only through a verified migration mapping.
-        receipt = read(paths.path / 'migration.json')
-        if receipt and ref in receipt['mappings']:
-            return confined(paths.path, receipt['mappings'][ref])
-        if sys_platform() == 'win32':
-            raise DelegationError('Legacy context references are unsupported on Windows; use state:context/<relative-path>: ' + ref)
-        raise DelegationError('Legacy context reference requires state migrate and an overlay update: ' + ref)
     raise DelegationError('Context references must use state:context/<relative-path>: ' + ref)
 
 
@@ -331,9 +311,6 @@ def recorded_path(root, event, field):
     ref = event[field]
     if event.get('location') == 'state':
         return confined(paths.path, ref)
-    receipt = read(paths.path / 'migration.json', {})
-    if ref in receipt.get('mappings', {}):
-        return confined(paths.path, receipt['mappings'][ref])
     path = Path(ref)
     return path if path.is_absolute() else paths.root / path
 
@@ -351,25 +328,6 @@ def activity(root, kind):
     finally:
         with mutex(paths.state_root):
             record.unlink(missing_ok=True)
-
-
-def manifest(source):
-    recognized, unknown = {}, []
-    if not source.exists():
-        return recognized, unknown
-    for item in sorted(source.rglob('*')):
-        rel = item.relative_to(source).as_posix()
-        if item.is_symlink():
-            unknown.append(rel)
-        elif item.is_file():
-            if rel == 'ledger.jsonl' or (rel.split('/')[0] in {'briefs', 'context', 'logs'}):
-                if any(parent.is_symlink() for parent in item.parents if parent != source.parent):
-                    unknown.append(rel)
-                else:
-                    recognized[rel] = hashlib.sha256(item.read_bytes()).hexdigest()
-            elif rel not in {'.gitignore', 'ledger.lock'}:
-                unknown.append(rel)
-    return recognized, unknown
 
 
 def events_at(path):
@@ -462,7 +420,7 @@ def locks_idle(directory, apply=False):
 
 
 def safe_payload(path):
-    allowed = {'identity.json', 'ledger.jsonl', 'briefs', 'context', 'logs', 'active', 'migration.json'}
+    allowed = {'identity.json', 'ledger.jsonl', 'briefs', 'context', 'logs', 'active'}
     return all(not p.is_symlink() and (p.relative_to(path).parts[0] in allowed) for p in path.rglob('*'))
 
 
@@ -547,8 +505,6 @@ def gc(apply=False, if_due=False, now=None):
                     for ref in event.get('context', {}):
                         if ref.startswith('state:'):
                             pinned.add(ref[6:])
-                receipt = read(path / 'migration.json', {})
-                pinned.update(receipt.get('mappings', {}).values())
                 # Current role declarations pin even runbooks not yet used by a delegation.
                 from .overlay import load_overlay
                 overlay = load_overlay(Path(saved['worktree']))
@@ -556,10 +512,7 @@ def gc(apply=False, if_due=False, now=None):
                     if ref.startswith('state:context/'):
                         pinned.add(ref[6:])
                 for role in overlay.roles.values():
-                    if role.runbook.startswith('state:'):
-                        pinned.add(role.runbook[6:])
-                    else:
-                        pinned.add('context/' + PurePosixPath(role.runbook.replace('\\', '/')).as_posix())
+                    pinned.add('context/' + PurePosixPath(role.runbook.replace('\\', '/')).as_posix())
                 for folder in ('briefs', 'context'):
                     for item in (path / folder).rglob('*'):
                         if item.is_file() and not any(item.relative_to(path).as_posix() == ref or item.relative_to(path).as_posix().startswith(ref.rstrip('/') + '/') for ref in pinned) and now - item.stat().st_mtime >= MONTH:
@@ -640,175 +593,3 @@ def opportunistic():
     # Due check before Git discovery keeps normal commands cheap.
     if time.time() - read(xdg('state') / 'gc.json', {}).get('last_sweep', 0) >= WEEK:
         gc(apply=True, if_due=True)
-
-
-def checker_activity(paths):
-    """Conservative Linux checker detection, plus native locks on every host.
-
-    Arbitrary old binaries cannot be proved absent; coordinated restart is required.
-    """
-    busy = []
-    if sys_platform() != 'linux':
-        return busy
-    for directory in Path('/proc').iterdir():
-        if not directory.name.isdigit() or int(directory.name) == os.getpid():
-            continue
-        try:
-            args = (directory / 'cmdline').read_bytes().split(b'\0')
-            if not any(x.endswith(b'/check.py') or x == b'check.py' for x in args):
-                continue
-            cwd = (directory / 'cwd').resolve(strict=True)
-            from .tree import _git
-            try:
-                common = Path(_git(cwd, ['rev-parse', '--git-common-dir']).strip())
-                common = (common if common.is_absolute() else cwd / common).resolve()
-            except DelegationError:
-                common = None
-            if common == paths.common or str(paths.root).encode() in args:
-                busy.append(int(directory.name))
-        except (OSError, RuntimeError):
-            continue
-    return busy
-
-
-def migrate(root, apply=False):
-    if sys_platform() == 'win32':
-        raise DelegationError('Legacy migration is POSIX-only; Windows starts fresh in LocalAppData.')
-    paths = paths_for(root)
-    digests, unknown = manifest(paths.legacy)
-    events = events_at(paths.legacy / 'ledger.jsonl')
-    mappings = {'.delegation/' + name: name for name in digests}
-    from .overlay import load_overlay
-    overlay = load_overlay(paths.root)
-    references = []
-    # Propose edits only. User-written helpers are never mass-rewritten.
-    for item in [overlay.path, *paths.root.glob('scripts/*.py'), *paths.root.glob('scripts/*.sh')]:
-        if item.is_file() and '.delegation/' in item.read_text(errors='replace'):
-            references.append(str(item))
-    proposed_edits = []
-    if overlay.path.is_file():
-        original = overlay.path.read_text()
-        updated = original.replace('.delegation/context/', 'state:context/')
-        if original != updated:
-            proposed_edits.append({'path': str(overlay.path), 'diff': ''.join(difflib.unified_diff(original.splitlines(True), updated.splitlines(True), fromfile=str(overlay.path), tofile=str(overlay.path)))})
-    result = {'version': 1, 'source': str(paths.legacy), 'destination': str(paths.path),
-              'legacy_locks': str(paths.legacy_locks), 'source_digests': digests,
-              'events': len(events), 'briefs': sum(x.startswith('briefs/') for x in digests), 'logs': sum(x.startswith('logs/') for x in digests),
-              'context': sum(x.startswith('context/') for x in digests), 'unknown': unknown,
-              'references': references, 'proposed_edits': proposed_edits, 'proposed_reference_update': '.delegation/context/ -> state:context/',
-              'host_side_effects': overlay.sections.get('Host side effects', ''),
-              'pending': [e['delegation'] for e in pending_events(events)], 'applied': False}
-    if not apply:
-        result['destination_exists'] = paths.path.exists()
-        result['conflicts'] = []
-        receipt = read(paths.path / 'migration.json')
-        if paths.path.exists() and not receipt:
-            result['conflicts'].append('Existing XDG payload without a matching migration receipt; histories cannot be merged.')
-        if receipt and receipt.get('source_digests') != digests:
-            result['conflicts'].append('Legacy source differs from the migration receipt.')
-        if result['pending']:
-            result['conflicts'].append('Open legacy delegations must be closed with the old checker.')
-        result['busy_legacy_locks'] = []
-        for item in [paths.legacy / 'ledger.lock', *paths.legacy_locks.glob('*.lock')]:
-            if not item.exists():
-                continue
-            if item.is_symlink():
-                result['busy_legacy_locks'].append(str(item))
-                continue
-            handle = try_acquire(item)
-            if handle is None:
-                result['busy_legacy_locks'].append(str(item))
-            else:
-                release(handle)
-        if result['busy_legacy_locks']:
-            result['conflicts'].append('Busy or unsafe legacy locks must be resolved before migration.')
-        result['detected_checkers'] = checker_activity(paths)
-        if result['detected_checkers']:
-            result['conflicts'].append('Active repository checker processes must be stopped.')
-        return result
-    if not digests:
-        raise DelegationError('No recognized legacy payload to migrate.')
-    if result['pending'] or checker_activity(paths):
-        raise DelegationError('Migration requires quiescent old/new sessions and no open delegations; close work and stop/restart checker sessions.')
-    from .tree import _git
-    worktrees = [Path(line[9:]) for line in _git(paths.root, ['worktree', 'list', '--porcelain', '-z']).split('\0') if line.startswith('worktree ')]
-    legacy_mutexes = [paths.legacy / 'ledger.lock']
-    for worktree in worktrees:
-        if worktree.resolve() == paths.root:
-            continue
-        legacy = worktree / '.delegation'
-        if pending_events(events_at(legacy / 'ledger.jsonl')):
-            raise DelegationError('Migration refused: open legacy delegation in another worktree; close all repository work first.')
-        if (legacy / 'ledger.lock').exists():
-            legacy_mutexes.append(legacy / 'ledger.lock')
-    # Native legacy slots and ledger mutex stay held through publication; no deletion.
-    with ExitStack() as stack:
-        for item in [*legacy_mutexes, *paths.legacy_locks.glob('*.lock')]:
-            if item.is_symlink():
-                raise DelegationError('Unsafe legacy lock symlink: ' + str(item))
-            handle = try_acquire(item)
-            if handle is None:
-                raise DelegationError('Migration refused: busy legacy lock ' + str(item))
-            stack.callback(release, handle)
-        with mutex(paths.state_root):
-            if paths.path.exists() and not (paths.path / 'migration.json').exists():
-                raise DelegationError('Conflicting XDG destination; inspect/recover it before migration. Histories will not be merged.')
-            if any(active_records(payload) or pending_events(events_at(payload / 'ledger.jsonl')) for payload in (paths.repo / 'worktrees').glob('*')) or not locks_idle(paths.locks):
-                raise DelegationError('Migration refused: active new checker/validator or resource owner.')
-            receipt = read(paths.path / 'migration.json')
-            if receipt:
-                if receipt['source_digests'] != digests:
-                    raise DelegationError('Legacy files changed; do not merge histories. Recover explicitly.')
-                # Original migrated files may later acquire appended ledger events.
-                for name, digest in receipt['destination_digests'].items():
-                    target = paths.path / name
-                    if not target.is_file():
-                        raise DelegationError('Migrated destination missing; recover from receipt: ' + name)
-                    if name != 'ledger.jsonl' and hashlib.sha256(target.read_bytes()).hexdigest() != digest:
-                        raise DelegationError('Migrated destination changed; inspect receipt: ' + name)
-                    if name == 'ledger.jsonl' and not target.read_bytes().startswith((paths.legacy / name).read_bytes()):
-                        raise DelegationError('Destination ledger conflicts with original history.')
-                paths.check()
-                return {**result, 'applied': True, 'noop': True}
-            if paths.path.exists():
-                raise DelegationError('Conflicting XDG destination; inspect/recover it before migration. Histories will not be merged.')
-            repo_saved = read(paths.repo / 'identity.json')
-            if repo_saved and any(repo_saved.get(k) != v for k, v in paths.repo_identity.items()):
-                raise DelegationError('Conflicting repository identity.')
-        staging = paths.repo / ('migration-' + paths.worktree_key)
-        with mutex(paths.state_root):
-            if staging.is_symlink():
-                raise DelegationError('Unsafe migration staging symlink.')
-            staging.mkdir(parents=True, exist_ok=True)
-            marker = read(staging / 'staging.json')
-            if marker and marker != digests:
-                raise DelegationError('Interrupted migration source changed; inspect staging before retry.')
-            allowed = set(digests) | {'staging.json', 'identity.json', 'migration.json'}
-            if any(item.is_symlink() or (item.is_file() and item.relative_to(staging).as_posix() not in allowed) for item in staging.rglob('*')):
-                raise DelegationError('Unknown/unsafe interrupted staging files; inspect staging before retry.')
-            atomic(staging / 'staging.json', digests)
-        for name, digest in digests.items():
-            target = confined(staging, name)
-            if target.exists():
-                if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
-                    raise DelegationError('Interrupted staging conflict: ' + name)
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(paths.legacy / name, target)
-            if hashlib.sha256(target.read_bytes()).hexdigest() != digest:
-                raise DelegationError('Migration copy digest mismatch: ' + name)
-        if manifest(paths.legacy)[0] != digests:
-            raise DelegationError('Legacy source changed during migration; stop old sessions and retry after inspection.')
-        atomic(staging / 'identity.json', {**paths.identity, 'created': time.time(), 'missing_since': None})
-        atomic(staging / 'migration.json', {'version': 1, 'source': str(paths.legacy), 'source_digests': digests,
-                                           'destination_digests': digests, 'mappings': mappings})
-        (staging / 'staging.json').unlink()
-        # Marker can be reconstructed after an interrupted final publication.
-        with mutex(paths.state_root):
-            if paths.path.exists() or any(active_records(payload) or pending_events(events_at(payload / 'ledger.jsonl')) for payload in (paths.repo / 'worktrees').glob('*')) or not locks_idle(paths.locks):
-                raise DelegationError('Migration publication refused: destination/activity changed; retry after quiescent inspection.')
-            paths.path.parent.mkdir(parents=True, exist_ok=True)
-            atomic(paths.repo / 'identity.json', {**paths.repo_identity, 'created': time.time()})
-            os.replace(staging, paths.path)
-    return {**result, 'applied': True, 'noop': False,
-            'next': 'Update the listed overlay/helpers, restart all sessions on the new checker and shared XDG root. Retain legacy copies for review.'}

@@ -1,8 +1,9 @@
 # Addendum: unified XDG state and locks
 
-Status: implemented in delegation 0.7.1 and long-horizon 0.2.1.
-Migration is explicit and quiescent; this release does not automatically migrate
-legacy user state. See docs/verification.md for actual validation and limitations.
+Status: implemented in delegation 0.7.1 and long-horizon 0.2.1. Its migration
+sections are superseded by the [migrate skills design](2026-10-12-migrate-skills-design.md):
+delegation 0.10.0 and long-horizon 0.5.0 removed legacy-layout migration. The
+XDG layout, lock and cleanup rules below still apply.
 
 Applies to the [delegation design](2026-10-09-delegation-design.md), the
 [long-horizon design](2026-10-11-long-horizon-design.md) and its

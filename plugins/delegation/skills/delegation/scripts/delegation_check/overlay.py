@@ -23,6 +23,7 @@ KNOWN_HEADINGS: tuple[str, ...] = (
     "Rote scripts",
     "Host side effects",
     "Authoring",
+    "Version",
 )
 AUTHORING_KEYS = ("roles", "scripts")
 AUTHORING_VALUES = ("ask", "allowed")
@@ -35,6 +36,7 @@ _VALIDATOR = re.compile(r"([^\s\[]+)\s*(?:\[([^\]]*)\])?\Z")
 _REFERENCE = re.compile(r"validator:([A-Za-z0-9][A-Za-z0-9_-]*)")
 _LEADING_INT = re.compile(r"(\d+)")
 _PLATFORMS = re.compile(r"[a-z0-9]+(?:\|[a-z0-9]+)*\Z")
+_VERSION = re.compile(r"\d+\.\d+\.\d+")
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,7 @@ class Overlay:
     roles: dict[str, Role]
     warnings: tuple[str, ...] = ()
     authoring: dict[str, str] = field(default_factory=lambda: dict.fromkeys(AUTHORING_KEYS, "allowed"))
+    version: str | None = None
 
 
 def overlay_path(root: Path) -> Path:
@@ -153,11 +156,10 @@ def _roles(lines: list[tuple[int, str]], problems: list[str], warnings: list[str
             problems.append(f'line {number}: invalid or duplicate role name "{name}"')
         if tier not in {"execute", "routine"}:
             problems.append(f'line {number}: role tier must be execute or routine')
-        relative = runbook.removeprefix("state:context/")
-        if (not relative or _escapes(relative) or (runbook.startswith("state:") and not runbook.startswith("state:context/"))):
-            problems.append(f'line {number}: role runbook needs a safe repository-relative source or state:context/<relative-path>')
-        elif runbook.startswith("state:context/"):
-            warnings.append(f'line {number}: legacy runbook {runbook}; migrate to a tracked .agents/delegation/runbooks/ source')
+        if runbook.startswith("state:"):
+            problems.append(f'line {number}: outdated role runbook {runbook}; name a tracked source such as .agents/delegation/runbooks/{name}.md')
+        elif not runbook or _escapes(runbook):
+            problems.append(f'line {number}: role runbook needs a safe repository-relative source')
         elif not PurePosixPath(runbook.replace("\\", "/")).as_posix().startswith(".agents/delegation/"):
             warnings.append(f'line {number}: runbook source outside .agents/delegation/: {runbook}; general tool references are supported')
         caps = []
@@ -330,5 +332,13 @@ def load_overlay(root: Path) -> Overlay:
         else:
             seen_authoring.add(name)
             authoring[name] = value
+    version = None
+    version_lines = bodies.get("Version", [])
+    if version_lines:
+        number, text = version_lines[0]
+        if len(version_lines) > 1 or not _VERSION.fullmatch(text):
+            problems.append(f'line {number}: Version needs one plugin version like 0.10.0, got "{text}"')
+        else:
+            version = text
     return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems), roles,
-                   tuple(warnings), authoring)
+                   tuple(warnings), authoring, version)

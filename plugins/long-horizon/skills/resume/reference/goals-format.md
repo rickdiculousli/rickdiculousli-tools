@@ -1,7 +1,7 @@
 # Goals grammar and lifecycle
 
-Outside fenced code, goals are `# Goal: Title` headings; a legacy roadmap without
-these is one implicit goal. Ordered milestones are `## 1. Title` (a dot is
+Outside fenced code, goals are `# Goal: Title` headings. Milestones without a
+goal heading are not read; status reports them as a `layout-outdated` error. Ordered milestones are `## 1. Title` (a dot is
 optional); `## Parked` is excluded. Goals may be open, current, done, shelved or
 dropped; milestones only open/current/done. Literal suffixes come from overlay
 markers. A missing current marker infers first incomplete work. Multiple current

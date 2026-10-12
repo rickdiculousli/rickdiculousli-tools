@@ -10,26 +10,39 @@ from pathlib import Path
 
 from . import DelegationError
 from .brief import footer, task_line, tier_instructions
-from . import locks, patterns, state
+from . import contract, locks, patterns, state
 from .ledger import OUTCOMES, TIERS, close_delegation, execute, judge_run, load_brief, open_delegation, pending, query, read_events, run_validator
 from .overlay import Validator, load_overlay
 from .suggest import suggest
 from .tree import repo_root, tree_hash
 
 
-def _lint(root: Path) -> int:
+def _lint(root: Path, as_json: bool = False) -> int:
     overlay = load_overlay(root)
+    version = contract.version_status(overlay, contract.installed_version())
+    items = contract.layout(root, overlay)
+    ok = not overlay.problems and not any(item.severity == "error" for item in items)
+    if as_json:
+        print(json.dumps({"ok": ok, "overlay": str(overlay.path), "exists": overlay.exists, "version": version,
+                          "problems": list(overlay.problems), "warnings": list(overlay.warnings),
+                          "layout": [item.json() for item in items]}))
+        return 0 if ok else 1
+    notice = contract.version_message(version)
+    if notice:
+        print("warning: " + notice)
+    for item in items:
+        prefix = "" if item.severity == "error" else "warning: "
+        print(f"{prefix}{item.kind} {item.path}: {item.message} Fix: {item.remedy}")
     if not overlay.exists:
         print(f"No overlay at {overlay.path}; base defaults apply.")
-        return 0
+        return 0 if ok else 1
     for warning in overlay.warnings:
         print("warning: " + warning)
-    if overlay.problems:
-        for problem in overlay.problems:
-            print(problem)
-        return 1
-    print(f"Overlay OK: {overlay.path}")
-    return 0
+    for problem in overlay.problems:
+        print(problem)
+    if ok:
+        print(f"Overlay OK: {overlay.path}")
+    return 0 if ok else 1
 
 
 def _open(root: Path, args: argparse.Namespace) -> int:
@@ -319,19 +332,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="check.py", description=__doc__)
     parser.add_argument("--root", type=Path, help="Worktree root (default: the git root of the cwd)")
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("lint", help="Report overlay problems")
+    linter = commands.add_parser("lint", help="Report overlay problems, layout drift and version mismatch")
+    linter.add_argument("--json", action="store_true")
     commands.add_parser("tree", help="Print the current tree hash")
-    paths = commands.add_parser('paths', help='Inspect XDG paths without creating or migrating payloads')
+    paths = commands.add_parser('paths', help='Inspect XDG paths without creating payloads')
     paths.add_argument('--json', action='store_true')
-    states = commands.add_parser('state', help='Explicit local collection and coordinated legacy migration')
+    states = commands.add_parser('state', help='Explicit local collection')
     subs = states.add_subparsers(dest='state_command', required=True)
     collector = subs.add_parser('gc')
     collector.add_argument('--apply', action='store_true')
     collector.add_argument('--if-due', action='store_true')
     collector.add_argument('--json', action='store_true')
-    migration = subs.add_parser('migrate')
-    migration.add_argument('--apply', action='store_true')
-    migration.add_argument('--json', action='store_true')
     opener = commands.add_parser("open", help="Record a delegation as started")
     opener.add_argument("--delegation", required=True)
     opener.add_argument("--tier", required=True, choices=TIERS)
@@ -400,7 +411,7 @@ def _resolve_root(given: Path | None) -> Path:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == 'state' and args.state_command == 'gc':
+        if args.command == 'state':
             print(json.dumps(state.gc(args.apply, args.if_due), indent=2))
             return 0
         root = _resolve_root(args.root)
@@ -408,11 +419,8 @@ def main(argv: list[str] | None = None) -> int:
             paths = state.Paths(root).json()
             print(json.dumps(paths) if args.json else '\n'.join(f'{k}: {v}' for k, v in paths.items()))
             return 0
-        if args.command == 'state':
-            print(json.dumps(state.migrate(root, args.apply), indent=2))
-            return 0
         if args.command == "lint":
-            return _lint(root)
+            return _lint(root, args.json)
         if args.command == "tree":
             print(tree_hash(root, load_overlay(root).extra_inputs))
             return 0

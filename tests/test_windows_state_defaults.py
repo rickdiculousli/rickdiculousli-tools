@@ -59,13 +59,10 @@ class WindowsDefaultsTests(unittest.TestCase):
                     self.assertEqual(module.xdg('state'), self.home / '.local/state/rickdiculousli-tools' / plugin)
                     self.assertEqual(module.xdg('cache'), self.home / '.cache/rickdiculousli-tools' / plugin)
 
-    def test_windows_has_no_legacy_lock_location_or_migration(self):
+    def test_windows_paths_stay_in_localappdata(self):
         root = delegation_support.git_repo(self.base / 'repo')
         with patch.dict(os.environ, {'LOCALAPPDATA': str(self.local)}, clear=True), patch.object(delegation, 'sys_platform', return_value='win32'):
             paths = delegation.Paths(root)
-            self.assertIsNone(paths.legacy_locks)
-            for apply in (False, True):
-                with self.assertRaisesRegex(DelegationError, 'POSIX'):
-                    delegation.migrate(root, apply)
+            self.assertTrue(paths.state_root.is_relative_to(self.local))
             self.assertFalse(self.local.exists())
             self.assertFalse((root / '.delegation').exists())

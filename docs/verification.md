@@ -852,3 +852,32 @@ Verification on macOS (Darwin 25.5.0, Python 3.14.7):
 - `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
   PASS at **2026-10-12T19:14:10.538612+00:00** on **codex-cli 0.162.1** and **Claude Code 2.1.296**, in
   disposable profiles.
+
+## 2026-10-12: delegation 0.10.0 and long-horizon 0.5.0, migrate skills
+
+Each plugin gains a `migrate` skill, designed in
+[the migrate skills spec](superpowers/specs/2026-10-12-migrate-skills-design.md).
+Lint knows only the current contract and reports layout drift; overlays carry
+`## Version`, and `check.py lint` / `lh.py status` warn `version-mismatch` when its
+major.minor is older than the installed plugin or missing. Pre-XDG handling is
+removed: delegation's `state migrate`, the `.delegation/` ledger guard, migration
+receipts and `.delegation/context/` references, and long-horizon's `legacy-state`
+finding. `state:context/` role runbooks, readiness paths without `cache:` and
+milestones without `# Goal:` are no longer read and lint reports them; the
+long-horizon `## Schema` heading is ignored and reported.
+
+Verification on Linux 7.0.0-38-generic, Python 3.14.4:
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  manifests declare delegation 0.10.0 and long-horizon 0.5.0.
+- `python3 scripts/run_tests.py`: 407 tests passed in 14.3 seconds. Serial
+  `python3 -m unittest discover -s tests`: 407 passed in 79.2 seconds. New
+  `test_delegation_contract` and `test_long_horizon_contract` cover version
+  status, layout findings and installed-version discovery.
+- `python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json`:
+  PASS at **2026-10-12T21:09:46.253353+00:00** on **codex-cli 0.162.1** and
+  **Claude Code 2.1.296**, in disposable profiles, with new files marked
+  intent-to-add.
+
+No host model session ran either migrate skill, no consuming repository was
+migrated, and no normal-profile reinstall was performed.

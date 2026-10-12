@@ -48,7 +48,7 @@ def git_tree(root: Path) -> str:
     from .state import Paths, atomic, mutex, owner
     paths = Paths(root)
     root = paths.root
-    # Inspect identity/legacy history without opening a new payload for hashing.
+    # Inspect identity without opening a new payload for hashing.
     paths.check()
     attempt = paths.cache / 'hashing' / secrets.token_hex(16)
     with mutex(paths.state_root):

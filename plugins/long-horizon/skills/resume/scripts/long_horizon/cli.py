@@ -4,7 +4,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from . import closure, evidence, gate, goals, handoff, lint, overlay, readiness, state
+from . import closure, contract, evidence, gate, goals, handoff, lint, overlay, readiness, state
 from .git import Git
 from .model import Invalid, Blocked, finding
 
@@ -125,9 +125,7 @@ def inspect(args, git, policy, parsed):
             overlay.script(policy, section, name)
         except Invalid as error:
             findings.append(finding('script-missing', str(error), 'Configure the declared script path/environment value.', 'warning'))
-    if (git.root / '.long-horizon').exists():
-        findings.append(finding('legacy-state', 'Legacy checkout-local long-horizon state exists.',
-            'Review and explicitly import recoverable records into XDG; no automatic move/delete.', 'warning'))
+    findings += contract.version(policy, contract.installed_version())
     selection = goals.select(parsed, policy, report, continuation['blockers'])
     needs = continuation['decisions'][:]
     if selection['mode'] == 'awaiting-signoff':
@@ -168,11 +166,7 @@ def execute(args):
         if args.apply and not args.fix:
             raise Invalid('--apply requires --fix and explicit review of the mechanical diff.')
         data, findings = inspect(args, git, policy, parsed)
-        findings += lint.pointers(policy, git)
-        name = policy['startup'].get('readiness')
-        if name and not name.startswith('cache:'):
-            findings.append(finding('readiness-legacy-path', 'Legacy readiness path violates the external runtime cache contract.',
-                'Use readiness: \"cache:readiness.json\" and have the startup helper discover its destination with lh.py paths --root PATH --json.', 'warning', policy['_overlay']))
+        findings += lint.pointers(policy, git) + contract.layout(policy, git)
         if args.fix:
             data['diff'] = lint.repair(policy, parsed, args.apply)
         return data, findings

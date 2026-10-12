@@ -22,8 +22,8 @@ Nested relative `.json` paths are allowed; empty components, `..`, absolute or
 Windows drive paths, backslashes, colons, NULs, trailing dots/spaces in components
 and symlinks within the plugin cache are rejected. These rules also prevent
 Windows path normalisation and alternate-stream escapes.
-Legacy paths still load relative to the checkout (or `--draft-root`); absolute
-legacy paths still load as before. `lint` warns and recommends `cache:`.
+Any value without `cache:` is not read: status reports it as a `layout-outdated`
+error and treats readiness as unknown.
 
 The consumer helper discovers its destination without creating anything:
 
@@ -51,7 +51,7 @@ No persistent state payload is needed for readiness-only use. The identity recor
 lets GC recognise readiness-only caches and enforce deleted-worktree recovery.
 
 Missing readiness or missing/malformed/mismatched cache identity remains unknown
-with a recovery instruction. Legacy report lookup does not require cache identity.
+with a recovery instruction.
 A report older than 24 hours stops being usable; this does not automatically delete the report. Weekly
 GC retains existing worktrees’ readiness caches, and removes recognised JSON
 readiness payloads after confirmed deletion and the seven-day recovery window.

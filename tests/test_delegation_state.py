@@ -27,26 +27,6 @@ class StateTests(unittest.TestCase):
         self.root = git_repo(self.base / 'repo with spaces')
         self.paths = state.Paths(self.root)
 
-    def legacy(self, pending=False):
-        source = self.root / '.delegation'
-        (source / 'briefs').mkdir(parents=True)
-        (source / 'context').mkdir()
-        (source / 'logs/d1').mkdir(parents=True)
-        (source / '.gitignore').write_text('*\n')
-        (source / 'briefs/d1.md').write_text('Old brief\n')
-        (source / 'context/pinned.md').write_text('Old context\n')
-        (source / 'logs/d1/1.log').write_text('Original output\n')
-        events = [{'event': 'open', 'delegation': 'd1', 'tier': 'routine', 'writes': False,
-                   'brief': '.delegation/briefs/d1.md', 'tree': 'old-tree',
-                   'context': {'.delegation/context/pinned.md': hashlib.sha256(b'Old context\n').hexdigest()}},
-                  {'event': 'result', 'delegation': 'd1', 'id': 'd1#1', 'ok': True,
-                   'stable': True, 'tree': 'old-tree', 'output_sha256': 'historical-hash',
-                   'log': '.delegation/logs/d1/1.log'}]
-        if not pending:
-            events.append({'event': 'close', 'delegation': 'd1', 'outcome': 'done'})
-        (source / 'ledger.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in events))
-        return source, events
-
     def test_paths_inspection_creates_nothing(self):
         result = run_cli(self.root, 'paths', '--json')
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -158,87 +138,15 @@ class StateTests(unittest.TestCase):
                 self.assertEqual(log_path(self.root, 'd1#1'), self.paths.path / 'logs/d1/1.log')
                 self.assertEqual(state.context_path(self.root, 'state:context/a.md'), self.paths.path / 'context/a.md')
 
-    def test_migration_preview_preserves_bytes_and_unknown_files(self):
-        source, events = self.legacy()
-        (source / 'keep.me').write_text('unknown')
-        preview = state.migrate(self.root)
-        self.assertEqual(preview['events'], 3)
-        self.assertEqual(preview['unknown'], ['keep.me'])
-        self.assertFalse(self.paths.state_root.exists())
-        original = (source / 'ledger.jsonl').read_bytes()
-        applied = state.migrate(self.root, True)
-        self.assertTrue(applied['applied'])
-        self.assertEqual((self.paths.path / 'ledger.jsonl').read_bytes(), original)
-        self.assertEqual(read_events(self.root), events)
-        from delegation_check.state import recorded_path
-        self.assertEqual(recorded_path(self.root, events[1], 'log').read_text(), 'Original output\n')
-        self.assertTrue(state.migrate(self.root, True)['noop'])
-        self.assertEqual((source / 'keep.me').read_text(), 'unknown')
-
-    def test_unmigrated_ledger_blocks_fresh_history(self):
-        self.legacy()
+    def test_stray_checkout_state_is_ignored_and_reported(self):
+        (self.root / '.delegation').mkdir()
+        (self.root / '.delegation/ledger.jsonl').write_text('{"event": "open", "delegation": "old"}\n')
         result = run_cli(self.root, 'pending')
-        self.assertEqual(result.returncode, 2)
-        self.assertIn('state migrate', result.stderr)
-        self.assertFalse(self.paths.path.exists())
-
-    def test_migration_open_and_busy_legacy_lock_refused(self):
-        source, _ = self.legacy(pending=True)
-        with self.assertRaisesRegex(DelegationError, 'quiescent'):
-            state.migrate(self.root, True)
-        events = state.events_at(source / 'ledger.jsonl')
-        events.append({'event': 'close', 'delegation': 'd1'})
-        (source / 'ledger.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in events))
-        handle = file_lock.try_acquire(source / 'ledger.lock')
-        try:
-            self.assertIn(str(source / 'ledger.lock'), state.migrate(self.root)['busy_legacy_locks'])
-            with self.assertRaisesRegex(DelegationError, 'busy legacy'):
-                state.migrate(self.root, True)
-        finally:
-            file_lock.release(handle)
-
-    def test_migration_destination_conflict_and_changed_source(self):
-        source, _ = self.legacy()
-        self.paths.path.mkdir(parents=True)
-        (self.paths.path / 'ledger.jsonl').write_text('different')
-        with self.assertRaisesRegex(DelegationError, 'Conflicting XDG'):
-            state.migrate(self.root, True)
-        shutil.rmtree(self.paths.path)
-        state.migrate(self.root, True)
-        (source / 'context/pinned.md').write_text('changed old bytes')
-        with self.assertRaisesRegex(DelegationError, 'changed'):
-            read_events(self.root)
-        with self.assertRaisesRegex(DelegationError, 'changed'):
-            state.migrate(self.root, True)
-
-    def test_interrupted_staging_resumes_and_changed_staging_refuses(self):
-        self.legacy()
-        with patch('delegation_check.state.shutil.copyfile', side_effect=OSError('interrupted')):
-            with self.assertRaises(OSError):
-                state.migrate(self.root, True)
-        self.assertTrue(state.migrate(self.root, True)['applied'])
-        self.assertFalse((self.paths.repo / ('migration-' + self.paths.worktree_key)).exists())
-
-    def test_interrupted_migration_conflicting_staging_and_source_refused(self):
-        source, _ = self.legacy()
-        with patch('delegation_check.state.shutil.copyfile', side_effect=OSError('interrupted')):
-            with self.assertRaises(OSError):
-                state.migrate(self.root, True)
-        staging = self.paths.repo / ('migration-' + self.paths.worktree_key)
-        (staging / 'unknown.txt').write_text('retain')
-        with self.assertRaisesRegex(DelegationError, 'Unknown/unsafe'):
-            state.migrate(self.root, True)
-        (staging / 'unknown.txt').unlink()
-        target = staging / 'briefs/d1.md'
-        target.parent.mkdir(exist_ok=True)
-        target.write_text('conflicting')
-        with self.assertRaisesRegex(DelegationError, 'staging conflict'):
-            state.migrate(self.root, True)
-        target.unlink()
-        (source / 'context/pinned.md').write_text('changed while interrupted')
-        with self.assertRaisesRegex(DelegationError, 'source changed'):
-            state.migrate(self.root, True)
-        self.assertFalse(self.paths.path.exists())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('No open delegations.', result.stdout)
+        lint = json.loads(run_cli(self.root, 'lint', '--json').stdout)
+        self.assertIn({'kind': 'unexpected', 'path': '.delegation'},
+                      [{k: item[k] for k in ('kind', 'path')} for item in lint['layout']])
 
     def test_owner_pid_reuse_unknown_and_crash(self):
         record = {'pid': 123, 'start': 'original'}
@@ -289,16 +197,17 @@ class StateTests(unittest.TestCase):
         payload = state_payload(self.root)
         (payload / 'context').mkdir()
         (payload / 'briefs').mkdir()
-        for name in ('context/pinned.md', 'context/role.md', 'context/draft.md', 'briefs/draft.md'):
+        for name in ('context/pinned.md', 'context/.agents/delegation/runbooks/r.md', 'context/draft.md', 'briefs/draft.md'):
+            (payload / name).parent.mkdir(parents=True, exist_ok=True)
             target = payload / name
             target.write_text('bytes')
             os.utime(target, (1, 1))
-        write_overlay(self.root, '## Roles\nr: tier=routine, runbook=state:context/role.md, max-uses=2\n')
+        write_overlay(self.root, '## Roles\nr: tier=routine, runbook=.agents/delegation/runbooks/r.md, max-uses=2\n')
         (payload / 'ledger.jsonl').write_text(json.dumps({'event': 'open', 'delegation': 'old',
             'context': {'state:context/pinned.md': 'hash'}}) + '\n')
         state.gc(apply=True, now=time.time())
         self.assertTrue((payload / 'context/pinned.md').exists())
-        self.assertTrue((payload / 'context/role.md').exists())
+        self.assertTrue((payload / 'context/.agents/delegation/runbooks/r.md').exists())
         self.assertFalse((payload / 'context/draft.md').exists())
         self.assertFalse((payload / 'briefs/draft.md').exists())
 
@@ -416,22 +325,6 @@ class StateTests(unittest.TestCase):
         state.gc(apply=True, now=time.time() + state.MONTH)
         self.assertTrue(payload.exists())
         self.assertTrue(self.root.exists())
-
-    def test_migration_new_native_slot_and_other_worktree_activity_refused(self):
-        self.legacy()
-        self.paths.locks.mkdir(parents=True)
-        handle = file_lock.try_acquire(self.paths.locks / 'mem.0.lock')
-        try:
-            with self.assertRaisesRegex(DelegationError, 'resource owner'):
-                state.migrate(self.root, True)
-        finally:
-            file_lock.release(handle)
-        other = self.base / 'other'
-        git(self.root, 'worktree', 'add', '-q', str(other))
-        payload = state_payload(other)
-        state.atomic(payload / 'active/probe.json', state.owner())
-        with self.assertRaisesRegex(DelegationError, 'active new'):
-            state.migrate(self.root, True)
 
     def test_root_lock_inode_is_permanent(self):
         state_payload(self.root)

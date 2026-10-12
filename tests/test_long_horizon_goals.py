@@ -23,20 +23,24 @@ class GoalTests(RepoTest):
 
     def test_capabilities_all_of_and_unknown(self):
         self.write('docs/goals.md', GOALS.replace('(any)', '(fixtures, native)', 1))
-        self.write('.agents/long-horizon.md', OVERLAY + '\n## Capabilities\ntags: {"any": [], "fixtures": ["fixtures"], "native": ["native"]}\n## Startup\nreadiness: "readiness.json"\n')
-        self.write('readiness.json', '{"version":1,"levels":{"fixtures":{"ready":true,"strength":"sha256"},"native":{"ready":false,"strength":"exists"}}}')
+        self.write('.agents/long-horizon.md', OVERLAY + '\n## Capabilities\ntags: {"any": [], "fixtures": ["fixtures"], "native": ["native"]}\n## Startup\nreadiness: "cache:readiness.json"\n')
+        self.write_readiness('{"version":1,"levels":{"fixtures":{"ready":true,"strength":"sha256"},"native":{"ready":false,"strength":"exists"}}}')
         self.assertEqual(self.cli('status')['selection']['task']['id'], '1.2')
-        self.write('readiness.json', '{"version":1,"levels":{"fixtures":{"ready":true,"strength":"sha256"},"native":{"ready":true,"strength":"exists"}}}')
+        self.write_readiness('{"version":1,"levels":{"fixtures":{"ready":true,"strength":"sha256"},"native":{"ready":true,"strength":"exists"}}}')
         self.assertEqual(self.cli('status')['selection']['task']['id'], '1.1')
         self.write('docs/goals.md', GOALS.replace('(any)', '(unknown)', 1))
         self.assertEqual(self.cli('status')['selection']['task']['id'], '1.2')
 
-    def test_manual_and_implicit(self):
+    def test_manual_and_goalless_milestones(self):
         self.write('docs/goals.md', 'A prose-only roadmap')
         self.assertEqual(self.cli('status')['selection']['mode'], 'manual')
         self.cli('gate', code=1)
         self.write('docs/goals.md', '# Legacy\n## 1. Work\n- [ ] A task\n')
-        self.assertTrue(self.cli('status')['selection']['task']['id'].startswith('1-'))
+        result = self.cli('status', code=1)
+        self.assertEqual(result['selection']['mode'], 'manual')
+        outdated = next(x for x in result['findings'] if x['code'] == 'layout-outdated')
+        self.assertEqual((outdated['severity'], outdated['line']), ('error', 2))
+        self.assertIn('# Goal:', outdated['remedy'])
 
     def test_done_with_open_task(self):
         self.write('docs/goals.md', GOALS.replace('## 1. Build — current', '## 1. Build — done'))
@@ -49,18 +53,18 @@ class GoalTests(RepoTest):
         self.assertEqual(self.cli('status')['selection']['mode'], 'awaiting-signoff')
 
     def test_any_is_always_unprepared_and_readiness_checkout_stale(self):
-        self.write('.agents/long-horizon.md', OVERLAY + '\n## Capabilities\ntags: {"native": ["native"]}\n## Startup\nreadiness: "readiness.json"\n')
+        self.write('.agents/long-horizon.md', OVERLAY + '\n## Capabilities\ntags: {"native": ["native"]}\n## Startup\nreadiness: "cache:readiness.json"\n')
         self.assertEqual(self.cli('status')['selection']['task']['id'], '1.1')
-        self.write('readiness.json', '{"version":1,"checkout":"/other","levels":{"native":{"ready":true,"strength":"probed"}}}')
+        self.write_readiness('{"version":1,"checkout":"/other","levels":{"native":{"ready":true,"strength":"probed"}}}')
         result = self.cli('status')
         self.assertIn('readiness-unknown', [x['code'] for x in result['findings']])
-        self.write('readiness.json', '{"version":1,"generated_at":"2000-01-01T00:00:00Z","levels":{"native":{"ready":true,"strength":"probed"}}}')
+        self.write_readiness('{"version":1,"generated_at":"2000-01-01T00:00:00Z","levels":{"native":{"ready":true,"strength":"probed"}}}')
         self.assertIn('readiness-unknown', [x['code'] for x in self.cli('status')['findings']])
 
     def test_missing_id_uses_plain_normalized_text_sha256(self):
         import hashlib
         text = 'Task  with   whitespace'
-        self.write('docs/goals.md', '# Legacy — current\n## 1. Work\n- [ ] ' + text + '\n')
+        self.write('docs/goals.md', '# Goal: Work — current\nID: work\n## 1. Work\n- [ ] ' + text + '\n')
         result = self.cli('status')
         expected = '1-' + hashlib.sha256(' '.join(text.split()).encode()).hexdigest()[:12]
         self.assertEqual(result['selection']['task']['id'], expected)

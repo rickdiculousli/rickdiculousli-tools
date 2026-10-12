@@ -23,11 +23,15 @@ class RoleTests(unittest.TestCase):
         self.brief = state_payload(self.root) / 'briefs/a.md'
         self.brief.parent.mkdir()
         self.brief.write_text('Goal: capture\n')
+        runbook = self.root / '.agents/delegation/runbooks/capture.md'
+        runbook.parent.mkdir(parents=True)
+        runbook.write_text('capture runbook\n')
+        git(self.root, 'add', '.agents/delegation/runbooks/capture.md')
         self.overlay()
 
     def overlay(self, caps='max-uses=2'):
         write_overlay(self.root, f'''## Roles
-capture: tier=execute, runbook=state:context/capture.md, {caps}
+capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md, {caps}
 ## Rote scripts
 capture: python scripts/capture.py; replaces launch, verify, import, index
 ## Host side effects
@@ -222,10 +226,10 @@ games: slots=6, wait=2
         text = run_cli(self.root, 'brief', '--delegation', 'a').stdout
         for expected in ['Do not commit unless the brief says so', 'No first person in committed files.',
                          'Never write these', '~/Library/Application Support/settings.nogg',
-                         'needs-human', 'state:context/capture.md', 'validator=null',
+                         'needs-human', 'state:context/.agents/delegation/runbooks/capture.md', 'validator=null',
                          'registered validator']:
             self.assertIn(expected, text)
-        self.context.write_text('changed')
+        (state_payload(self.root) / 'context/.agents/delegation/runbooks/capture.md').write_text('changed')
         self.assertEqual(run_cli(self.root, 'brief', '--delegation', 'a').returncode, 2)
 
     def test_defaults_apply_without_overlay_and_role_runbook_is_recorded(self):
@@ -241,7 +245,7 @@ games: slots=6, wait=2
         write_overlay(self.root, '## Roles\n')
         r = run_cli(self.root, 'brief', '--delegation', 'a')
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn('state:context/capture.md', r.stdout)
+        self.assertIn('state:context/.agents/delegation/runbooks/capture.md', r.stdout)
 
     def test_reuse_preserves_writer_and_parallel_rules(self):
         self.assertEqual(self.open('a').returncode, 0)
@@ -252,12 +256,19 @@ games: slots=6, wait=2
         self.assertEqual(r.returncode, 2)
         self.assertIn('writer needs the worktree', r.stderr)
 
-    def test_role_requires_present_contained_runbook(self):
-        self.context.unlink()
+    def test_role_requires_tracked_runbook(self):
+        git(self.root, 'rm', '-qf', '.agents/delegation/runbooks/capture.md')
         self.assertEqual(self.open('a').returncode, 2)
-        outside = self.root.parent / 'external.md'
-        outside.write_text('external')
-        self.context.symlink_to(outside)
+        lint = json.loads(run_cli(self.root, 'lint', '--json').stdout)
+        self.assertFalse(lint['ok'])
+        self.assertIn(('missing', '.agents/delegation/runbooks/capture.md'),
+                      [(item['kind'], item['path']) for item in lint['layout']])
+
+    def test_state_runbook_is_outdated(self):
+        write_overlay(self.root, '## Roles\ncapture: tier=execute, runbook=state:context/capture.md, max-uses=2\n')
+        result = run_cli(self.root, 'lint')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('outdated role runbook state:context/capture.md', result.stdout)
         self.assertEqual(self.open('a').returncode, 2)
 
     def test_continue_hashes_brief_links_chain_and_enforces_count(self):
@@ -296,13 +307,13 @@ games: slots=6, wait=2
         self.assertEqual(self.open('fresh').returncode, 0)
 
     def test_lint_rejects_bad_roles_and_rote_scripts(self):
-        cases = ['capture: tier=wrong, runbook=state:context/a.md, max-uses=2',
+        cases = ['capture: tier=wrong, runbook=.agents/delegation/runbooks/capture.md, max-uses=2',
                  'capture: tier=execute, runbook=../a.md, max-uses=2',
-                 'capture: tier=execute, runbook=state:context/a.md',
-                 'capture: tier=execute, runbook=state:context/a.md, max-uses=0',
-                 'capture: tier=execute, tier=routine, runbook=state:context/a.md, max-uses=2',
-                 'capture: tier=execute, runbook=state:context/a.md, max-uses=²',
-                 'capture: tier=execute, runbook=state:context/a.md, max-context-bytes=nan']
+                 'capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md',
+                 'capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md, max-uses=0',
+                 'capture: tier=execute, tier=routine, runbook=.agents/delegation/runbooks/capture.md, max-uses=2',
+                 'capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md, max-uses=²',
+                 'capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md, max-context-bytes=nan']
         for row in cases:
             with self.subTest(row=row):
                 write_overlay(self.root, '## Roles\n' + row + '\n')

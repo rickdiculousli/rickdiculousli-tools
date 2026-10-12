@@ -3,6 +3,7 @@ import difflib
 import json
 import os
 from pathlib import Path
+import re
 from .git import confined
 from .model import Invalid
 
@@ -43,10 +44,14 @@ def suggested(value, choices):
     return '; perhaps ' + matches[0] if matches else ''
 
 
+VERSION = re.compile(r'\d+\.\d+\.\d+')
+
+
 def parse(text):
     data = copy.deepcopy(DEFAULTS)
+    data['_version'] = None
+    data['_outdated'] = []
     sections, keys, section = set(), set(), None
-    schema_valid = False
     for number, raw in enumerate(text.splitlines(), 1):
         line = raw.strip()
         if not line or (line.startswith('<!--') and line.endswith('-->')):
@@ -55,7 +60,10 @@ def parse(text):
             continue
         if line.startswith('## '):
             section = line[3:].strip().lower()
-            if section not in SCHEMA and section != 'schema':
+            if section == 'schema':
+                # Superseded by Version; its body is ignored and lint reports it.
+                data['_outdated'].append(number)
+            elif section not in SCHEMA and section != 'version':
                 raise Invalid(f'Overlay line {number}: unknown heading {section}' + suggested(section, SCHEMA))
             if section in sections:
                 raise Invalid(f'Overlay line {number}: duplicate heading {section}')
@@ -63,10 +71,12 @@ def parse(text):
             keys = set()
             continue
         if section == 'schema':
-            if line != '1' or keys:
-                raise Invalid('Overlay schema must contain exactly 1.')
+            continue
+        if section == 'version':
+            if not VERSION.fullmatch(line) or keys:
+                raise Invalid(f'Overlay line {number}: Version needs one plugin version like 0.5.0.')
             keys.add('version')
-            schema_valid = True
+            data['_version'] = line
             continue
         if section is None or ':' not in line:
             raise Invalid(f'Overlay line {number}: expected key: JSON value under a named heading.')
@@ -84,8 +94,6 @@ def parse(text):
         if type(value) is not SCHEMA[section][key]:
             raise Invalid(f'Overlay line {number}: wrong type for {key}')
         data[section][key] = value
-    if 'schema' in sections and not schema_valid:
-        raise Invalid('Overlay Schema heading requires 1.')
     validate(data)
     return data
 
@@ -156,7 +164,7 @@ def load(git, overlay=None, draft_root=None, goals=None, handoff=None):
     if not path.is_absolute():
         path = git.root / path
     exists = path.is_file()
-    data = parse(path.read_text(encoding='utf-8')) if exists else copy.deepcopy(DEFAULTS)
+    data = parse(path.read_text(encoding='utf-8')) if exists else {**copy.deepcopy(DEFAULTS), '_version': None, '_outdated': []}
     data['_installed'] = exists and not draft_root
     data['_overlay'] = str(path)
     data['_base'] = str(base)

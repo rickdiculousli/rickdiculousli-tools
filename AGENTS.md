@@ -24,7 +24,6 @@
   overrides; otherwise use `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/state/`
   and `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/cache/`. If LOCALAPPDATA is
   missing, empty or relative, resolve `Path.home() / "AppData" / "Local"`.
-  Their legacy migration is POSIX-only; Windows has no legacy layout.
   Treat empty or relative XDG values as unset and use the platform defaults.
   Resolve home paths in Python, not through shell expansion.
   Do not put runtime state or locks in consuming worktrees, installed plugin
@@ -51,8 +50,9 @@
   Unreferenced snapshots/drafts expire after 30 days. Cleanup never removes
   durable Git evidence, live locks or active resource holders/waiters. Plugin-wide
   histories/caches need their own documented retention rules, not worktree expiry.
-  See [the XDG migration addendum](docs/superpowers/specs/2026-10-11-xdg-state-and-locks-addendum.md)
-  for delegation's existing-layout migration and verification requirements.
+  Plugins support only the current layout: each plugin's `migrate` skill lints
+  a consuming repository against it and tags the overlay's `## Version`; see
+  [the migrate skills design](docs/superpowers/specs/2026-10-12-migrate-skills-design.md).
 - After packaging changes run:
 
   ```sh

@@ -18,7 +18,7 @@ python3 <delegation-dir>/scripts/check.py [--root <worktree>] <command> ...
 
 Work from the target repo's worktree root. Write nothing until step 4.
 
-## Local state and coordinated upgrade
+## Local state
 
 Resolve directories with `python3 "<skill-dir>/scripts/check.py" paths --json`
 (delegation's script for setup). Use the returned `brief_directory`,
@@ -30,26 +30,14 @@ checks its bytes and prints the resolved quoted path. Keep a pinned context
 single-writer and immutable until its active briefs have closed.
 
 On Windows, unset XDG variables select `%LOCALAPPDATA%/rickdiculousli-tools/delegation/state/`
-and the sibling `cache/` directory. Explicit absolute XDG overrides win. Windows
-has no legacy layout; `state migrate` is POSIX-only.
-
-On POSIX, before opening work with an existing `.delegation/ledger.jsonl`, stop old checker
-sessions, close their open delegations with the old checker, and preview
-`check.py state migrate`. Apply with `check.py state migrate --apply` only when
-all repository sessions and validators are quiescent. Inspect the reported
-`Host side effects` policy for XDG restrictions; do not override it. Review the
-receipt and proposed overlay/helper reference updates; apply repository edits
-within current task authorization. Restart all sessions with the new checker and
-the same XDG root. Keep legacy copies for explicit review; changed legacy bytes
-block dependent operations. Migration does not rewrite historical evidence or
-establish a new PASS. Renamed acceptance inputs need the authorized checks rerun.
+and the sibling `cache/` directory. Explicit absolute XDG overrides win.
 
 `check.py state gc` previews collection; `check.py state gc --apply [--if-due]`
 applies it, including outside a checkout. Normal writes sweep at most weekly.
 Confirmed deleted, unregistered worktrees have a seven-day recovery window;
 existing unfinished work, ledger inputs, role runbooks and uncertain owners stay.
 Unreferenced briefs/context expire after 30 days; dead hash attempts are collected
-weekly. Cleanup never touches durable tracked evidence or legacy copies.
+weekly. Cleanup never touches durable tracked evidence.
 
 
 ## 1. Check the starting point
@@ -93,7 +81,9 @@ make checks stale; list them for an ignore rule.
 Show the user, in chat:
 
 1. The full overlay draft. Leave out any heading you have nothing real for; the
-   base defaults cover it. Keep guesses out of the file.
+   base defaults cover it. Keep guesses out of the file. Always include
+   `## Version` with the installed plugin version (`check.py lint --json` reports
+   it as `version.installed`).
 2. The pointer line, exactly:
    `Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.`
    and where it goes (`AGENTS.md`, plus `CLAUDE.md` if it doesn't import `AGENTS.md`).
@@ -131,7 +121,7 @@ Wait for approval or edits.
 
 ## 5. Prove it
 
-1. `check.py lint` must print `Overlay OK`. Fix and repeat.
+1. `check.py lint` must print `Overlay OK` with no `version-` warning. Fix and repeat.
 2. Notify the user before any `needs-human` validator and early while the
    user is present; stop for required human action without infinite retries.
    Run every validator once through the ledger, under one setup delegation:
@@ -172,7 +162,6 @@ The optional quota plugin sizes one bounded batch with at most one opt-in read.
 
 
 Keep the overlay at `.agents/delegation.md`; the material directories are optional.
-For reviewed migration of existing approved material, source pinning, lint
-warnings and the public CLI wrapper, follow
-[the overlay reference](../delegation/reference/overlay.md). Do not automatically
-rewrite consuming repositories or copy runbooks into runtime state at startup.
+For source pinning, lint warnings and the public CLI wrapper, follow
+[the overlay reference](../delegation/reference/overlay.md). To bring an older
+repository up to the installed plugin, use the `migrate` skill instead of setup.

@@ -26,7 +26,7 @@ class HandoffTests(RepoTest):
         self.write('other.md', '@CLAUDE.md\n')
         self.assertIn('pointer-cycle', [x['code'] for x in self.cli('lint', code=1)['findings']])
         self.write('CLAUDE.md', '@AGENTS.md\n')
-        self.write('docs/goals.md', '# Roadmap\r\n## 1. Work\r\n- [ ] Task without ID\r\n')
+        self.write('docs/goals.md', '# Goal: Roadmap\r\nID: roadmap\r\n## 1. Work\r\n- [ ] Task without ID\r\n')
         before = (self.root / 'docs/goals.md').read_bytes()
         preview = self.cli('lint', '--fix')
         self.assertTrue(preview['diff'])

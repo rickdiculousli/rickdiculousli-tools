@@ -21,6 +21,13 @@ python3 "$LONG_HORIZON_SCRIPT" status --root "$PROJECT" --json
 python3 "$LONG_HORIZON_SCRIPT" state gc --apply --if-due --json
 ```
 
+If status warns `version-mismatch`, ask the user once: "long-horizon plugin is
+X, this repo is tagged Y. Run a migration?" On yes, follow `long-horizon:migrate`
+before selecting work; on no, continue without asking again this session.
+`version-newer` means the installed plugin is older than the repo: suggest
+updating it. An invalid overlay whose message names an outdated form is the same
+offer.
+
 Status also lists this worktree's uncommitted pending evidence (`pending_evidence`,
 and `pending: true` on acceptance it would satisfy) and the handoff's `lines` and
 `budget`. Pending records still reach the gate only through explicit `--pending`.

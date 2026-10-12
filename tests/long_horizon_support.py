@@ -83,6 +83,17 @@ class RepoTest(unittest.TestCase):
         self.assertEqual(result.returncode, code, result.stdout + result.stderr)
         return json.loads(result.stdout)
 
+    def write_readiness(self, text):
+        # Publish the cache identity the way a startup helper does, then the report.
+        output = self.cli('paths')
+        identity = Path(output['cache_identity_path'])
+        identity.parent.mkdir(parents=True, exist_ok=True)
+        identity.write_text(json.dumps(output['cache_identity']))
+        path = Path(output['readiness_path'])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
     def prepare(self, attempt=None, check='validator:unit'):
         args = ['evidence', 'prepare', check]
         if attempt:

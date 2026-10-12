@@ -34,11 +34,11 @@ See [verification evidence and scope](docs/verification.md).
 | --- | --- |
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
-| `long-horizon` | Shared setup/resume/checkpoint skills and deterministic scoped acceptance across sessions |
+| `long-horizon` | Shared setup/resume/checkpoint/migrate skills and deterministic scoped acceptance across sessions |
 | `repository-info` | Informational stub describing this layout |
 | `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
-| `delegation` | `setup` skill prepares a repo; `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. |
+| `delegation` | `setup` skill prepares a repo and `migrate` brings it up to the installed version; `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. |
 
 ## Visual audit reports
 
@@ -99,7 +99,7 @@ checkout; in a consuming repository the skill resolves the script as
 `<skill-dir>/scripts/check.py`:
 
 ```sh
-python3 plugins/delegation/skills/delegation/scripts/check.py lint
+python3 plugins/delegation/skills/delegation/scripts/check.py lint [--json]
 python3 plugins/delegation/skills/delegation/scripts/check.py tree
 python3 plugins/delegation/skills/delegation/scripts/check.py pending
 python3 plugins/delegation/skills/delegation/scripts/check.py query --help
@@ -144,15 +144,16 @@ repository-relative sources. The checker
 rejects traversal and symlink escapes. Recorded generated paths are state-relative
 with `location: state`; caller brief paths may remain absolute.
 
-On POSIX, for an existing `.delegation/` history, close its open work using the old checker
-and stop every repository checker/validator session. Run `check.py state migrate`
-to review counts, conflicts, unknown files, host restrictions and reference edits;
-then `check.py state migrate --apply`. It preserves original event/log hashes and
-writes a digest receipt, leaving legacy copies and old temporary locks untouched.
-Update the reported overlay/helper references, then restart all sessions with the
-new checker and one shared XDG root. Do not run old/new versions simultaneously.
-Changed legacy files block dependent operations; migration never creates a PASS.
-Logical input renames can make current fingerprints stale, requiring a fresh check.
+Delegation 0.10.0 tags each overlay with `## Version`. `check.py lint` compares
+it with the installed plugin and warns `version-mismatch` when the major.minor is
+older or the tag is missing; the delegation skill then offers a migration. Lint
+knows only the current contract: it reports overlay problems plus `missing`,
+`unexpected` and `outdated` repository paths (`--json` for all of it), such as a
+stray `.delegation/` directory, files under `.agents/delegation/` the overlay
+never names, or a role runbook given as `state:context/...`. Run
+`/delegation:migrate` (or ask Codex for the `migrate` skill from `delegation`) to
+review those findings, approve rewrites and deletions, re-lint until clean and
+tag the overlay. Checkout-local `.delegation/` state and `state migrate` are gone.
 
 `check.py state gc` previews local collection and `check.py state gc --apply`
 applies it, even outside a checkout. `--if-due` limits applied sweeps to once per
@@ -161,14 +162,13 @@ worktrees get seven days of recovery before removal. Existing unfinished work,
 ledger-referenced bytes, declared role inputs, live locks and uncertain processes
 are retained. Unreferenced briefs/context expire after 30 days. Hash scratch is
 removed on exit; a weekly sweep removes interrupted attempts only when the owner
-is confirmed gone. No background service runs. Legacy copies require explicit
-review/removal. Durable knowledge and acceptance stay in tracked documents.
+is confirmed gone. No background service runs. Durable knowledge and acceptance stay in tracked documents.
 Both plugins honor explicit absolute XDG state/cache overrides on every platform.
 Without overrides, Windows uses `%LOCALAPPDATA%\rickdiculousli-tools\<plugin>\state\`
 and `%LOCALAPPDATA%\rickdiculousli-tools\<plugin>\cache\`; missing/invalid LOCALAPPDATA
 uses the Python-resolved home `AppData\Local` directory. POSIX retains the home
 `.local/state` and `.cache` defaults. Empty/relative XDG values select these
-platform defaults. Legacy migration is POSIX-only; Windows starts fresh. Unwritable roots
+platform defaults. Unwritable roots
 fail with a diagnostic and never switch lock domains. Workspace sandboxes must
 allow both configured external XDG roots; grant those paths through the host’s
 permission configuration rather than changing roots for individual commands.
@@ -184,10 +184,10 @@ The overlay stays at `.agents/delegation.md`; optional tracked runbook sources
 and approved rote scripts default to `.agents/delegation/runbooks/` and
 `.agents/delegation/scripts/`. `open` copies role sources into external context,
 refuses changes while any open delegation pins those bytes, and refreshes after
-all pins close. Edit tracked sources on final use. Legacy state references remain
-supported with migration warnings. General tools may stay in their own location;
-the judge adds scripts and roles per the overlay's `## Authoring` policy. See the
-[layout and migration guide](plugins/delegation/skills/delegation/reference/overlay.md#repository-material-and-migration).
+all pins close. Edit tracked sources on final use. General tools may stay in
+their own location; the judge adds scripts and roles per the overlay's
+`## Authoring` policy. See the
+[layout guide](plugins/delegation/skills/delegation/reference/overlay.md#repository-material).
 
 Wrap each native process with one foreground
 `python3 "$DELEGATION_CHECKER" exec --lock games --timeout 300 -- <command>`.
@@ -538,7 +538,7 @@ worktree cache’s `readiness/` directory, `state_directory`, `cache_directory`,
 `readiness_directory`, `cache_identity_path` and `cache_identity`, without creating
 files. Helpers publish the cache identity and report under the lifecycle lock;
 see [readiness publication](plugins/long-horizon/skills/resume/reference/readiness.md).
-Legacy readiness paths keep working with a lint warning. Readiness remains
+Since 0.5.0, readiness paths without `cache:` are not read. Readiness remains
 unknown when missing/stale/for another checkout. Weekly GC recognises readiness
 JSON and applies the deleted-worktree recovery window.
 
@@ -551,6 +551,15 @@ a batch's trailers. `evidence rerecord <id>` carries an unchanged observation on
 revised criteria. `closure manifest --base <commit>` builds the reviewed batch
 manifest and ID. Reviewed observations record `--reviewer-kind human|agent`; agents
 review only checks declaring `"reviewer": "any"`.
+
+Long-horizon 0.5.0 replaces the overlay's `## Schema` heading with `## Version`,
+the plugin version it was last linted clean against. `status` warns
+`version-mismatch` when the major.minor is older or the tag is missing, and
+resume offers `/long-horizon:migrate`. `lint` knows only the current contract
+and reports `layout-outdated` (`## Schema`, readiness paths without `cache:`,
+milestones without `# Goal:`), `layout-missing` and `layout-unexpected` (a stray
+`.long-horizon/` directory) findings; migrate fixes them through a reviewed
+draft, deletes only approved paths and tags the overlay.
 
 | Project | Composition |
 | --- | --- |

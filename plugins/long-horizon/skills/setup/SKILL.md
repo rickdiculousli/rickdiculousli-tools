@@ -24,7 +24,8 @@ was actually observed. The default batch is one task or one blocker resolution.
    need one choice in the draft. Preserve branch-specific policy and dirty work.
 2. Choose the requested mode: new, adopt, update, add-goal or wind-down. New starts
    from an aim. Adopt preserves existing prose, ordering, criteria and evidence;
-   add IDs and check annotations without inventing historical PASS. Update edits
+   add a `# Goal:` heading, IDs and check annotations without inventing
+   historical PASS. Update edits
    only the requested policy. Add-goal reuses the previous survey and reactivates
    a dormant overlay. Unshelving restores the preserved roadmap, not a new goal.
 3. Ask the quick questions together (at most five; see interview). “You decide”
@@ -36,8 +37,9 @@ was actually observed. The default batch is one task or one blocker resolution.
    When a startup helper exists, default drafted Startup readiness to
    `"cache:readiness.json"`; include helper path discovery with `lh.py paths --root
    "$PROJECT" --json` and identity publication from [readiness](../resume/reference/readiness.md)
-   in the concrete draft. Preserve legacy paths during unrelated updates, and
-   explain their lint warning and migration remedy.
+   in the concrete draft. Draft `## Version` with the installed plugin version
+   (the lint `version-mismatch` finding names it). To bring an older repository
+   up to the installed plugin, use `long-horizon:migrate` instead of update.
 4. Create an identity-bearing draft with `python3 "$LONG_HORIZON_SCRIPT" state draft --root "$PROJECT" --json`. Draft only owned files under its returned `draft_directory`. The status `cache_directory` is scoped by repository/worktree keys; drafts live in its `drafts/<unique-id>/` directory. The helper resolves the cache root in Python: explicit XDG overrides win; otherwise Windows uses `%LOCALAPPDATA%/rickdiculousli-tools/long-horizon/cache/` and POSIX uses `~/.cache/rickdiculousli-tools/long-horizon/`; do not use a sibling XDG cache directory or shell-expand a home fallback. Use the actual root
    for Git identity and `--draft-root` for all draft managed paths. Show together:
    goals/overlay/handoff, exact pointer edits, dry-run status and chosen task,

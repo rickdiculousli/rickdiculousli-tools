@@ -21,7 +21,7 @@ def resolve(policy, git):
     if not name:
         return None
     if not name.startswith('cache:'):
-        return Path(policy['_base']) / name
+        return None
     base = state.State(git).cache / 'readiness'
     path = base / cache_name(name)
     # Reject symlinks as well as lexical traversal, including links in ancestors.
@@ -65,9 +65,13 @@ def load(policy, git):
     empty = {'levels': {}, 'recovery': 'Configure and run an authorized startup helper; provide readiness JSON.'}
     if not name:
         return empty, []
+    if not name.startswith('cache:'):
+        return empty, [finding('layout-outdated', 'Startup readiness ' + name + ' is a checkout path; only cache: paths are read.',
+            'Use readiness: "cache:readiness.json", point the startup helper at lh.py paths --root PATH --json, '
+            'and delete the old checkout file after approval.', 'error', policy['_overlay'])]
     path = resolve(policy, git)
     try:
-        if name.startswith('cache:') and cache_identity(git)[0] is None:
+        if cache_identity(git)[0] is None:
             raise Invalid('Missing readiness cache identity; regenerate with paths discovery.')
         value = json.loads(path.read_text(encoding='utf-8'))
         if value.get('version') != 1 or not isinstance(value.get('levels'), dict) or not isinstance(value.get('missing', []), list):

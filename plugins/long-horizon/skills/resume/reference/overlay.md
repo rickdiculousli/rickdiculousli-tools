@@ -1,7 +1,12 @@
-# Overlay schema 1
+# Overlay format
 
-`.agents/long-horizon.md` is Markdown with a title, optional `## Schema` containing
-`1`, and named level-two headings below. Headings/keys are case-insensitive;
+`.agents/long-horizon.md` is Markdown with a title, an optional `## Version`
+heading holding one plugin version line (like `0.5.0`), and named level-two
+headings below. Setup and migrate write `## Version` after a clean lint. `status`
+warns `version-mismatch` when it is missing or its major.minor is older than the
+installed plugin, and `version-newer` when it is newer; patch differences are
+ignored. A `## Schema` heading is superseded: it is ignored and lint reports it
+as `layout-outdated`. Headings/keys are case-insensitive;
 values retain case. Each nonblank line under a heading is `key: <JSON value>`
 (optionally `- key:`). Full-line `<!-- comments -->` are allowed. Duplicate or
 unknown keys/headings and wrong types are errors. No YAML, inline comments or
@@ -13,7 +18,7 @@ command interpolation. JSON arrays/maps must fit one line.
 | Goals and ownership | `path`: string docs/goals.md; `milestone-policy`: user; `task-refinement`: agent; `task-completion`: agent; `milestone-completion`: agent; `goal-signoff`: user. Ownership strings are user or agent. |
 | Goals format | `markers`: object with four distinct nonempty literal strings current/done/shelved/dropped; defaults `— current`, `— done`, `— shelved`, `— dropped`. No regex. |
 | Continuation | `handoff`: string docs/handoff.md; `archive`: string docs/goals-archive; `findings`: string array []; `evidence`: string docs/evidence; `non-code`: string array defaulting to configured goals/handoff/archive/findings; `handoff-budget`: positive integer 80 |
-| Startup | `command`: string; `effects`: string array; `context`: string; `readiness`: string `cache:<relative-json-path>` resolved under this worktree’s XDG cache `readiness/` directory; legacy checkout-relative/absolute strings remain readable with a lint warning. All absent by default. Command/effects describe actual skill authorization, never an instruction executed by status. |
+| Startup | `command`: string; `effects`: string array; `context`: string; `readiness`: string `cache:<relative-json-path>` resolved under this worktree’s XDG cache `readiness/` directory; any other value is `layout-outdated` and not read. All absent by default. Command/effects describe actual skill authorization, never an instruction executed by status. |
 | Capabilities | `tags`: object mapping tag to array of named readiness levels; default `{"any": []}`. All tags/levels required; unknown tags ineligible. |
 | Evidence | `checks`: object {}; `inputs`: object {}; `delegation-script`: string literal path OR `delegation-env`: string variable name; `validator-policy`: string path; when delegation is configured defaults to .agents/delegation.md |
 | Batch | `tasks`: positive integer 1; `blocker-resolutions`: positive integer 1; `quota`: boolean false; `quota-script`: string literal path OR `quota-env`: string variable name |
@@ -54,8 +59,8 @@ A full example:
 
 ```markdown
 # Long-horizon
-## Schema
-1
+## Version
+0.5.0
 ## State
 state: "active"
 ## Goals and ownership

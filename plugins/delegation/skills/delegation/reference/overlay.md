@@ -3,6 +3,9 @@
 The overlay lives in the repository it describes. It is Markdown with fixed `##`
 headings. Every heading is optional; a missing one falls back to the base
 default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
+It also reports layout drift (`missing`, `unexpected` or `outdated` paths) and
+compares `## Version` with the installed plugin; `--json` prints all of it. See
+the `migrate` skill.
 
 | Heading | Content | Default |
 |---|---|---|
@@ -21,6 +24,7 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
 | `## Tier hints` | Known task types per tier | None |
 | `## Parallel limit` | Max parallel readers | 3 |
 | `## Return cap` | Max return length, in words | 400 |
+| `## Version` | Plugin version the overlay was last linted clean against, like `0.10.0` | None; lint warns `version-mismatch` |
 
 ## Parsing rules
 
@@ -101,6 +105,10 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
   every file under it, and a missing path the marker `missing`. With extra
   inputs, the tree hash is a SHA-256 over the git tree id plus each input's hash,
   so changing a golden trace makes earlier checks stale.
+- **`## Version`.** One line, `<major>.<minor>.<patch>`. Setup and migrate write
+  it after a clean lint. Lint warns `version-mismatch` when it is missing or its
+  major.minor is older than the installed plugin, and `version-newer` when it is
+  newer; patch differences are ignored. Neither warning fails lint.
 - **`## Parallel limit` and `## Return cap`.** The leading integer of the first
   line, at least 1. Trailing text is allowed, for example
   `3 (ghidra-mcp concurrency unverified)`.
@@ -111,8 +119,8 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
   ```
 
   `tier` is `execute` or `routine`; `runbook` names a tracked repository-relative
-  source, normally `.agents/delegation/runbooks/<role>.md`. Legacy
-  `state:context/<path>` remains compatible with a migration warning. At least one positive cap is required. Prefer `max-uses`: it counts
+  source, normally `.agents/delegation/runbooks/<role>.md`; a `state:` runbook is an
+  outdated lint problem. At least one positive cap is required. Prefer `max-uses`: it counts
   the first brief and every continuation, including all ancestor branches.
   `max-context-bytes` accumulates the sizes of the brief and context files loaded
   on every use, including repeated reads across uses. Outputs are excluded; this
@@ -121,8 +129,7 @@ default. `check.py lint` reports problems as `line <n>: <problem>` and exits 1.
   the required `--tier` matches the role. Reuse through
   `open --tier execute --continue <prior-id>` requires a new id and brief, a closed prior
   delegation, the same tier, and no open brief in the same role session. Each
-  use records fresh brief/runbook hashes. Optional roles leave legacy overlays
-  valid.
+  use records fresh brief/runbook hashes.
 - **`## Rote scripts`.** One `name: body` per line; the parser validates
   this structure. Use `name: command; what it replaces` for proposals. Record deterministic multi-step rote sequences worth replacing with
   repository scripts. Whether the judge may then write one without asking
@@ -199,7 +206,7 @@ routine: probe batches (--jobs 6 max); first-divergence triage; export_functions
 the trace manifest then goes under `## Extra inputs`.
 
 
-## Repository material and migration
+## Repository material
 
 Delegation material defaults to tracked `.agents/delegation/runbooks/` role
 sources and `.agents/delegation/scripts/` approved rote scripts. The overlay stays
@@ -217,19 +224,15 @@ materialized destination itself must be a regular file, not a symlink.
 Unchanged sources may share the pin; changed sources refuse to open until all
 pins close. Refresh the tracked source on final use, preserving the current
 external context; the next open after all pins close rematerializes it.
-Legacy `state:context/` role declarations remain supported with a migration
-warning. Lint warnings for material outside `.agents/delegation/` are nonfatal
+Lint warnings for material outside `.agents/delegation/` are nonfatal
 and separate from unsafe-path errors. They allow intentional general tool refs.
 Rote command inspection recognizes direct scripts, common interpreters and
 `uv run --script`; complex shell wrappers receive best-effort inspection.
 Review and stage approved source files before the first role open; the checker
 does not stage repository material.
 
-To migrate, review and move approved role sources and scripts into these default
-locations, update overlay and caller paths, remove startup copying into state
-and private checker imports, then rerun registered validators. There is no
-automatic rewrite of consuming repositories. Review script permissions before
-creating or moving helpers.
+Lint lists files under `.agents/delegation/` that the overlay never names, and
+anything there other than `runbooks/` and `scripts/`, as `unexpected`.
 
 ## Public lock interface
 

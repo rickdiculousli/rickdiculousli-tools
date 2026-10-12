@@ -43,14 +43,11 @@ def parse(text, policy, path=''):
     goals, findings, ids = [], [], set()
     goal = milestone = current = None
     parked = False
-    explicit = any(re.match(r'^# Goal:', raw) for _, raw in outside(text))
-    if not explicit:
-        title = next((raw[2:] for _, raw in outside(text) if raw.startswith('# ')), 'Legacy roadmap')
-        goal = node(title, 'goal', 1, markers)
-        goal['id'] = 'goal-' + text_id(goal['title'])
-        goal['implicit'] = True
-        goals.append(goal)
-        current = goal
+    if not any(re.match(r'^# Goal:', raw) for _, raw in outside(text)):
+        first = next((number for number, raw in outside(text) if re.match(r'^## \d', raw.strip())), None)
+        if first:
+            findings.append(finding('layout-outdated', 'Milestones without a # Goal: heading are not read.',
+                'Add "# Goal: <title>" with an ID: line above the first milestone.', 'error', path, first))
     for number, raw in outside(text):
         line = raw.strip()
         if line.startswith('# Goal:'):
@@ -119,9 +116,6 @@ def parse(text, policy, path=''):
         if not goal['id']:
             goal['id'] = 'goal-' + text_id(goal['title'])
             findings.append(finding('missing-goal-id', 'Goal has a derived ID: ' + goal['id'], 'Add ID: ' + goal['id'] + ' below its heading.', 'warning', path, goal['line']))
-        if goal.get('implicit') and goal['children']:
-            goal['criteria'] = goal['children'][-1]['criteria']
-            goal['checks'] = goal['children'][-1]['checks'][:]
         validate_node(goal, ids, findings, path, policy)
         for milestone in goal['children']:
             check_criteria(milestone, findings, path)

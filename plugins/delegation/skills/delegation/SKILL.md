@@ -21,7 +21,7 @@ python3 <skill-dir>/scripts/check.py [--root <worktree>] <command> ...
 directory). Exit codes: 0 ok; 1 lint problems or a failing validator; 2 an error
 or a refused operation (the reason is on stderr).
 
-## Local state and coordinated upgrade
+## Local state
 
 Resolve directories with `python3 "<skill-dir>/scripts/check.py" paths --json`
 (delegation's script for setup). Use the returned `brief_directory`,
@@ -33,26 +33,14 @@ checks its bytes and prints the resolved quoted path. Keep a pinned context
 single-writer and immutable until its active briefs have closed.
 
 On Windows, unset XDG variables select `%LOCALAPPDATA%/rickdiculousli-tools/delegation/state/`
-and the sibling `cache/` directory. Explicit absolute XDG overrides win. Windows
-has no legacy layout; `state migrate` is POSIX-only.
-
-On POSIX, before opening work with an existing `.delegation/ledger.jsonl`, stop old checker
-sessions, close their open delegations with the old checker, and preview
-`check.py state migrate`. Apply with `check.py state migrate --apply` only when
-all repository sessions and validators are quiescent. Inspect the reported
-`Host side effects` policy for XDG restrictions; do not override it. Review the
-receipt and proposed overlay/helper reference updates; apply repository edits
-within current task authorization. Restart all sessions with the new checker and
-the same XDG root. Keep legacy copies for explicit review; changed legacy bytes
-block dependent operations. Migration does not rewrite historical evidence or
-establish a new PASS. Renamed acceptance inputs need the authorized checks rerun.
+and the sibling `cache/` directory. Explicit absolute XDG overrides win.
 
 `check.py state gc` previews collection; `check.py state gc --apply [--if-due]`
 applies it, including outside a checkout. Normal writes sweep at most weekly.
 Confirmed deleted, unregistered worktrees have a seven-day recovery window;
 existing unfinished work, ledger inputs, role runbooks and uncertain owners stay.
 Unreferenced briefs/context expire after 30 days; dead hash attempts are collected
-weekly. Cleanup never touches durable tracked evidence or legacy copies. Scratch
+weekly. Cleanup never touches durable tracked evidence. Scratch
 files untouched for 30 days are removed; pattern-log lines older than 180 days are
 folded into per-kind counts ([reference/patterns.md](reference/patterns.md)).
 
@@ -61,7 +49,11 @@ folded into per-kind counts ([reference/patterns.md](reference/patterns.md)).
 
 The repo's overlay is `.agents/delegation.md`; its format is in
 [reference/overlay.md](reference/overlay.md). At the start of a session, read it
-and run `check.py lint`. Fix or report any problems it lists. If there is no
+and run `check.py lint`. Fix or report any problems it lists. If it warns
+`version-mismatch`, ask the user once: "Delegation plugin is X, this repo is
+tagged Y. Run a migration?" On yes, follow the `migrate` skill from this plugin;
+on no, carry on without asking again this session. `version-newer` means the
+installed plugin is older than the repo: suggest updating the plugin. If there is no
 overlay, say once that base defaults apply (parallel limit 3, return cap 400
 words, no validators, findings go to the execution log) and carry on. To create
 an overlay, or to rework one broadly, use the `setup` skill from this plugin. To
@@ -217,8 +209,8 @@ to `.agents/delegation/runbooks/`, and approved rote scripts to
 `.agents/delegation/scripts/`. General tools may remain in their own location.
 `open` materializes role sources into external context, sharing unchanged bytes
 and refusing changed bytes while any open delegation pins them. See
-[layout, migration and the public lock interface](reference/overlay.md) for
-source validation, nonfatal warnings and migration steps. Adding repository
+[layout and the public lock interface](reference/overlay.md) for source
+validation and nonfatal warnings. Adding repository
 scripts and roles follows the overlay's `## Authoring` policy (see
 [Growing roles and scripts](#growing-roles-and-scripts)).
 
@@ -239,7 +231,7 @@ ids to host agent ids; the checker does not know it. Preserve the original
 tracked-file write permissions. Proactively refresh the runbook during the final
 allowed use by editing its tracked source after work and checks complete and
 before close. Keep the pinned external context unchanged so the current brief
-remains readable. Legacy state-only roles should migrate before refreshing.
+remains readable.
 
 A cap refusal happens after the prior use is already closed. Open a separate
 short refresh delegation without `--role` or `--continue`, granting `May write`

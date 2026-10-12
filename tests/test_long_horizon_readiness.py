@@ -62,15 +62,15 @@ class ReadinessTests(RepoTest):
         (current.cache / 'readiness').symlink_to(self.root, target_is_directory=True)
         self.cli('paths', code=2)
 
-    def test_legacy_path_works_and_lint_warns(self):
+    def test_checkout_path_is_outdated_and_not_read(self):
         self.configure('readiness.json')
         self.write('readiness.json', json.dumps(self.report()))
-        self.assertEqual(self.cli('paths')['readiness_path'], str(self.root.resolve() / 'readiness.json'))
-        findings = self.cli('lint')['findings']
-        warning = next(x for x in findings if x['code'] == 'readiness-legacy-path')
-        self.assertEqual(warning['severity'], 'warning')
-        self.assertIn('cache:', warning['remedy'])
-        self.assertNotIn('readiness-unknown', [x['code'] for x in findings])
+        self.assertIsNone(self.cli('paths')['readiness_path'])
+        result = self.cli('status', code=1)
+        self.assertEqual(result['selection']['task']['id'], '1.1')
+        outdated = next(x for x in result['findings'] if x['code'] == 'layout-outdated')
+        self.assertEqual(outdated['severity'], 'error')
+        self.assertIn('cache:', outdated['remedy'])
 
     def test_readiness_only_cache_deleted_worktree_gc(self):
         self.configure('cache:nested/report.json')
