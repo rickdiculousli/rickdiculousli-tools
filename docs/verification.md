@@ -975,3 +975,52 @@ Verification on Linux 7.0.0-38-generic, Python 3.14.4:
   **Claude Code 2.1.296**, in disposable profiles.
 
 Not run on a Windows host; eol conversion was exercised through Git on Linux.
+
+## Lanes support — delegation 0.11.0
+
+Date: 2026-10-13. Evidence: `checked`.
+
+Delegation gains what a parallel-lane run needs, with overlays that lack the new
+sections behaving as before:
+
+- `## Locks` accepts one `provider: "<command>"` line and a `ttl=` lock
+  attribute. With a provider, `run` (validators with `lock=`) and `exec --lock`
+  hold a lease through the provider's `acquire <name> --ttl N` / `renew <key>
+  --ttl N` / `release <key>` subcommands instead of a native slot; the ledger
+  result records it under `lease`. The contract (exit codes, stdout, polling,
+  renewal period, holder environment) is in the overlay reference. A lock
+  named `provider` is now a lint problem.
+- `suggest --with-dependents` adds the validators of units that depend on a
+  changed unit, from a `## Deps` map or a `command:` printing JSON.
+- `## Rules` lines are injected into every brief; tier instructions name them.
+- `open --lane <name>` tags the open event, `pending --json`, the brief header
+  and the pattern log; `patterns`/`kinds --json` list `lanes` per kind only
+  when some open carried one.
+
+Verification on Linux 7.0.0-38-generic, Python 3.14.4:
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  manifests declare delegation 0.11.0.
+- `python3 scripts/run_tests.py`: 438 tests passed. The new
+  `test_delegation_lanes` (26 tests) drives the lease path against
+  `tests/fake_lease_provider.py`, a directory-backed provider implementing the
+  documented contract, covering acquisition, renewal, a lost lease, busy
+  polling, provider errors, `exec` and judge runs, dependents (overlay map and
+  command, transitive), rules injection, lane tags, and unchanged output for
+  overlays and opens without the new features.
+- `python3 scripts/verify_lifecycle.py --report
+  ~/.cache/rickdiculousli-tools-scratch/delegation/plugin-verification.json`:
+  PASS on **codex-cli 0.162.1** and **Claude Code 2.1.296**, in disposable
+  profiles.
+- One adversarial review by a fresh-context model session found: `lanes` added
+  to every `patterns --json` entry (now only when non-empty), a lock named
+  `provider` silently hijacked (now a lint problem), non-`DelegationError`
+  exceptions escaping the renew thread (now `OSError` is a provider error), a
+  wall-clock timing assertion (now polls the provider log), and the missing
+  verification entry; plus holder identity for the provider, renew timeouts,
+  the brief footer's slot count under a provider, literal pathspecs for
+  dependents and contract wording, all applied.
+
+No real lease provider exists yet; the Go `lane lease` command is to be written
+against the documented contract. No model-driven session exercised the new
+sections, and Windows was not run.

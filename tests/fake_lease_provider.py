@@ -5,8 +5,9 @@
     release <key>            -> removes the lease, exit 0
 
 Leases are files under $FAKE_LEASE_DIR named <slot>.<n>; $FAKE_LEASE_SLOTS slots per
-name (default 1). Every call is appended to $FAKE_LEASE_LOG. $FAKE_LEASE_MODE can be
-`fail` (acquire exits 7) or `nokey` (acquire exits 0 without printing anything).
+name (default 1). Every call is appended to $FAKE_LEASE_LOG, followed by the holder
+variables check.py passes. $FAKE_LEASE_MODE can be `fail` (acquire exits 7), `nokey`
+(acquire exits 0 without printing anything) or `norelease` (release exits 9).
 """
 
 import os
@@ -20,8 +21,10 @@ def main(argv):
     store.mkdir(parents=True, exist_ok=True)
     log = os.environ.get("FAKE_LEASE_LOG")
     if log:
+        holder = " ".join(f"{key}={os.environ.get(key, '')}" for key in
+                          ("DELEGATION_LEASE_DELEGATION", "DELEGATION_LEASE_COMMAND"))
         with open(log, "a", encoding="utf-8") as handle:
-            handle.write(" ".join(argv) + "\n")
+            handle.write(" ".join(argv) + " | " + holder + "\n")
     command, args = argv[0], argv[1:]
     mode = os.environ.get("FAKE_LEASE_MODE", "")
     if command == "acquire":
@@ -55,6 +58,9 @@ def main(argv):
         path = store / args[0]
         if path.exists():
             path.unlink()
+        if mode == "norelease":
+            print("release refused", file=sys.stderr)
+            return 9
         return 0
     print(f"unknown command {command}", file=sys.stderr)
     return 2

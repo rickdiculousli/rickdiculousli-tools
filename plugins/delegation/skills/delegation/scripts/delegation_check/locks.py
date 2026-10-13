@@ -91,16 +91,19 @@ def status(root: Path, name: str, lock: Lock) -> list[str]:
     return lines
 
 
-def _provider_call(root: Path, provider: str, *args: str) -> tuple[int, str, str]:
-    """Run `<provider> <args>` from the worktree root; a missing or hanging provider is an error."""
+def _provider_call(root: Path, provider: str, env: dict[str, str], *args: str,
+                   timeout: float = PROVIDER_TIMEOUT_S) -> tuple[int, str, str]:
+    """Run `<provider> <args>` from the worktree root; a missing, unrunnable or hanging provider is an error."""
     argv = [*shlex.split(provider), *args]
     try:
-        done = subprocess.run(argv, cwd=root, stdin=subprocess.DEVNULL, capture_output=True,
-                              text=True, errors="replace", timeout=PROVIDER_TIMEOUT_S)
+        done = subprocess.run(argv, cwd=root, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              errors="replace", timeout=timeout, env={**os.environ, **env})
     except FileNotFoundError as error:
         raise DelegationError(f'lock provider not found: {error.filename or argv[0]} (overlay ## Locks provider)') from error
+    except OSError as error:
+        raise DelegationError(f'lock provider cannot start: {argv[0]}: {error.strerror or error}') from error
     except subprocess.TimeoutExpired as error:
-        raise DelegationError(f'lock provider gave no answer in {PROVIDER_TIMEOUT_S:g}s: {shlex.join(argv)}') from error
+        raise DelegationError(f'lock provider gave no answer in {timeout:g}s: {shlex.join(argv)}') from error
     return done.returncode, done.stdout, done.stderr
 
 
@@ -108,8 +111,18 @@ def _ttl(lock: Lock) -> str:
     return str(max(1, math.ceil(lock.ttl)))
 
 
+def _holder_env(holder: dict, paths: state.Paths) -> dict[str, str]:
+    """Who is asking, for the provider's own records; every value is a plain string."""
+    return {
+        'DELEGATION_LEASE_DELEGATION': holder.get('delegation') or '',
+        'DELEGATION_LEASE_COMMAND': holder.get('command') or '',
+        'DELEGATION_LEASE_WORKTREE': str(paths.root),
+        'DELEGATION_LEASE_PID': str(os.getpid()),
+    }
+
+
 @contextlib.contextmanager
-def lease(root: Path, name: str, lock: Lock, provider: str) -> Iterator[dict]:
+def lease(root: Path, name: str, lock: Lock, provider: str, holder: dict) -> Iterator[dict]:
     """Hold one lease on `name` from the provider for the duration of the block.
 
     `acquire <name> --ttl N` exits 0 with the lease key on stdout, 3 when every
@@ -118,9 +131,10 @@ def lease(root: Path, name: str, lock: Lock, provider: str) -> Iterator[dict]:
     background; a failed renewal is reported in `lease.lost`, and `release <key>`
     always runs when the block ends.
     """
+    env = _holder_env(holder, state.Paths(root))
     started, announced = time.monotonic(), False
     while True:
-        code, out, err = _provider_call(root, provider, "acquire", name, "--ttl", _ttl(lock))
+        code, out, err = _provider_call(root, provider, env, "acquire", name, "--ttl", _ttl(lock))
         if code == 0:
             key = next((line.strip() for line in out.splitlines() if line.strip()), "")
             if not key:
@@ -138,11 +152,14 @@ def lease(root: Path, name: str, lock: Lock, provider: str) -> Iterator[dict]:
         time.sleep(PROVIDER_POLL_S)
     info = {'provider': provider, 'key': key, 'ttl_s': lock.ttl, 'renewals': 0, 'lost': False}
     stop = threading.Event()
+    period = max(0.1, lock.ttl / 3)
 
     def renew() -> None:
-        while not stop.wait(max(0.1, lock.ttl / 3)):
+        # A renewal gets one period, so release never waits longer than that for it.
+        while not stop.wait(period):
             try:
-                code, _, err = _provider_call(root, provider, "renew", key, "--ttl", _ttl(lock))
+                code, _, err = _provider_call(root, provider, env, "renew", key, "--ttl", _ttl(lock),
+                                              timeout=min(PROVIDER_TIMEOUT_S, max(1.0, period)))
             except DelegationError as error:
                 code, err = -1, str(error)
             if code == 0:
@@ -159,7 +176,7 @@ def lease(root: Path, name: str, lock: Lock, provider: str) -> Iterator[dict]:
         stop.set()
         keeper.join()
         try:
-            code, _, err = _provider_call(root, provider, "release", key)
+            code, _, err = _provider_call(root, provider, env, "release", key)
         except DelegationError as error:
             code, err = -1, str(error)
         if code != 0:
@@ -171,7 +188,7 @@ def hold(root: Path, name: str, lock: Lock, holder: dict, provider: str | None =
     if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', name):
         raise DelegationError('Invalid resource lock name: ' + name)
     if provider:
-        with lease(root, name, lock, provider) as held:
+        with lease(root, name, lock, provider, holder) as held:
             yield held
         return
     paths = state.Paths(root)

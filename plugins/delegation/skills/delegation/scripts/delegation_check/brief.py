@@ -74,7 +74,8 @@ def footer(root: Path, delegation: str, overlay: Overlay, lane: str | None = Non
         rules = ["Rules (overlay ## Rules); these apply to everything you do here:",
                  *(f"- {rule}" for rule in overlay.rules), ""]
     if overlay.locks:
-        names = ", ".join(f"{name} ({lock.slots} slot{'s' if lock.slots != 1 else ''})"
+        names = ", ".join(f"{name} (lease)" if overlay.lock_provider else
+                          f"{name} ({lock.slots} slot{'s' if lock.slots != 1 else ''})"
                           for name, lock in overlay.locks.items())
         exec_line = command(root, "exec", "--lock", "<lock>", "--timeout", "<seconds>",
                             "--delegation", delegation, "--", "<command>")

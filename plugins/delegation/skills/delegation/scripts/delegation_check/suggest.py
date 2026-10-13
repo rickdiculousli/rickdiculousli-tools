@@ -54,7 +54,8 @@ def _unit_of(path: str, units: list[str]) -> str | None:
 def _normal(unit: object) -> str | None:
     if not isinstance(unit, str) or not unit.strip() or _escapes(unit.strip()):
         return None
-    return PurePosixPath(unit.strip().replace("\\", "/")).as_posix().rstrip("/") or None
+    value = PurePosixPath(unit.strip().replace("\\", "/")).as_posix().rstrip("/")
+    return None if value in ("", ".") else value
 
 
 def deps_map(root: Path, overlay: Overlay) -> tuple[dict[str, tuple[str, ...]], str | None]:
@@ -118,7 +119,7 @@ def dependents_of(deps: dict[str, tuple[str, ...]], changed_paths: list[str]) ->
 
 
 def _tracked_under(root: Path, unit: str) -> list[str]:
-    return sorted(filter(None, _git(root, ["ls-files", "-z", "--", unit]).split("\0")))
+    return sorted(filter(None, _git(root, ["ls-files", "-z", "--", ":(literal)" + unit]).split("\0")))
 
 
 def suggest(root: Path, overlay: Overlay, base: str | None = None, with_dependents: bool = False) -> dict:

@@ -78,6 +78,13 @@ class OverlayParsingTests(LanesCase):
         self.assertIn('line 4: ttl needs a positive number', problems[2])
         self.assertEqual(self.cli("lint", code=1).returncode, 1)
 
+    def test_a_lock_named_provider_is_a_lint_problem(self):
+        write_overlay(self.root, "## Locks\nprovider: slots=2, wait=5\n")
+        overlay = load_overlay(self.root)
+        self.assertIsNone(overlay.lock_provider)
+        self.assertEqual(overlay.locks, {})
+        self.assertEqual(overlay.problems, ('line 2: "provider" is reserved for the lock provider command; rename this lock',))
+
     def test_rules_and_deps_sections(self):
         write_overlay(self.root, "## Rules\n- Never print the word skip in test output.\n- Scratch goes under the cache root.\n"
                                  "## Deps\n- crates/app-core/: crates/app-ui, crates/app-cli/\n- crates/app-ui: crates/app-cli, crates/app-ui\n"
@@ -89,14 +96,16 @@ class OverlayParsingTests(LanesCase):
         self.assertEqual(overlay.deps_command, "python3 -I tools/dependents.py")
 
     def test_deps_problems(self):
-        write_overlay(self.root, "## Deps\nnonsense\n../up: a\ncrates/a: /abs\ncrates/a: b\ncommand: x\ncommand: y\n")
+        write_overlay(self.root, "## Deps\nnonsense\n../up: a\ncrates/a: /abs\ncrates/a: b\ncommand: x\ncommand: y\n./: crates/a\n")
         problems = load_overlay(self.root).problems
-        self.assertEqual([p.split(":")[0] for p in problems], ["line 2", "line 3", "line 4", "line 5", "line 7"], problems)
+        self.assertEqual([p.split(":")[0] for p in problems], ["line 2", "line 3", "line 4", "line 5", "line 7", "line 8"], problems)
         self.assertIn('expected "<unit>: <dependent>, ..."', problems[0])
-        self.assertIn("deps unit needs a repository-relative path", problems[1])
-        self.assertIn("deps unit needs a repository-relative path", problems[2])
+        self.assertIn("deps unit needs a repository-relative directory", problems[1])
+        self.assertIn("deps unit needs a repository-relative directory", problems[2])
         self.assertIn('duplicate deps unit "crates/a"', problems[3])
         self.assertIn("duplicate deps command", problems[4])
+        self.assertIn("deps unit needs a repository-relative directory", problems[5])
+        self.assertNotIn("validator", " ".join(problems))
 
 
 class LeaseProviderTests(LanesCase):
@@ -112,7 +121,17 @@ class LeaseProviderTests(LanesCase):
         write_overlay(self.root, f'## Locks\nprovider: "{PROVIDER}"\n{locks}\n## Validators\n{validators}')
 
     def calls(self):
+        """Provider calls without holder details; `holders()` has those."""
+        return [line.partition(" | ")[0] for line in self.holders()]
+
+    def holders(self):
         return self.log.read_text(encoding="utf-8").splitlines() if self.log.exists() else []
+
+    def wait_for(self, predicate, seconds=10):
+        deadline = time.monotonic() + seconds
+        while not predicate() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertTrue(predicate(), "condition not met in time")
 
     def test_run_takes_a_lease_instead_of_a_native_slot(self):
         self.overlay()
@@ -127,8 +146,25 @@ class LeaseProviderTests(LanesCase):
         self.assertEqual(event["lease"]["provider"], PROVIDER)
         self.assertFalse(event["lease"]["lost"])
         self.assertEqual(self.calls(), ["acquire cargo --ttl 120", "release cargo.0"])
+        self.assertEqual(self.holders()[0].partition(" | ")[2],
+                         "DELEGATION_LEASE_DELEGATION=d1 DELEGATION_LEASE_COMMAND=heavy")
         self.assertEqual(sorted(self.store.iterdir()), [])
         self.assertFalse(list(Paths(self.root).locks.glob("*.lock")))
+
+    def test_ttl_is_rounded_up_to_whole_seconds(self):
+        self.overlay("cargo: ttl=2.1")
+        self.open()
+        self.cli("run", "heavy", "--delegation", "d1")
+        self.assertEqual(self.calls(), ["acquire cargo --ttl 3", "release cargo.0"])
+        self.assertEqual(self.results()[0]["lease"]["ttl_s"], 2.1)
+
+    def test_release_failure_is_reported_but_not_fatal(self):
+        self.overlay()
+        self.open()
+        with patch.dict(os.environ, FAKE_LEASE_MODE="norelease"):
+            result = self.cli("run", "heavy", "--delegation", "d1")
+        self.assertIn("d1#1 PASS", result.stdout)
+        self.assertIn("lock provider could not release cargo lease cargo.0: release refused", result.stderr)
 
     def test_lease_is_renewed_at_a_third_of_the_ttl(self):
         self.overlay("cargo: ttl=0.9", "heavy [lock=cargo, timeout=10]: sleep 1\n")
@@ -147,9 +183,7 @@ class LeaseProviderTests(LanesCase):
         self.store.mkdir()
         proc = subprocess.Popen([sys.executable, str(SCRIPTS / "check.py"), "run", "heavy", "--delegation", "d1"],
                                 cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        deadline = time.monotonic() + 10
-        while not (self.store / "cargo.0").exists() and time.monotonic() < deadline:
-            time.sleep(0.05)
+        self.wait_for((self.store / "cargo.0").exists)
         (self.store / "cargo.0").unlink()
         out, err = proc.communicate(timeout=30)
         self.assertEqual(proc.returncode, 0, err)
@@ -176,12 +210,22 @@ class LeaseProviderTests(LanesCase):
         (self.store / "cargo.0").write_text("someone else\n", encoding="utf-8")
         proc = subprocess.Popen([sys.executable, str(SCRIPTS / "check.py"), "run", "heavy", "--delegation", "d1"],
                                 cwd=self.root, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        time.sleep(1.2)
+        self.wait_for(lambda: self.calls().count("acquire cargo --ttl 120") >= 2)
         (self.store / "cargo.0").unlink()
         out, err = proc.communicate(timeout=30)
         self.assertEqual(proc.returncode, 0, err)
         self.assertIn("d1#1 PASS", out)
-        self.assertGreater(self.results()[0]["lock_wait_s"], 1.0)
+        self.assertIn("waiting for lock cargo from provider", err)
+        self.assertGreater(self.results()[0]["lock_wait_s"], 0.5)
+        self.assertEqual(self.calls()[-1], "release cargo.0")
+
+    def test_exec_waits_for_a_busy_provider_too(self):
+        self.overlay("cargo: wait=1")
+        self.store.mkdir()
+        (self.store / "cargo.0").write_text("someone else\n", encoding="utf-8")
+        result = self.cli("exec", "--lock", "cargo", "--timeout", "10", "--", "echo", "hi", code=2)
+        self.assertIn("lock cargo still busy after 1s", result.stderr)
+        self.assertEqual(result.stdout, "")
 
     def test_provider_errors_refuse_without_a_result(self):
         self.overlay()
@@ -275,7 +319,7 @@ class DependentsTests(LanesCase):
         self.assertEqual(data["unscoped"], ["all"])
         text = self.cli("suggest", "--with-dependents").stdout
         self.assertIn("dependents of crates/app-core: crates/app-ui, crates/app-cli\n", text)
-        self.assertIn("run ui:  (dependent: crates/app-ui)\n", text)
+        self.assertIn("run ui: dependent: crates/app-ui\n", text)
 
     def test_deps_command_supplies_the_map(self):
         script = self.root / "tools" / "dependents.py"
@@ -341,14 +385,18 @@ class RulesAndLaneTests(LanesCase):
         self.assertEqual(read_events(self.root), [])
 
     def test_without_lane_events_are_unchanged(self):
-        self.open()
+        self.open("d1", "--kind", "port-module", "--new-kind", "Port one module")
         opened = read_events(self.root)[0]
         self.assertNotIn("lane", opened)
         pending = json.loads(self.cli("pending", "--json").stdout)["pending"]
         self.assertEqual(sorted(pending[0]), ["delegation", "opened", "tier", "tree", "writes"])
         self.assertTrue(self.cli("brief", "--delegation", "d1").stdout.find("Delegation id: d1\n") >= 0)
-        kinds = json.loads(self.cli("patterns", "--json").stdout)
-        self.assertEqual(kinds["kinds"], [])
+        line = json.loads((Paths(self.root).repo / "patterns.jsonl").read_text(encoding="utf-8").splitlines()[0])
+        self.assertNotIn("lane", line)
+        kinds = json.loads(self.cli("patterns", "--json", "--min", "1").stdout)["kinds"]
+        self.assertEqual(sorted(kinds[0]), ["candidate", "count", "days", "description", "kind", "last", "outcomes",
+                                            "role", "status", "tiers", "worktrees"])
+        self.assertEqual(sorted(json.loads(self.cli("kinds", "--json").stdout)["kinds"][0]), sorted(kinds[0]))
 
 
 if __name__ == "__main__":

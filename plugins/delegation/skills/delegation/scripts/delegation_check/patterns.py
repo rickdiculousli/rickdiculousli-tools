@@ -318,7 +318,7 @@ def summary(paths: state.Paths, roles: set[str], since_days: float | None = None
             "kind": name, "description": entry["description"], "count": total,
             "worktrees": len(group["worktrees"]), "days": len(group["days"]),
             "outcomes": group["outcomes"], "tiers": sorted(t for t in group["tiers"] if t),
-            "lanes": sorted(group["lanes"]),
+            **({"lanes": sorted(group["lanes"])} if group["lanes"] else {}),
             "last": group["last"], "role": role, "status": status,
             "candidate": total >= minimum and not role and status not in ("approved", "declined"),
         })
@@ -326,7 +326,7 @@ def summary(paths: state.Paths, roles: set[str], since_days: float | None = None
     unlabeled = [
         {"fingerprint": key, "count": group["count"], "worktrees": len(group["worktrees"]),
          "days": len(group["days"]), "outcomes": group["outcomes"], "tiers": sorted(t for t in group["tiers"] if t),
-         "lanes": sorted(group["lanes"]), "last": group["last"]}
+         **({"lanes": sorted(group["lanes"])} if group["lanes"] else {}), "last": group["last"]}
         for key, group in shapes.items() if group["count"] >= minimum
     ]
     unlabeled.sort(key=lambda item: item["count"], reverse=True)

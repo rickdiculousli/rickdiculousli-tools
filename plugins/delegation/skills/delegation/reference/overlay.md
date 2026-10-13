@@ -104,8 +104,9 @@ the `migrate` skill.
     a provider, `slots=` and `DELEGATION_LOCK_<NAME>` are not consulted (the
     provider owns the slot count), `wait` still bounds how long `run` and `exec`
     poll, and `ttl` is the lease length passed to the provider. An empty or
-    unquotable command, or a second `provider:` line, is a lint problem. Without
-    the line, locking is unchanged.
+    unquotable command, or a second `provider:` line, is a lint problem, and so
+    is a lock named `provider` (`provider: slots=2`): the name is reserved.
+    Without the line, locking is unchanged.
 - **`## Deps`.** The dependency map for `check.py suggest --with-dependents`
   (requirement: a change in one unit must also run the validators of the units
   that depend on it). Units are repository-relative directories (a crate, a
@@ -116,13 +117,18 @@ the `migrate` skill.
   additionally; the command wins) one `command: <cmd>` line names a command run
   from the worktree root that prints a JSON object `{"<unit>": ["<dependent>", ...]}`
   on stdout, for example a wrapper over `cargo metadata`. A failing, hanging
-  (120 s) or malformed command makes `suggest --with-dependents` exit 2.
+  (120 s) or malformed command makes `suggest --with-dependents` exit 2. A
+  changed path belongs to the longest declared unit that contains it; a
+  dependent's validators are those whose `paths=` match a file Git tracks under
+  that unit (an untracked-only dependent contributes nothing). The repository
+  root (`.`) is not a unit.
 - **`## Rules`.** Free-text lines (bullets). `check.py brief` appends them to
   every brief, after the safety instructions and before the scratch directory,
   as `Rules (overlay ## Rules); these apply to everything you do here:`. Put
   project rules every subagent must obey here (what test output may never
-  contain, where scratch goes, cache keys being append-only). They are agent
-  instructions, not enforcement.
+  contain, where scratch goes, cache keys being append-only). One rule per
+  line; a line starting with `#` is skipped like any heading, so don't start a
+  rule with it. They are agent instructions, not enforcement.
 - **`validator:<name>` references.** Anywhere in the file, `validator:<name>`
   must name a registered validator, or lint reports `unregistered validator`.
   Use it in `## Oracle` or `## Tier hints` to tie prose to a check.
@@ -188,30 +194,40 @@ With `provider: "<command>"` under `## Locks`, `check.py run` (for a validator
 with `lock=<name>`) and `check.py exec --lock <name>` hold a lease from the
 provider for the lifetime of the foreground command instead of a native slot.
 `<command>` is split with POSIX shell rules and run from the worktree root with
-stdin closed, stdout and stderr captured, inheriting the environment; each call
-gets 60 seconds, after which it counts as an error. The provider must implement
-three subcommands, appended to `<command>`:
+stdin closed, stdout and stderr captured, inheriting the environment plus the
+holder's identity in `DELEGATION_LEASE_DELEGATION` (the delegation id, empty
+for an unattributed `exec`), `DELEGATION_LEASE_COMMAND` (the validator name or
+command line), `DELEGATION_LEASE_WORKTREE` (absolute path) and
+`DELEGATION_LEASE_PID`, for the provider's own records. `acquire` and `release`
+get 60 seconds each, `renew` one renewal period (below), after which a call
+counts as an error. The provider must implement three subcommands, appended to
+`<command>`:
 
 | Call | Must do | stdout | Exit |
 |---|---|---|---|
-| `acquire <name> --ttl <seconds>` | Try once, without blocking, to take one free slot of lock `<name>` for `<seconds>` (an integer) | On success, the lease key on the first non-empty line (for example `cargo.0`) | `0` acquired; `3` every slot is taken (busy); anything else is a provider error |
+| `acquire <name> --ttl <seconds>` | Try once, without blocking, to take one free slot of lock `<name>` for `<seconds>` (an integer) | On success, the lease key on the first non-empty line (for example `cargo.0`); it is passed back as one argument, so it may contain spaces but not a newline; later lines are ignored | `0` acquired; `3` every slot is taken (busy); anything else is a provider error |
 | `renew <key> --ttl <seconds>` | Extend the lease `<key>` by `<seconds>` from now | ignored | `0` renewed; anything else means the lease is gone |
 | `release <key>` | End the lease `<key>` (a missing lease is fine) | ignored | `0`; anything else is reported, not fatal |
 
 How check.py uses them:
 
-- `acquire` is polled once a second while it exits `3`; the lock's `wait`
-  bounds the polling (exit 2, nothing recorded, same as native locks), and the
-  last line of the provider's stderr is shown as the reason while waiting. An
-  exit other than `0` or `3`, a missing executable, a timeout, or exit `0`
-  without a key, refuse the run with exit 2 and record nothing.
+- `acquire` is polled once a second while it exits `3` (so a `wait` under a
+  second still allows one full poll); without `wait` it polls indefinitely,
+  as native locks do. The lock's `wait` bounds the polling (exit 2, nothing
+  recorded, same as native locks), and the last line of the provider's stderr
+  is shown as the reason while waiting. An exit other than `0` or `3`, a
+  missing or unrunnable executable, a timeout, or exit `0` without a key,
+  refuse the run with exit 2 and record nothing. The lease is taken before the
+  tree is hashed, so it covers the hashing as well as the command.
 - `--ttl` is the lock's `ttl` rounded up to a whole second (default 120).
-  `renew` runs in the background every `ttl/3` seconds while the command runs.
-  A renewal that fails is printed to stderr and sets `lease.lost` in the ledger
-  result; the command is not interrupted, so the result stays usable evidence
-  but the provider may have handed the slot to someone else.
+  `renew` runs in the background every `ttl/3` seconds while the command runs,
+  concurrently with it but never concurrently with another `renew` or with
+  `release`. A renewal that fails is printed to stderr and sets `lease.lost`
+  in the ledger result; the command is not interrupted, so the result stays
+  usable evidence but the provider may have handed the slot to someone else.
 - `release` always runs when the command ends, including after a timeout or a
-  forwarded signal. If it fails the lease expires at its TTL.
+  forwarded signal; it waits for an in-flight `renew` first, at most one
+  renewal period. If it fails the lease expires at its TTL.
 - The ledger result records `lock`, `lock_wait_s` and a `lease` object
   (`provider`, `key`, `ttl_s`, `renewals`, `lost`); `lock_slot` is `null` under a
   provider. `check.py locks` prints the provider and each lock's ttl and wait;

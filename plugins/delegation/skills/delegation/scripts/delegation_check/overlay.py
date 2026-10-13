@@ -244,10 +244,11 @@ def _quoted_command(number: int, key: str, value: str, problems: list[str]) -> s
 def _unit(number: int, value: str, problems: list[str]) -> str | None:
     """A repository-relative directory naming a dependency unit, without a trailing slash."""
     text = value.strip().strip("`").strip()
-    if not text or _escapes(text):
-        problems.append(f'line {number}: deps unit needs a repository-relative path, got "{value}"')
+    unit = PurePosixPath(text.replace("\\", "/")).as_posix().rstrip("/") if text else ""
+    if not text or _escapes(text) or unit in ("", "."):
+        problems.append(f'line {number}: deps unit needs a repository-relative directory, got "{value}"')
         return None
-    return PurePosixPath(text.replace("\\", "/")).as_posix().rstrip("/") or None
+    return unit
 
 
 def _deps(lines: list[tuple[int, str]], problems: list[str]) -> tuple[dict[str, tuple[str, ...]], str | None]:
@@ -347,6 +348,8 @@ def load_overlay(root: Path) -> Overlay:
         if sep and name == PROVIDER_KEY:
             if provider_seen:
                 problems.append(f'line {number}: duplicate lock provider')
+            elif re.match(r"(slots|wait|ttl)\s*=", attributes.strip()):
+                problems.append(f'line {number}: "provider" is reserved for the lock provider command; rename this lock')
             else:
                 provider_seen = True
                 lock_provider = _quoted_command(number, "provider", attributes, problems)

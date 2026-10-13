@@ -169,8 +169,9 @@ def _suggest(root: Path, args: argparse.Namespace) -> int:
         print("no ## Deps section or command in the overlay; dependents not considered")
     for item in data["run"]:
         sample = ", ".join(item["matched"][:3]) + (f" (+{len(item['matched']) - 3} more)" if len(item["matched"]) > 3 else "")
-        via = f" (dependent: {', '.join(item['dependents'])})" if item.get("via") == "dependents" else ""
-        print(f"run {item['validator']}: {sample}{via}")
+        if item.get("via") == "dependents":
+            sample = f"dependent: {', '.join(item['dependents'])}"
+        print(f"run {item['validator']}: {sample}")
     for name in data["unscoped"]:
         print(f"unscoped {name}: no paths= attribute; decide from the overlay's notes")
     for item in data["not_needed"]:
@@ -183,15 +184,14 @@ def _declared(root: Path, name: str):
     if name not in overlay.locks:
         known = ", ".join(sorted(overlay.locks)) or "none"
         raise DelegationError(f'unknown lock "{name}"; declared: {known}')
-    return overlay.locks[name]
+    return overlay, overlay.locks[name]
 
 
 def _exec(root: Path, args: argparse.Namespace) -> int:
     command = args.argv[1:] if args.argv[:1] == ["--"] else args.argv
     if not command:
         raise DelegationError("exec needs a command after --")
-    lock = _declared(root, args.lock)
-    overlay = load_overlay(root)
+    overlay, lock = _declared(root, args.lock)
     if args.delegation:
         result = run_validator(root, args.delegation, None,
                                Validator(shlex.join(command), timeout=args.timeout, lock=args.lock),
