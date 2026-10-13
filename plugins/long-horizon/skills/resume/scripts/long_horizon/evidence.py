@@ -1,16 +1,60 @@
 """Immutable pending proposals and reachable, independently verifiable evidence."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import shlex
+import subprocess
 import time
 import uuid
 from .delegation import Checker
-from .git import confined
+from .git import Git, confined, path_key
 from .model import Invalid, Blocked, digest, finding
 from .scope import snapshot, definition, policy_digest, criterion_policy
-from .state import State, atomic
+from .state import State, atomic, lock, read, xdg
+
+# The repository-wide evidence index is written only under lanes mode or by --commit-in;
+# every other repository reads it when present and is otherwise unchanged.
+INDEX_WRITES = False
+
+
+def enable_index_writes():
+    global INDEX_WRITES
+    INDEX_WRITES = True
+
+
+class Index:
+    """Per-commit cache of validated acceptance records, shared by a repository's worktrees.
+
+    A commit's trailers and detail files never change, so what one worktree validated holds
+    for every other; records written in a landing checkout resolve anywhere after a rebase.
+    Lives under the XDG cache: <repo-key>/evidence/<commit>.json plus identity.json.
+    """
+
+    def __init__(self, git):
+        self.git = git
+        self.path = xdg('cache') / path_key(git.common) / 'evidence'
+
+    def get(self, commit):
+        try:
+            value = read(self.path / (commit + '.json'))
+        except Invalid:
+            return None
+        if (not isinstance(value, dict) or value.get('version') != 1 or value.get('commit') != commit
+                or value.get('common') != str(self.git.common) or value.get('invalid') != [] or not isinstance(value.get('records'), list)):
+            return None
+        return value
+
+    def put(self, commit, records, invalid):
+        # Only commits whose every trailer validated are cached; a failure is re-examined each time.
+        if not INDEX_WRITES or invalid:
+            return
+        value = {'version': 1, 'commit': commit, 'common': str(self.git.common), 'records': records, 'invalid': [], 'created': time.time()}
+        with lock():
+            if not (self.path / 'identity.json').is_file():
+                atomic(self.path / 'identity.json', {'version': 1, 'common': str(self.git.common), 'created': time.time(), 'missing_since': None})
+            atomic(self.path / (commit + '.json'), value)
 
 HEX = re.compile(r'^[0-9a-f]{64}$')
 FIELDS = {'id', 'name', 'outcome', 'scope', 'policy', 'inputs', 'domain', 'ledger', 'claim', 'detail', 'log'}
@@ -306,31 +350,122 @@ def validate_durable(git, commit, value):
             raise Invalid('Dated review note is missing/altered.')
 
 
+def commit_records(git, commit, lines, index):
+    """Validated records one commit carries plus the trailer IDs (None when unparseable) that failed,
+    from the shared index when it already knows the commit."""
+    cached = index.get(commit)
+    if cached is not None:
+        return cached['records'], []
+    records, invalid = [], []
+    for line in lines:
+        fields = None
+        try:
+            fields = parse_trailer(line)
+            path = confined(git.root, fields['detail']).relative_to(git.root).as_posix()
+            value = json.loads(git.read(commit, path))
+            validate_durable(git, commit, value)
+            if record_id(value) != fields['id'] or parse_trailer(trailer(value)) != fields:
+                raise Invalid('Trailer/detail content mismatch.')
+            records.append(value)
+        except (Invalid, ValueError, KeyError, TypeError):
+            invalid.append(fields['id'] if fields else None)
+    index.put(commit, records, invalid)
+    return records, invalid
+
+
+def history(git, ref='HEAD'):
+    """(commit, message) pairs oldest first; one log call, signatures never mixed into the text."""
+    raw = git.run('log', '-z', '--no-show-signature', '--reverse', '--topo-order', '--format=%H%n%B', ref, check=False)
+    for entry in raw.split('\0'):
+        if entry.strip():
+            commit, _, message = entry.partition('\n')
+            yield commit, message
+
+
 def committed(git):
     records, findings = [], []
     seen = set()
+    index = Index(git)
     # Reverse topological traversal identifies original introduction, not duplicate carrying commits.
-    commits = git.run('rev-list', '--reverse', '--topo-order', 'HEAD', check=False).splitlines()
-    for commit in commits:
-        message = git.run('show', '-s', '--format=%B', commit)
-        for line in message.splitlines():
-            if not line.startswith(('Accepted-Check:', 'Accepted-Exception:')):
+    for commit, message in history(git):
+        lines = [x for x in message.splitlines() if x.startswith(('Accepted-Check:', 'Accepted-Exception:'))]
+        if not lines:
+            continue
+        values, invalid = commit_records(git, commit, lines, index)
+        for value in values:
+            if value['id'] in seen:
                 continue
-            try:
-                fields = parse_trailer(line)
-                if fields['id'] in seen:
-                    continue
-                path = confined(git.root, fields['detail']).relative_to(git.root).as_posix()
-                value = json.loads(git.read(commit, path))
-                validate_durable(git, commit, value)
-                if record_id(value) != fields['id'] or parse_trailer(trailer(value)) != fields:
-                    raise Invalid('Trailer/detail content mismatch.')
-                seen.add(value['id'])
-                value = dict(value, carrying_commit=commit, pending=False)
-                records.append(value)
-            except (Invalid, ValueError, KeyError, TypeError):
+            seen.add(value['id'])
+            records.append(dict(value, carrying_commit=commit, pending=False))
+        for id_ in invalid:
+            # A repeated trailer of a record already introduced is not corruption, as before.
+            if id_ is None or id_ not in seen:
                 findings.append(finding('evidence-corrupt', 'Committed acceptance trailer/detail is invalid.', 'Inspect acceptance records in commit ' + commit + ' and record new reviewed evidence.'))
     return records, findings
+
+
+def commit_in(git, record, directory):
+    """Lander flow: commit exactly the record's detail file, with its trailer, in a checkout of this repository.
+
+    Uses a private index file, so the checkout's own index and staged work stay untouched; it never
+    amends, pushes or moves any ref but that checkout's HEAD, and only from the HEAD it read.
+    """
+    other = Git(directory)
+    if other.common != git.common:
+        raise Invalid('--commit-in must name a checkout of the same repository as --root.')
+    head = other.oid()
+    if not head:
+        raise Invalid('--commit-in checkout has no commit to build on.')
+    # The commit carries exactly the detail file, so every file the record relies on must already be history.
+    if not record.get('exception') and not record['log'].startswith(('https://', 'http://', 'regenerate:')):
+        raise Invalid('--commit-in needs a persistent --log route (regenerate: or http(s)), not a checkout file.')
+    if record.get('claim') == 'reviewed':
+        raise Invalid('--commit-in records observed or delegated checks; reviewed observations go through the reviewed commit flow.')
+    line = trailer(record)
+    for existing in committed(other)[0]:
+        if existing['id'] == record['id']:
+            return {'commit': existing['carrying_commit'], 'committed_in': str(other.root), 'already_committed': True}
+    content = proposed(record)
+    write_files(other, {record['detail']: content})
+    relative = confined(other.root, record['detail']).relative_to(other.root).as_posix()
+    blob = other.run('hash-object', '-w', '--path', relative, '--stdin', input=content).strip()
+    scratch = xdg('cache') / path_key(git.common) / 'scratch'
+    scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
+    index_file = scratch / ('index-' + uuid.uuid4().hex)
+    env = dict(os.environ, GIT_INDEX_FILE=str(index_file), GIT_OPTIONAL_LOCKS='0')
+
+    def run(*args, input=None):
+        result = subprocess.run(['git', '-C', str(other.root), *args], input=input, capture_output=True, text=True, timeout=30, env=env)
+        if result.returncode:
+            raise Invalid('Git operation failed in --commit-in checkout: ' + args[0] + '; ' + result.stderr.strip())
+        return result.stdout.strip()
+
+    try:
+        run('read-tree', head)
+        run('update-index', '--add', '--cacheinfo', '100644,' + blob + ',' + relative)
+        tree = run('write-tree')
+        if tree == other.run('rev-parse', head + '^{tree}').strip():
+            raise Invalid('The detail file is already in HEAD without its trailer; record a new check or cite the carrying commit.')
+        subject = 'Evidence: ' + (('exception ' + record['check'] + ' for ' + record['target']) if record.get('exception') else record['name'] + ' ' + record['outcome'])
+        commit = run('commit-tree', tree, '-p', head, input=subject + '\n\n' + line + '\n')
+        # The dangling commit is checked as history would read it before any ref moves.
+        values, invalid = commit_records(other, commit, [line], Index(other))
+        if invalid or [x['id'] for x in values] != [record['id']]:
+            raise Invalid('The evidence commit would not validate from history; nothing was committed.')
+        run('update-ref', '-m', 'long-horizon evidence', 'HEAD', commit, head)
+        # The checkout's own index learns the one added path, so the worktree matches its new HEAD.
+        other.run('update-index', '--add', '--cacheinfo', '100644,' + blob + ',' + relative)
+    finally:
+        if index_file.exists():
+            index_file.unlink()
+        try:
+            scratch.rmdir()
+        except OSError:
+            pass
+    result = {'commit': commit, 'committed_in': str(other.root), 'already_committed': False}
+    if other.root == git.root:
+        result['cleanup'] = cleanup(git, commit, [record['id']])
+    return result
 
 
 def candidates(git, pending):

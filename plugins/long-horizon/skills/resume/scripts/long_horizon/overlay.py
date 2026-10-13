@@ -22,6 +22,8 @@ SCHEMA = {
     'batch': {'tasks': int, 'blocker-resolutions': int, 'quota': bool, 'quota-script': str, 'quota-env': str},
     'integration': {'steps': list, 'target': str, 'remote': str, 'sync': str,
                     'stop-conditions': list, 'authorization': str},
+    'lanes': {'config': str, 'assignment': str, 'task-completion': str,
+              'milestone-completion': str, 'landing': str, 'lane-files': str},
 }
 DEFAULTS = {
     'state': {'state': 'active'},
@@ -36,6 +38,9 @@ DEFAULTS = {
     'evidence': {'checks': {}, 'inputs': {}},
     'batch': {'tasks': 1, 'blocker-resolutions': 1, 'quota': False},
     'integration': {'steps': [], 'stop-conditions': []},
+    # Lanes mode is on only when a ## Lanes section names its config file.
+    'lanes': {'assignment': 'goals', 'task-completion': 'lane', 'milestone-completion': 'judge',
+              'landing': 'lander', 'lane-files': 'docs/lanes'},
 }
 
 
@@ -135,6 +140,13 @@ def validate(data):
         raise Invalid('Push requires a named remote.')
     if 'sync' in steps and not data['integration'].get('sync'):
         raise Invalid('Sync requires its configured operation.')
+    lanes = data['lanes']
+    for key, allowed in (('assignment', ('goals',)), ('task-completion', ('lane', 'judge', 'user')),
+                         ('milestone-completion', ('judge', 'user')), ('landing', ('lander', 'session'))):
+        if lanes[key] not in allowed:
+            raise Invalid('Lanes ' + key + ' must be one of ' + ', '.join(allowed) + '.')
+    if 'config' in lanes and not lanes['config'].strip():
+        raise Invalid('Lanes config must name the lanes TOML file, such as .agents/lanes.toml.')
     for name, spec in data['evidence']['checks'].items():
         if not isinstance(spec, dict) or set(spec) - {'scope', 'inputs', 'domain', 'allowed-skips', 'validator', 'reviewer'}:
             raise Invalid('Invalid check definition: ' + name)
@@ -166,11 +178,13 @@ def load(git, overlay=None, draft_root=None, goals=None, handoff=None):
     exists = path.is_file()
     data = parse(path.read_text(encoding='utf-8')) if exists else {**copy.deepcopy(DEFAULTS), '_version': None, '_outdated': []}
     data['_installed'] = exists and not draft_root
+    data['_lanes'] = 'config' in data['lanes']
     data['_overlay'] = str(path)
     data['_base'] = str(base)
     data['_goals'] = str(confined(base, goals or data['goals and ownership']['path']))
     data['_handoff'] = str(confined(base, handoff or data['continuation']['handoff']))
-    for value in [data['continuation']['archive'], data['continuation']['evidence'], *data['continuation']['findings']]:
+    for value in [data['continuation']['archive'], data['continuation']['evidence'], *data['continuation']['findings'],
+                  data['lanes']['lane-files'], *([data['lanes']['config']] if 'config' in data['lanes'] else [])]:
         confined(base, value)
     if 'non-code' not in data['continuation']:
         data['continuation']['non-code'] = [data['goals and ownership']['path'], data['continuation']['handoff'],

@@ -24,6 +24,14 @@ Recreated directories cannot inherit old state; mutation quarantines an old
 identity generation with a unique retired suffix. Unknown/unavailable identities
 are retained. Status reports resolved state path and creates nothing.
 
+Under lanes mode, and with `evidence record --commit-in`, the evidence index adds
+a repository-scoped `<cache>/rickdiculousli-tools/long-horizon/<repo-key>/evidence/`
+directory with `<commit>.json` per trailer-carrying commit and an `identity.json`
+recording the Git common directory; see [lanes](lanes.md). It is a regenerable
+cache, so deleting it loses nothing. Weekly `state gc` removes an entry whose
+commit object no longer exists, and the whole index follows the seven-day recovery
+window once the repository's Git directory is gone.
+
 All writes use one fixed root POSIX flock or Windows msvcrt byte lock and atomic
 replacement. Never unlink/replace state.lock. Do not hold it while running probes,
 validators, startup or Git integration. Failed writes preserve prior JSON.

@@ -7,6 +7,9 @@ from .model import finding
 TOKENS = re.compile(r'\b(?:validator|observation):[\w.-]*\w')
 LOOSE = re.compile(r'^(?i:done when)\b(?!\s*:)\s*[-\u2013\u2014]?\s*')
 KEYS = {'ID', 'Done when', 'Checks', 'Evidence', 'Context', 'Signed-off', 'Archive', 'Reason', 'Policy-Approval', 'Completion', 'Exception'}
+# Lane metadata ends a wrapped criterion only on the node kind it belongs to, so other prose is unchanged.
+LANE_KEYS = {'task': {'Lane', 'After'}, 'goal': {'Parallel'}}
+LANE = re.compile(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}')
 
 
 def outside(text):
@@ -36,7 +39,8 @@ def node(title, kind, line, markers):
             title, status = title[:-len(marker)].strip(), name
             break
     return {'kind': kind, 'title': title, 'status': status, 'line': line, 'id': '',
-            'criteria': '', 'checks': [], 'evidence': {}, 'context': [], 'children': [], 'metadata': {}}
+            'criteria': '', 'checks': [], 'evidence': {}, 'context': [], 'children': [], 'metadata': {},
+            'lane': None, 'after': []}
 
 
 def parse(text, policy, path=''):
@@ -55,7 +59,8 @@ def parse(text, policy, path=''):
     for number, raw in outside(text):
         line = raw.strip()
         if paragraph and (not line or number != paragraph['criteria_end'] + 1 or line.startswith('#')
-                          or re.match(r'^- \[[ xX]\]', line) or LOOSE.match(line) or line.split(':', 1)[0].strip() in KEYS):
+                          or re.match(r'^- \[[ xX]\]', line) or LOOSE.match(line) or line.split(':', 1)[0].strip() in KEYS
+                          or line.split(':', 1)[0].strip() in LANE_KEYS.get(paragraph['kind'], ())):
             paragraph = None
         if paragraph:
             key = 'criteria' if paragraph['criteria'] else 'loose_criteria'
@@ -124,7 +129,14 @@ def parse(text, policy, path=''):
                     findings.append(finding('invalid-evidence', 'Evidence requires target=references.', 'Use Evidence: <id>=<evidence-id-or-commit>.', path=path, line=number))
             elif key == 'Context':
                 current['context'].append(value)
-            elif key in ('Signed-off', 'Archive', 'Reason', 'Policy-Approval', 'Completion', 'Exception'):
+            elif key == 'Lane' and current['kind'] == 'task':
+                # Lane names are checked against the lanes config only under lanes mode.
+                current['lane'] = value
+                current['lane_line'] = number
+            elif key == 'After' and current['kind'] == 'task':
+                current['after'] = [x.strip() for x in value.split(',') if x.strip()]
+                current['after_line'] = number
+            elif key in ('Signed-off', 'Archive', 'Reason', 'Policy-Approval', 'Completion', 'Exception') or (key == 'Parallel' and current['kind'] == 'goal'):
                 current['metadata'].setdefault(key, []).append(value)
     for goal in goals:
         if not goal['id']:
@@ -216,6 +228,20 @@ def flatten(goals):
     return result
 
 
+def eligibility(task, policy, readiness, blockers):
+    """Why a task cannot start now: handoff blockers, unknown tags, unready levels."""
+    reasons = list(blockers.get(task['id'], []))
+    for tag in task['tags']:
+        mapping = policy['capabilities']['tags'].get(tag)
+        if mapping is None:
+            reasons.append('Unknown capability ' + tag + '; map it under Capabilities tags.')
+        else:
+            for level in mapping:
+                if not readiness.get('levels', {}).get(level, {}).get('ready', False):
+                    reasons.append('Missing readiness ' + level + '; ' + readiness.get('recovery', 'run authorized startup and provide its readiness report.'))
+    return reasons
+
+
 def select(parsed, policy, readiness, blockers):
     if policy['state']['state'] == 'dormant':
         return {'mode': 'dormant', 'task': None}
@@ -234,15 +260,7 @@ def select(parsed, policy, readiness, blockers):
     for task in milestone['children']:
         if task['status'] == 'done':
             continue
-        reasons = list(blockers.get(task['id'], []))
-        for tag in task['tags']:
-            mapping = policy['capabilities']['tags'].get(tag)
-            if mapping is None:
-                reasons.append('Unknown capability ' + tag + '; map it under Capabilities tags.')
-            else:
-                for level in mapping:
-                    if not readiness.get('levels', {}).get(level, {}).get('ready', False):
-                        reasons.append('Missing readiness ' + level + '; ' + readiness.get('recovery', 'run authorized startup and provide its readiness report.'))
+        reasons = eligibility(task, policy, readiness, blockers)
         if not reasons:
             return dict(context, mode='selected', task=task, blocked=unavailable)
         unavailable.append({'task': task['id'], 'reasons': reasons})

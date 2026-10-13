@@ -261,6 +261,7 @@ def gc(apply=False, if_due=False, now=None, location_root=None):
             return result
         collect(root, apply, now, result, registrations)
         collect_cache(root, apply, now, result, registrations)
+        collect_index(apply, now, result)
         if apply:
             atomic(root / 'gc.json', {'version': 1, 'last_sweep': now})
     return result
@@ -580,3 +581,51 @@ def collect_cache(root, apply, now, result, registrations):
                 worktrees.rmdir()
                 if not any(repo.iterdir()):
                     repo.rmdir()
+
+
+def collect_index(apply, now, result):
+    """The shared evidence index: entries live as long as their commit; a repository whose Git
+    directory is gone gets the seven-day recovery window, then the whole index goes."""
+    for path in sorted(xdg('cache').glob('*/evidence')):
+        entry = {'path': str(path), 'action': 'retain', 'reason': 'unknown evidence index identity'}
+        result['entries'].append(entry)
+        try:
+            if path.is_symlink() or path.parent.is_symlink() or not path.is_dir():
+                continue
+            saved = read(path / 'identity.json')
+            if not saved or saved.get('version') != 1 or path_key(saved['common']) != path.parent.name:
+                continue
+            files = [x for x in path.iterdir() if x.name != 'identity.json']
+            if any(x.is_symlink() or not x.is_file() or x.suffix != '.json' for x in files):
+                entry['reason'] = 'unknown files in evidence index; retained'
+                continue
+            common = Path(saved['common'])
+            if common.exists():
+                entry['reason'] = 'existing repository index'
+                if saved.get('missing_since') is not None and apply:
+                    atomic(path / 'identity.json', {**saved, 'missing_since': None})
+                oids = [x.stem for x in files if re.fullmatch(r'[0-9a-f]{40,64}', x.stem)]
+                if oids:
+                    probe = subprocess.run(['git', '--git-dir', str(common), 'cat-file', '--batch-check'],
+                                           input='\n'.join(oids) + '\n', capture_output=True, text=True, timeout=30)
+                    if probe.returncode == 0:
+                        gone = {line.split()[0] for line in probe.stdout.splitlines() if line.endswith(' missing')}
+                        for item in files:
+                            if item.stem in gone:
+                                result['entries'].append({'path': str(item), 'action': 'remove', 'reason': 'commit no longer exists'})
+                                if apply:
+                                    item.unlink()
+                continue
+            since = saved.get('missing_since')
+            since = now if since is None else since
+            entry.update(reason='repository Git directory missing', deadline=since + WEEK)
+            if apply and saved.get('missing_since') is None:
+                atomic(path / 'identity.json', {**saved, 'missing_since': since})
+            if now >= since + WEEK:
+                entry.update(action='remove', reason='repository Git directory missing for the recovery window')
+                if apply:
+                    shutil.rmtree(path)
+                    if not any(path.parent.iterdir()):
+                        path.parent.rmdir()
+        except (Invalid, OSError, KeyError, subprocess.TimeoutExpired):
+            entry['reason'] = 'unknown/inaccessible evidence index; retained'

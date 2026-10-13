@@ -1024,3 +1024,66 @@ Verification on Linux 7.0.0-38-generic, Python 3.14.4:
 No real lease provider exists yet; the Go `lane lease` command is to be written
 against the documented contract. No model-driven session exercised the new
 sections, and Windows was not run.
+
+## The lanes contract — long-horizon 0.6.0
+
+Date: 2026-10-13. Evidence: `checked` unless marked.
+
+Long-horizon can run one goal as parallel lanes. The overlay's optional `## Lanes`
+section turns it on only when `config` names a lanes TOML; a `## Lanes` heading
+without `config`, or no section at all, changes nothing. Goals gain `Lane:` and
+`After:` task metadata and the goal's `Parallel: lanes, <who>, YYYY-MM-DD`
+approval. `status --lane <name> --json` selects the lane's first open task whose
+dependencies are done, walking the active goal's unfinished milestones in order;
+without `--lane` a lanes-mode status is the judge view (`mode: judge`) with a
+`lanes` object (per-lane open/eligible/blocked/done and the critical path). New
+findings: `lanes-config-missing`, `lanes-config-invalid`, `lane-missing`,
+`lane-unknown`, `after-missing`, `after-cycle`, `parallel-approval-missing`,
+`lanes-config-changed`, `mac-task-on-non-native-lane`, `lane-file-missing`,
+`lane-file-template`, `handoff-lanes-line`, `handoff-lane-link`.
+
+Evidence: `committed` reads every message in one `git log -z` call and caches each
+trailer-carrying commit's validated records in a repository-wide index under the
+XDG cache (`<repo-key>/evidence/<commit>.json`), written only under lanes mode or
+by `--commit-in`; weekly `state gc` prunes entries whose commit object is gone and
+applies the seven-day window to an index whose repository is gone. `evidence
+record --commit-in <dir>` commits exactly the detail file with its trailer in a
+checkout of the same repository through a private index file, moving only that
+checkout's HEAD by compare-and-swap; the pending copy is cleaned when `<dir>` is
+the `--root` worktree. The lanes TOML is read with `tomllib` on 3.11+ and a
+stdlib subset parser (`toml_subset.py`) on 3.10; its tests compare both.
+
+Verification on Linux 7.0.0-38-generic:
+
+- `python3 scripts/sync_marketplaces.py --check` and `git diff --check`: passed;
+  manifests declare long-horizon 0.6.0.
+- `python3 scripts/run_tests.py` (Python 3.14.4): 468 tests passed, after rebasing onto delegation 0.11.0. The new
+  `tests/test_long_horizon_lanes.py` (24 tests: overlay section, no-change
+  without `config` including wrapped criteria, repeated trailers and
+  `log.showSignature`, lane selection, judge view, every finding, config fallback
+  parsing, scaffold, `--commit-in` from a landing worktree and in the `--root`
+  worktree with staged unrelated work, index tamper/stale safety, GC) and
+  `tests/test_long_horizon_toml.py` (6 tests) are included.
+- `uv run --no-project --python 3.10 python -m unittest discover -s tests`:
+  468 tests passed, one skipped (the tomllib comparison, absent on 3.10, so
+  `load_text` took the fallback path).
+- `python3 scripts/verify_lifecycle.py --report
+  ~/.cache/rickdiculousli-tools-scratch/long-horizon/plugin-verification.json`:
+  PASS at **2026-10-13T17:38:28.349389+00:00** on **codex-cli 0.162.1** and
+  **Claude Code 2.1.296**, in disposable profiles.
+
+An adversarial review of the diff found and the change fixed: a stray commit from a
+smoke test; `--commit-in` committing a record whose `--log` file was absent from
+the commit (now a persistent route is required and the dangling commit is validated
+before HEAD moves); `git log` output mixed with `log.showSignature` text (now
+`--no-show-signature`); `Lane:`/`After:`/`Parallel:` ending wrapped criteria on
+every node (now only on the node kind they belong to); repeated trailers reported
+as corrupt (now skipped as before); TOML dates serialising differently per reader
+(now rejected by both); invalid commits cached forever (now never cached); and
+day-granular `lanes-config-changed` (now relative to the commit that recorded the
+`Parallel:` line). Accepted as additive: selected tasks in JSON gain `lane`,
+`after` and `lane_line` fields.
+
+Not performed: no model session has run a lanes-mode `resume`, `checkpoint`,
+`setup` scaffold or `migrate` yet; the pipeline daemon that calls `status --lane`
+and `--commit-in` is not part of this repository. Not run on Windows or macOS.

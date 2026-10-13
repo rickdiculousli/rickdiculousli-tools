@@ -570,6 +570,23 @@ milestones without `# Goal:`), `layout-missing` and `layout-unexpected` (a stray
 `.long-horizon/` directory) findings; migrate fixes them through a reviewed
 draft, deletes only approved paths and tags the overlay.
 
+Long-horizon 0.6.0 adds optional lanes mode for running one goal as parallel
+streams. An overlay `## Lanes` section with `config: ".agents/lanes.toml"` turns
+it on (without `config` nothing changes); goals gain `Lane:` and `After:` task
+metadata and a `Parallel: lanes, <who>, YYYY-MM-DD` approval line. `status --lane
+<name> --json` selects that lane's first open task whose dependencies are done
+(modes `selected`, `all-blocked`, `lane-done`, and `judge` without `--lane`) and
+every lanes-mode `status`/`lint` adds a `lanes` object with the critical path and
+per-lane counts. Lint reports `lanes-config-missing`, `lanes-config-invalid`,
+`lane-missing`, `lane-unknown`, `after-missing`, `after-cycle`,
+`parallel-approval-missing`, `lanes-config-changed`,
+`mac-task-on-non-native-lane`, `lane-file-missing`, `lane-file-template`,
+`handoff-lanes-line` and `handoff-lane-link`. `evidence record --commit-in <dir>`
+lets a lander commit the record's detail file and trailer without touching staged
+work, backed by a regenerable evidence index in the XDG cache. Python 3.10 reads
+the lanes TOML with a built-in subset parser. See the
+[lanes reference](plugins/long-horizon/skills/resume/reference/lanes.md).
+
 | Project | Composition |
 | --- | --- |
 | Goal spans sessions, solo work | long-horizon |

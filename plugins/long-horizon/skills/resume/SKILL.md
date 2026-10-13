@@ -66,6 +66,14 @@ records next steps and preserves work. Use `long-horizon:checkpoint` after the
 bounded batch. Recommending a fresh session is useful after honest closure, not
 a claim of token savings or automatic scheduling.
 
+Lanes mode (`## Lanes` with `config` in the overlay; see
+[lanes](reference/lanes.md)): a session without a lane is the judge
+(`selection.mode` is `judge`). It selects no task; it reads the `lanes` object
+(critical path, per-lane eligible and blocked), assigns or reassigns `Lane:`
+within its authority, closes milestones with evidence and edits the handoff. A
+lane session runs `status --lane "$LANE" --json` and works only its selected
+task, in its own worktree, on its owned paths. Without `config`, nothing changes.
+
 Preserve the host’s existing shared XDG state/cache roots across every CLI call.
 Never redirect them into a checkout, Git directory or installed plugin, including
 for temporary isolation. For tests use an explicitly supplied external disposable

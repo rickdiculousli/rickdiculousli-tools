@@ -49,6 +49,14 @@ was actually observed. The default batch is one task or one blocker resolution.
    PR or ask each time. Write standing integration authorization only after actual
    approval for the named steps/target/remote/stop conditions. Existing session
    authorization applies; an identical already-approved rerun is a no-op.
+   Lanes (optional): when the user wants the active goal run as parallel lanes,
+   draft the lane plan (lane name, owned globs, validators, host), then
+   `lanes.toml` (via `python3 -c` calling `long_horizon.lanes.scaffold(plan)` from
+   the resume scripts directory, or by hand from the example), the `## Lanes`
+   section with `config`, the goal's `Parallel:` line, `Lane:` metadata, a lane
+   file per lane from a small template (`# Lane <name>`, `## Status`, `## Next`,
+   `## Asks`) and the handoff `Lanes:` line and links. Write them only after actual
+   approval of the lane plan. See [lanes](../resume/reference/lanes.md).
 5. Approval is the final step before applying the concrete draft. Apply surgical
    edits after checking original file digests; preserve unrelated prose and dirty
    paths. Add exactly one pointer to AGENTS.md:

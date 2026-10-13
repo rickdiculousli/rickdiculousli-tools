@@ -4,7 +4,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from . import closure, contract, evidence, gate, goals, handoff, lint, overlay, readiness, state
+from . import closure, contract, evidence, gate, goals, handoff, lanes, lint, overlay, readiness, state
 from .git import Git
 from .model import Invalid, Blocked, finding
 
@@ -25,6 +25,7 @@ def parser():
     common(commands.add_parser('paths'))
     status = common(commands.add_parser('status'))
     status.add_argument('--brief', action='store_true')
+    status.add_argument('--lane', help='select for this lane (lanes mode); without it a lanes-mode status is the judge view')
     check = common(commands.add_parser('lint'))
     check.add_argument('--fix', action='store_true')
     check.add_argument('--apply', action='store_true')
@@ -47,6 +48,7 @@ def parser():
     record.add_argument('--probe-inputs', action='store_true')
     record.add_argument('--exception', action='store_true')
     record.add_argument('--write-proposed', action='store_true')
+    record.add_argument('--commit-in', help='lander only: commit the detail file with the trailer in this checkout of the same repository')
     again = common(ev.add_parser('rerecord'))
     again.add_argument('id')
     for key in ('attempt', 'detail', 'trailers-file'):
@@ -91,6 +93,8 @@ def context(args):
     policy = overlay.load(git, args.overlay, args.draft_root, args.goals, args.handoff)
     path = Path(policy['_goals'])
     parsed = goals.parse(path.read_text(encoding='utf-8') if path.exists() else '', policy, str(path))
+    if policy['_lanes']:
+        evidence.enable_index_writes()
     return git, policy, parsed
 
 
@@ -126,7 +130,20 @@ def inspect(args, git, policy, parsed):
         except Invalid as error:
             findings.append(finding('script-missing', str(error), 'Configure the declared script path/environment value.', 'warning'))
     findings += contract.version(policy, contract.installed_version())
-    selection = goals.select(parsed, policy, report, continuation['blockers'])
+    lane = getattr(args, 'lane', None)
+    lanes_data = None
+    if policy['_lanes']:
+        config, lane_findings = lanes.load(policy, git)
+        findings += lane_findings + lanes.lint(policy, git, parsed, config, continuation)
+        lanes_data = lanes.overview(parsed, policy, report, continuation['blockers'], config)
+        if lane:
+            selection = lanes.select_lane(parsed, policy, report, continuation['blockers'], config, lane)
+        else:
+            selection = lanes.judge(parsed, policy) if config else {'mode': 'manual', 'task': None}
+    elif lane:
+        raise Invalid('--lane needs a ## Lanes section with config in the overlay.')
+    else:
+        selection = goals.select(parsed, policy, report, continuation['blockers'])
     needs = continuation['decisions'][:]
     if selection['mode'] == 'awaiting-signoff':
         needs.append('sign off the completed goal')
@@ -141,11 +158,14 @@ def inspect(args, git, policy, parsed):
         needs.append('unfinished closure: ' + cl['next'])
     # Unfinished closure is status data, not a failed inspection.
     findings += [finding(x.code, x.message, x.remedy, 'warning', x.path, x.line) for x in closure_findings]
-    return {'selection': selection, 'handoff': continuation, 'needs_you': needs, 'acceptance': acceptance['checks'],
+    result = {'selection': selection, 'handoff': continuation, 'needs_you': needs, 'acceptance': acceptance['checks'],
             'pending_evidence': pending,
             'closure': cl, 'state_directory': str(state.State(git).path), 'cache_directory': str(state.State(git).cache),
             'git': {'root': str(git.root), 'common_dir': str(git.common), 'branch': git.branch(),
-                    'head': git.oid(), 'target': policy['integration'].get('target') or git.target(), 'dirty': git.dirty()}}, findings
+                    'head': git.oid(), 'target': policy['integration'].get('target') or git.target(), 'dirty': git.dirty()}}
+    if lanes_data is not None:
+        result['lanes'] = dict(lanes_data, policy={k: v for k, v in policy['lanes'].items()})
+    return result, findings
 
 
 def execute(args):
@@ -178,7 +198,12 @@ def execute(args):
         if args.action == 'record':
             # Keep argparse's command discriminator separate from provenance.
             args.command = args.observed_command
-            return evidence.record(git, policy, args), []
+            output = evidence.record(git, policy, args)
+            if args.commit_in:
+                evidence.enable_index_writes()
+                output['committed'] = evidence.commit_in(git, output['record'], args.commit_in)
+                output['pending'] = output['committed'].get('cleanup') is None
+            return output, []
         if args.action == 'rerecord':
             return evidence.rerecord(git, policy, args), []
         return evidence.find(git, policy, args.check, args.probe_inputs, args.pending)
@@ -224,7 +249,13 @@ def main(argv=None):
             print('Milestone: ' + selection.get('milestone_title', selection['mode']) +
                   (f" ({progress['done']}/{progress['total']} tasks)" if progress else ''))
             print('Next: ' + (task['id'] + ' ' + task['title'] if task else selection['mode']) +
+                  ('' if not selection.get('lane') else ' (lane ' + selection['lane'] + ')') +
                   '; Needs you: ' + ('; '.join(output.get('needs_you', [])) or 'none'))
+            lanes_data = output.get('lanes')
+            if lanes_data and not selection.get('lane'):
+                print('Lanes: ' + ', '.join(name + ' ' + str(len(data['eligible'])) + '/' + str(len(data['open'])) + ' eligible'
+                                           for name, data in lanes_data['per_lane'].items() if data['open'] or name != 'unassigned') +
+                      '; critical path: ' + (' -> '.join(lanes_data['critical_path']) or 'none'))
             handoff = output.get('handoff', {})
             if 'lines' in handoff:
                 print('Handoff: %d/%d lines' % (handoff['lines'], handoff['budget']) + (' (over budget)' if handoff['lines'] > handoff['budget'] else ''))

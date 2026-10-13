@@ -55,6 +55,23 @@ Pending acceptance is accepted only through explicit repeated `--pending <id>`;
 it remains pending, never already committed. Missing proof is data in find and an
 error when required by gate.
 
+`evidence record ... --commit-in <dir>` is for the lander under
+`landing: "lander"` (see [lanes](../../resume/reference/lanes.md)). After recording
+it commits exactly the record's detail file, with the trailer as the message
+(`Evidence: <check> <outcome>`), in checkout `<dir>` of the same repository as
+`--root`. It uses a private index, leaves staged work alone, never amends or
+pushes, and moves only that checkout's HEAD by compare-and-swap. Output gains
+`committed: {commit, committed_in, already_committed}`; when `<dir>` is the
+`--root` worktree the pending XDG copy is cleaned and `pending` is false. A record
+already in that history returns `already_committed: true` with no commit. Each
+trailer-carrying commit's validated records are cached in a regenerable evidence
+index (written under lanes mode and by `--commit-in`) shared by every worktree,
+so rebased-in evidence is read without revalidation; see
+[retention](../../resume/reference/state.md). The record needs a persistent
+`--log` route and observed or delegated provenance; the commit is validated
+before HEAD moves.
+`committed` reads all messages in one `git log` call.
+
 Re-record after a criteria-only change. Records name the criterion they prove, so
 an approved criteria edit (or the `Done when` layout repair) makes them stale:
 

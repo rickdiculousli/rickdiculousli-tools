@@ -1,7 +1,7 @@
 # Overlay format
 
 `.agents/long-horizon.md` is Markdown with a title, an optional `## Version`
-heading holding one plugin version line (like `0.5.0`), and named level-two
+heading holding one plugin version line (like `0.6.0`), and named level-two
 headings below. Setup and migrate write `## Version` after a clean lint. `status`
 warns `version-mismatch` when it is missing or its major.minor is older than the
 installed plugin, and `version-newer` when it is newer; patch differences are
@@ -22,6 +22,7 @@ command interpolation. JSON arrays/maps must fit one line.
 | Capabilities | `tags`: object mapping tag to array of named readiness levels; default `{"any": []}`. All tags/levels required; unknown tags ineligible. |
 | Evidence | `checks`: object {}; `inputs`: object {}; `delegation-script`: string literal path OR `delegation-env`: string variable name; `validator-policy`: string path; when delegation is configured defaults to .agents/delegation.md |
 | Batch | `tasks`: positive integer 1; `blocker-resolutions`: positive integer 1; `quota`: boolean false; `quota-script`: string literal path OR `quota-env`: string variable name |
+| Lanes | `config`: string path to the lanes TOML (lanes mode is on only when set); `assignment`: goals; `task-completion`: lane (default), judge or user; `milestone-completion`: judge (default) or user; `landing`: lander (default) or session; `lane-files`: string docs/lanes. See [lanes](lanes.md). |
 | Integration | `steps`: string array []; `target`: string branch; `remote`: string; `sync`: string operation; `stop-conditions`: string array []; `authorization`: string. Nonempty steps need actual recorded authorization. Ordered unique steps: validate, commit, merge, push, sync. Merge/push need target, push needs remote, sync needs operation. |
 
 Each Evidence check key is the exact token, such as `validator:unit`. Its object:
@@ -60,7 +61,7 @@ A full example:
 ```markdown
 # Long-horizon
 ## Version
-0.5.0
+0.6.0
 ## State
 state: "active"
 ## Goals and ownership
@@ -92,6 +93,13 @@ validator-policy: ".agents/delegation.md"
 tasks: 1
 blocker-resolutions: 1
 quota: false
+## Lanes
+config: ".agents/lanes.toml"
+assignment: "goals"
+task-completion: "lane"
+milestone-completion: "judge"
+landing: "lander"
+lane-files: "docs/lanes"
 ## Integration
 steps: ["validate", "commit", "merge", "push"]
 target: "main"

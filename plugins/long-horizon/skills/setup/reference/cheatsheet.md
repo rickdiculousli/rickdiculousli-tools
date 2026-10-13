@@ -14,6 +14,7 @@
 | Shelve / drop | Actual instruction, reason and archive of where work stopped |
 | Resume shelved goal | Restore preserved roadmap and ID |
 | Wind down | Reviewed dormant/pointer diff; preserve durable files and other plugins |
+| Run the goal as parallel lanes | `## Lanes` with `config`, `Lane:`/`After:`/`Parallel:` metadata; a lane session runs `status --lane <name> --json`; see [lanes](../../resume/reference/lanes.md) |
 | Add another goal | Reuse policy/survey, reactivate one pointer/import |
 
 Set `LONG_HORIZON_SCRIPT` to the installed resume/scripts/lh.py or any checkout's
@@ -27,6 +28,7 @@ python3 "$LONG_HORIZON_SCRIPT" lint --root "$PROJECT" --fix --apply
 python3 "$LONG_HORIZON_SCRIPT" gate --root "$PROJECT"
 python3 "$LONG_HORIZON_SCRIPT" closure verify --root "$PROJECT"
 python3 "$LONG_HORIZON_SCRIPT" state gc --json
+python3 "$LONG_HORIZON_SCRIPT" status --root "$PROJECT" --lane "$LANE" --json   # lanes mode only
 ```
 
 Warning-only lint permits work. Gate proof missing? Run named checks; mark only
