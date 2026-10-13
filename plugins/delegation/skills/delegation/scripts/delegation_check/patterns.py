@@ -192,6 +192,7 @@ def record_open(paths: state.Paths, event: dict, kind: str | None, description: 
         line = {"event": "open", "kind": kind, "fingerprint": shape, "tier": event["tier"],
                 "writes": event["writes"], "role": event.get("role"), "delegation": event["delegation"],
                 "worktree": paths.worktree_key, "brief_sha256": event["brief_sha256"],
+                **({"lane": event["lane"]} if event.get("lane") else {}),
                 "timestamp": _stamp(_now())}
         _append(paths, line)
     return warnings
@@ -291,12 +292,14 @@ def summary(paths: state.Paths, roles: set[str], since_days: float | None = None
         if item.get("kind"):
             name = resolve(registry, item["kind"])
             group = groups.setdefault(name, {"kind": name, "count": 0, "worktrees": set(), "days": set(),
-                                             "outcomes": {}, "tiers": set(), "last": item["timestamp"]})
+                                             "outcomes": {}, "tiers": set(), "lanes": set(), "last": item["timestamp"]})
         else:
             group = shapes.setdefault(item["fingerprint"], {"fingerprint": item["fingerprint"], "count": 0,
                                                             "worktrees": set(), "days": set(), "outcomes": {},
-                                                            "tiers": set(), "last": item["timestamp"]})
+                                                            "tiers": set(), "lanes": set(), "last": item["timestamp"]})
         group["count"] += 1
+        if item.get("lane"):
+            group["lanes"].add(item["lane"])
         group["worktrees"].add(item.get("worktree"))
         group["days"].add(item["timestamp"][:10])
         group["tiers"].add(item.get("tier"))
@@ -306,7 +309,7 @@ def summary(paths: state.Paths, roles: set[str], since_days: float | None = None
     kinds = []
     for name, entry in registry["kinds"].items():
         group = groups.get(name, {"kind": name, "count": 0, "worktrees": set(), "days": set(),
-                                  "outcomes": {}, "tiers": set(), "last": None})
+                                  "outcomes": {}, "tiers": set(), "lanes": set(), "last": None})
         archived = 0 if cutoff else entry.get("archived", {}).get("count", 0)
         status = entry.get("status", {}).get("status")
         role = name in roles
@@ -315,6 +318,7 @@ def summary(paths: state.Paths, roles: set[str], since_days: float | None = None
             "kind": name, "description": entry["description"], "count": total,
             "worktrees": len(group["worktrees"]), "days": len(group["days"]),
             "outcomes": group["outcomes"], "tiers": sorted(t for t in group["tiers"] if t),
+            "lanes": sorted(group["lanes"]),
             "last": group["last"], "role": role, "status": status,
             "candidate": total >= minimum and not role and status not in ("approved", "declined"),
         })
@@ -322,7 +326,7 @@ def summary(paths: state.Paths, roles: set[str], since_days: float | None = None
     unlabeled = [
         {"fingerprint": key, "count": group["count"], "worktrees": len(group["worktrees"]),
          "days": len(group["days"]), "outcomes": group["outcomes"], "tiers": sorted(t for t in group["tiers"] if t),
-         "last": group["last"]}
+         "lanes": sorted(group["lanes"]), "last": group["last"]}
         for key, group in shapes.items() if group["count"] >= minimum
     ]
     unlabeled.sort(key=lambda item: item["count"], reverse=True)

@@ -60,7 +60,7 @@ def _open(root: Path, args: argparse.Namespace) -> int:
     event = open_delegation(
         root, args.delegation, args.tier, args.brief, args.writes,
         overlay.parallel_limit, overlay.extra_inputs,
-        args.continued_from, args.role, overlay.roles,
+        args.continued_from, args.role, overlay.roles, args.lane,
     )
     brief = args.brief if args.brief.is_absolute() else root.resolve() / args.brief
     try:
@@ -71,6 +71,7 @@ def _open(root: Path, args: argparse.Namespace) -> int:
         print("note: " + note, file=sys.stderr)
     role = "writer" if args.writes else "reader"
     labelled = f", kind {kind}" if kind else ""
+    labelled += f", lane {args.lane}" if args.lane else ""
     print(f"opened {args.delegation} ({args.tier}, {role}{labelled}) at {event['tree'][:12]}")
     print(f"task: {task_line(root, args.delegation)}")
     print(f"task with instructions: {task_line(root, args.delegation, with_instructions=True)}")
@@ -90,7 +91,7 @@ def _brief(root: Path, args: argparse.Namespace) -> int:
         text += '\n\nRole runbook (' + event['role_runbook'] + '): read ' + shlex.quote(str(state.context_path(root, event['role_runbook'])))
         if event.get('role_runbook_source'):
             text += '\nRefresh the tracked source on final use: ' + shlex.quote(str(root / event['role_runbook_source'])) + '; keep the pinned external context unchanged.'
-    print(f"{head}{text}\n\n{footer(root, args.delegation, load_overlay(root))}", end="")
+    print(f"{head}{text}\n\n{footer(root, args.delegation, load_overlay(root), event.get('lane'))}", end="")
     return 0
 
 
@@ -114,6 +115,7 @@ def _pending(root: Path, args: argparse.Namespace) -> int:
                 "writes": e["writes"],
                 "opened": e["timestamp"],
                 "tree": e["tree"],
+                **({"lane": e["lane"]} if e.get("lane") else {}),
             }
             for e in items
         ]
@@ -123,7 +125,8 @@ def _pending(root: Path, args: argparse.Namespace) -> int:
     else:
         for e in items:
             role = "writer" if e["writes"] else "reader"
-            print(f"{e['delegation']} {e['tier']} {role} opened {e['timestamp']}")
+            lane = f" lane {e['lane']}" if e.get("lane") else ""
+            print(f"{e['delegation']} {e['tier']} {role}{lane} opened {e['timestamp']}")
     return 0
 
 
@@ -137,11 +140,11 @@ def _run(root: Path, args: argparse.Namespace) -> int:
         raise DelegationError("run needs exactly one of --delegation <id> or --judge")
     if args.judge:
         result = judge_run(root, args.validator, validator, overlay.locks.get(validator.lock or ""),
-                           overlay.extra_inputs, args.timeout)
+                           overlay.extra_inputs, args.timeout, overlay.lock_provider)
     else:
         result = run_validator(
             root, args.delegation, args.validator, validator, overlay.locks.get(validator.lock or ""),
-            overlay.extra_inputs, args.timeout,
+            overlay.extra_inputs, args.timeout, provider=overlay.lock_provider,
         )
     print(_result_line(result))
     if not result["ok"]:
@@ -154,15 +157,20 @@ def _run(root: Path, args: argparse.Namespace) -> int:
 
 def _suggest(root: Path, args: argparse.Namespace) -> int:
     overlay = load_overlay(root)
-    data = suggest(root, overlay, args.base)
+    data = suggest(root, overlay, args.base, args.with_dependents)
     if args.json:
         print(json.dumps(data))
         return 0
     if not data["changed"]:
         print(f"No changed paths since {data['base']}.")
+    for item in data.get("dependents", []):
+        print(f"dependents of {item['unit']}: {', '.join(item['dependents']) or 'none'}")
+    if args.with_dependents and data.get("deps_source") is None:
+        print("no ## Deps section or command in the overlay; dependents not considered")
     for item in data["run"]:
         sample = ", ".join(item["matched"][:3]) + (f" (+{len(item['matched']) - 3} more)" if len(item["matched"]) > 3 else "")
-        print(f"run {item['validator']}: {sample}")
+        via = f" (dependent: {', '.join(item['dependents'])})" if item.get("via") == "dependents" else ""
+        print(f"run {item['validator']}: {sample}{via}")
     for name in data["unscoped"]:
         print(f"unscoped {name}: no paths= attribute; decide from the overlay's notes")
     for item in data["not_needed"]:
@@ -183,11 +191,11 @@ def _exec(root: Path, args: argparse.Namespace) -> int:
     if not command:
         raise DelegationError("exec needs a command after --")
     lock = _declared(root, args.lock)
+    overlay = load_overlay(root)
     if args.delegation:
-        overlay = load_overlay(root)
         result = run_validator(root, args.delegation, None,
                                Validator(shlex.join(command), timeout=args.timeout, lock=args.lock),
-                               lock, overlay.extra_inputs, args.timeout, argv=command)
+                               lock, overlay.extra_inputs, args.timeout, argv=command, provider=overlay.lock_provider)
         if result['output_tail']:
             print(result['output_tail'])
         print(_result_line(result))
@@ -195,7 +203,7 @@ def _exec(root: Path, args: argparse.Namespace) -> int:
         return 124 if result['timed_out'] else (result['exit'] if result['exit'] is not None else 1)
     holder = {"delegation": args.delegation, "command": " ".join(command)}
     state.opportunistic()
-    with state.activity(root, "exec"), locks.hold(root, args.lock, lock, holder):
+    with state.activity(root, "exec"), locks.hold(root, args.lock, lock, holder, overlay.lock_provider):
         code, timed_out, _ = execute(root, command, args.timeout, capture=False)
     if timed_out:
         print(f"check.py: timed out after {args.timeout:g}s: {holder['command']}", file=sys.stderr)
@@ -207,10 +215,15 @@ def _locks(root: Path, args: argparse.Namespace) -> int:
     overlay = load_overlay(root)
     if not overlay.locks:
         print("No locks declared.")
+    if overlay.lock_provider:
+        print(f"provider: {overlay.lock_provider} (leases; slots and holders are the provider's)")
     for name, lock in overlay.locks.items():
+        wait = f", wait {lock.wait:g}s" if lock.wait is not None else ""
+        if overlay.lock_provider:
+            print(f"{name}: lease ttl {lock.ttl:g}s{wait}")
+            continue
         count = locks.slots(name, lock)
         source = f" ({locks.env_name(name)})" if count != lock.slots else ""
-        wait = f", wait {lock.wait:g}s" if lock.wait is not None else ""
         print(f"{name}: {count} slot{'s' if count != 1 else ''}{source}{wait}")
         for line in locks.status(root, name, lock):
             print(f"  {line}")
@@ -276,8 +289,9 @@ def _patterns(root: Path, args: argparse.Namespace) -> int:
     candidates = [item for item in data["kinds"] if item["candidate"]]
     print(f"Candidates (>= {args.min} uses{window}, no role, not approved or declined):")
     for item in candidates:
+        lanes = f"; lanes {', '.join(item['lanes'])}" if item.get("lanes") else ""
         print(f"  {item['kind']}: {_count(item)}; "
-              f"{_outcomes(item)}; tiers {', '.join(item['tiers']) or 'n/a'}{'; ' + item['status'] if item['status'] else ''}")
+              f"{_outcomes(item)}; tiers {', '.join(item['tiers']) or 'n/a'}{lanes}{'; ' + item['status'] if item['status'] else ''}")
     if not candidates:
         print("  none")
     others = [item for item in data["kinds"] if not item["candidate"] and item["count"]]
@@ -352,6 +366,7 @@ def build_parser() -> argparse.ArgumentParser:
     opener.add_argument("--continue", dest="continued_from", help="Prior role delegation id; reuse its agent")
     opener.add_argument("--kind", help="Registered work label (check.py kinds lists them)")
     opener.add_argument("--new-kind", metavar="DESCRIPTION", help="Register --kind as a new label with this one-line description")
+    opener.add_argument("--lane", help="Lane this delegation belongs to, recorded for the audit and patterns")
     loader = commands.add_parser("brief", help="Print an open delegation's brief, checked against its hash")
     loader.add_argument("--delegation", required=True)
     loader.add_argument("--with-instructions", action="store_true",
@@ -378,6 +393,8 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("locks", help="List declared locks and who holds each slot")
     suggester = commands.add_parser("suggest", help="Map changed paths to the validators whose paths= scope they touch")
     suggester.add_argument("--base", help="Compare against this commit (default: HEAD)")
+    suggester.add_argument("--with-dependents", action="store_true",
+                           help="Also run validators scoped to units that depend on changed ones (overlay ## Deps)")
     suggester.add_argument("--json", action="store_true")
     kinds = commands.add_parser("kinds", help="List, merge, rename or mark repository-wide work labels")
     kinds.add_argument("--all", action="store_true", help="Include declined, idle and overflow labels")

@@ -27,6 +27,7 @@ SCHEMA = 1
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 TIERS = ("execute", "routine")
 OUTCOMES = ("done", "stuck", "abandoned")
+LANE = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
 CONTEXT_REF = re.compile(r"state:context/[^\s`\"\'<>),;]+")
 
 
@@ -143,9 +144,12 @@ def open_delegation(
     continued_from: str | None = None,
     role_name: str | None = None,
     roles: dict[str, Role] | None = None,
+    lane: str | None = None,
 ) -> dict:
     if not ID.match(delegation):
         raise DelegationError(f"invalid delegation id: {delegation!r}")
+    if lane is not None and not LANE.match(lane):
+        raise DelegationError(f"invalid lane name: {lane!r}; use [a-z0-9][a-z0-9_-]*")
     if tier not in TIERS:
         raise DelegationError(f"tier must be one of {', '.join(TIERS)}, got {tier!r}")
     root_resolved = root.resolve()
@@ -288,6 +292,7 @@ def open_delegation(
                 "context": context,
                 "tree": tree,
                 **metadata,
+                **({"lane": lane} if lane is not None else {}),
             },
         )
 
@@ -411,6 +416,7 @@ def run_validator(
     extra_inputs: Sequence[str],
     timeout: float | None,
     argv: Sequence[str] | None = None,
+    provider: str | None = None,
 ) -> dict:
     if delegation not in {e["delegation"] for e in pending(root)}:
         raise DelegationError(f"delegation is not open: {delegation}")
@@ -422,7 +428,7 @@ def run_validator(
     timeout = timeout if timeout is not None else validator.timeout
     held = (
         locks.hold(root, validator.lock, lock or Lock(),
-                   {"delegation": delegation, "command": name if name is not None else validator.command})
+                   {"delegation": delegation, "command": name if name is not None else validator.command}, provider)
         if validator.lock
         else contextlib.nullcontext({"slot": None, "wait_s": None})
     )
@@ -463,6 +469,7 @@ def run_validator(
                 "lock": validator.lock,
                 "lock_slot": slot["slot"],
                 "lock_wait_s": slot["wait_s"],
+                **({"lease": slot["lease"]} if slot.get("lease") else {}),
                 "tree": before,
                 "stable": before == after,
                 "host": {"platform": sys.platform, "machine": platform.machine(), "node": platform.node()},
@@ -481,6 +488,7 @@ def judge_run(
     lock: Lock | None,
     extra_inputs: Sequence[str],
     timeout: float | None,
+    provider: str | None = None,
 ) -> dict:
     """Run a registered validator for the judge: open, record and close one self-delegation.
 
@@ -500,7 +508,7 @@ def judge_run(
         _append(root, {"event": "open", "delegation": delegation, "tier": "judge", "writes": False,
                        "brief": None, "brief_sha256": None, "context": {}, "tree": tree})
     try:
-        return run_validator(root, delegation, name, validator, lock, extra_inputs, timeout)
+        return run_validator(root, delegation, name, validator, lock, extra_inputs, timeout, provider=provider)
     finally:
         close_delegation(root, delegation, "done", "judge run")
 

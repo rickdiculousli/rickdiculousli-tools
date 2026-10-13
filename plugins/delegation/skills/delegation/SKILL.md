@@ -143,7 +143,10 @@ every worktree and session. Use them when you open delegations (see
    Pass `--writes` if the subagent may edit the worktree. Pass `--kind` with an
    existing label, or a new one plus `--new-kind` (see
    [Labels and patterns](#labels-and-patterns)); `--role` records the role's name
-   as the kind. Read any `note:` lines `open` prints. Exit 2 means refused:
+   as the kind. When this session works one lane of a parallel run, pass
+   `--lane <name>` (`[a-z0-9][a-z0-9_-]*`): the open event, `pending --json`,
+   the brief header and the pattern log carry it, and `patterns` lists the lanes
+   each kind was used from. Read any `note:` lines `open` prints. Exit 2 means refused:
    a writer is open, a writer was asked for while others are open, the parallel
    limit is reached, or the id was used. Wait for a close, or keep the work.
 3. **Start the tier agent** (section 4). Its task is one line `open` printed,
@@ -197,7 +200,11 @@ time>-<hex>` delegation around the run, so nothing stays pending. Cite its
 `judge-…#1` result like any other (`query --delegation judge-…`). It refuses while
 a writer is open. Before choosing which validators to run, `check.py suggest
 [--base <commit>]` lists changed and untracked paths and the validators whose
-`paths=` scope they touch; unscoped validators are listed for your judgment. It uses the overlay's timeout for that validator unless
+`paths=` scope they touch; unscoped validators are listed for your judgment.
+With `--with-dependents` it also adds the validators scoped to units that depend
+on a changed unit, from the overlay's `## Deps` map or command (a changed shared
+crate then pulls in its dependents' suites; `--json` marks each as
+`via: changed|dependents`). It uses the overlay's timeout for that validator unless
 `--timeout` is given, waits for the validator's `lock` if the overlay sets one,
 and keeps the full output in `<log-directory>/<id>/<n>.log`; a failed run
 prints that path. `check.py tree` prints the current tree hash.
@@ -320,8 +327,14 @@ A registered validator marked `needs-human`, or a tier hint such as
 to notify the user before work and early while the user is present. Stop
 for needed human action; do not retry indefinitely.
 
+**Rules** (overlay `## Rules`) are project rules every brief carries; `brief`
+appends them, so don't repeat them in the brief body.
+
 **Locks** (overlay `## Locks`) cap how many heavy commands run at once across
-every worktree of the repo. `check.py exec --lock <name> --timeout <seconds>
+every worktree of the repo. With a `provider:` line the slots are leases from an
+external command (for runs spanning machines); `run` and `exec` then take and
+renew a lease instead of a native slot, and the ledger records it under `lease`
+(see [reference/overlay.md](reference/overlay.md), "Lock provider contract"). `check.py exec --lock <name> --timeout <seconds>
 [--delegation <id>] -- <command>` runs any other command under a lock (the brief
 footer shows subagents this command). `check.py locks` shows who holds each
 slot; check it when a subagent reports waiting. If this machine can take more or

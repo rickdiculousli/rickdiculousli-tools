@@ -155,6 +155,15 @@ never names, or a role runbook given as `state:context/...`. Run
 review those findings, approve rewrites and deletions, re-lint until clean and
 tag the overlay. Checkout-local `.delegation/` state and `state migrate` are gone.
 
+Delegation 0.11.0 adds the pieces a parallel-lane run needs. `## Locks` may
+name a `provider: "<command>"` whose `acquire`/`renew`/`release` subcommands
+hand out leases instead of native slots (the contract is in the overlay
+reference); `check.py suggest --with-dependents` adds the validators of units
+that depend on a changed one, from a `## Deps` map or command; `## Rules`
+lines are injected into every brief; and `check.py open --lane <name>` tags
+delegations for the audit and `patterns`. Overlays without these sections
+behave as before.
+
 `check.py state gc` previews local collection and `check.py state gc --apply`
 applies it, even outside a checkout. `--if-due` limits applied sweeps to once per
 168 hours; normal writes do this automatically. Confirmed deleted, unregistered

@@ -44,7 +44,7 @@ def tier_instructions(tier: str) -> str:
     return tiers[tier]
 
 
-def footer(root: Path, delegation: str, overlay: Overlay) -> str:
+def footer(root: Path, delegation: str, overlay: Overlay, lane: str | None = None) -> str:
     run = command(root, "run", "<validator>", "--delegation", delegation)
     fields = overlay.sections.get("Return fields", "").strip() or "none"
     cheap = ", ".join(name for name, v in overlay.validators.items() if v.cheap) or "none"
@@ -69,6 +69,10 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
                    "to agents; report a blocked launch instead of retrying indefinitely.", ""]
         safety += [line for line in hints.splitlines() if 'needs-human' in line]
         safety += [""]
+    rules = []
+    if overlay.rules:
+        rules = ["Rules (overlay ## Rules); these apply to everything you do here:",
+                 *(f"- {rule}" for rule in overlay.rules), ""]
     if overlay.locks:
         names = ", ".join(f"{name} ({lock.slots} slot{'s' if lock.slots != 1 else ''})"
                           for name, lock in overlay.locks.items())
@@ -96,7 +100,7 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
     ]
     return "\n".join(
         [
-            f"Delegation id: {delegation}",
+            f"Delegation id: {delegation}" + (f" (lane {lane})" if lane else ""),
             "",
             "Evidence: run validators only with this command, and cite the printed id as",
             f'[checked: {delegation}#<n>] only when it printed PASS and not "unstable".',
@@ -116,6 +120,7 @@ def footer(root: Path, delegation: str, overlay: Overlay) -> str:
             *hosts,
             *locks,
             *safety,
+            *rules,
             *scratch,
             "Return format:",
             "",

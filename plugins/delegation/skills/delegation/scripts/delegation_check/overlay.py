@@ -19,6 +19,8 @@ KNOWN_HEADINGS: tuple[str, ...] = (
     "Return cap",
     "Extra inputs",
     "Locks",
+    "Deps",
+    "Rules",
     "Roles",
     "Rote scripts",
     "Host side effects",
@@ -29,6 +31,9 @@ AUTHORING_KEYS = ("roles", "scripts")
 AUTHORING_VALUES = ("ask", "allowed")
 DEFAULT_PARALLEL_LIMIT = 3
 DEFAULT_RETURN_CAP = 400
+DEFAULT_LEASE_TTL = 120.0
+PROVIDER_KEY = "provider"
+DEPS_COMMAND_KEY = "command"
 
 _CANONICAL = {heading.lower(): heading for heading in KNOWN_HEADINGS}
 _NAME = re.compile(r"[a-z0-9][a-z0-9_-]*\Z")
@@ -62,6 +67,7 @@ class Role:
 class Lock:
     slots: int = 1
     wait: float | None = None
+    ttl: float = DEFAULT_LEASE_TTL
 
 
 @dataclass(frozen=True)
@@ -79,6 +85,10 @@ class Overlay:
     warnings: tuple[str, ...] = ()
     authoring: dict[str, str] = field(default_factory=lambda: dict.fromkeys(AUTHORING_KEYS, "allowed"))
     version: str | None = None
+    lock_provider: str | None = None
+    rules: tuple[str, ...] = ()
+    deps: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    deps_command: str | None = None
 
 
 def overlay_path(root: Path) -> Path:
@@ -192,8 +202,8 @@ def _positive(number: int, key: str, value: str, problems: list[str]) -> float |
 
 
 def _lock(number: int, attributes: str, problems: list[str]) -> Lock:
-    """Parse `slots=<n>, wait=<seconds>`; both optional."""
-    slots, wait = 1, None
+    """Parse `slots=<n>, wait=<seconds>, ttl=<seconds>`; all optional."""
+    slots, wait, ttl = 1, None, DEFAULT_LEASE_TTL
     seen: set[str] = set()
     for item in filter(None, (part.strip() for part in attributes.split(","))):
         key, eq, value = (part.strip() for part in item.partition("="))
@@ -208,9 +218,66 @@ def _lock(number: int, attributes: str, problems: list[str]) -> Lock:
                 problems.append(f'line {number}: slots needs a positive integer, got "{value}"')
         elif key == "wait" and eq:
             wait = _positive(number, "wait", value, problems)
+        elif key == "ttl" and eq:
+            ttl = _positive(number, "ttl", value, problems) or DEFAULT_LEASE_TTL
         else:
             problems.append(f'line {number}: unknown lock attribute "{item}"')
-    return Lock(slots, wait)
+    return Lock(slots, wait, ttl)
+
+
+def _quoted_command(number: int, key: str, value: str, problems: list[str]) -> str | None:
+    """A command line, optionally in double quotes; it must split into at least one word."""
+    text = value.strip()
+    if len(text) >= 2 and text[0] == text[-1] == '"':
+        text = text[1:-1].strip()
+    try:
+        words = shlex.split(text)
+    except ValueError as error:
+        problems.append(f'line {number}: {key} command has unbalanced quoting: {error}')
+        return None
+    if not words:
+        problems.append(f'line {number}: {key} needs a command, got "{value}"')
+        return None
+    return text
+
+
+def _unit(number: int, value: str, problems: list[str]) -> str | None:
+    """A repository-relative directory naming a dependency unit, without a trailing slash."""
+    text = value.strip().strip("`").strip()
+    if not text or _escapes(text):
+        problems.append(f'line {number}: deps unit needs a repository-relative path, got "{value}"')
+        return None
+    return PurePosixPath(text.replace("\\", "/")).as_posix().rstrip("/") or None
+
+
+def _deps(lines: list[tuple[int, str]], problems: list[str]) -> tuple[dict[str, tuple[str, ...]], str | None]:
+    """Parse `<unit>: <dependent>, <dependent>` lines and at most one `command: <cmd>` line."""
+    deps: dict[str, tuple[str, ...]] = {}
+    command = None
+    for number, text in lines:
+        head, sep, body = (part.strip() for part in text.partition(":"))
+        if not sep or not head:
+            problems.append(f'line {number}: expected "<unit>: <dependent>, ..." or "command: <cmd>", got "{text}"')
+            continue
+        if head == DEPS_COMMAND_KEY:
+            if command is not None:
+                problems.append(f'line {number}: duplicate deps command')
+            else:
+                command = _quoted_command(number, "deps", body, problems)
+            continue
+        unit = _unit(number, head, problems)
+        if unit is None:
+            continue
+        if unit in deps:
+            problems.append(f'line {number}: duplicate deps unit "{unit}"')
+            continue
+        dependents = []
+        for item in filter(None, (part.strip() for part in body.split(","))):
+            dependent = _unit(number, item, problems)
+            if dependent is not None and dependent != unit and dependent not in dependents:
+                dependents.append(dependent)
+        deps[unit] = tuple(dependents)
+    return deps, command
 
 
 def load_overlay(root: Path) -> Overlay:
@@ -273,9 +340,17 @@ def load_overlay(root: Path) -> Overlay:
             extra.append(value)
 
     locks: dict[str, Lock] = {}
+    lock_provider: str | None = None
+    provider_seen = False
     for number, text in bodies.get("Locks", []):
         name, sep, attributes = (part.strip() for part in text.partition(":"))
-        if not sep or not _NAME.match(name):
+        if sep and name == PROVIDER_KEY:
+            if provider_seen:
+                problems.append(f'line {number}: duplicate lock provider')
+            else:
+                provider_seen = True
+                lock_provider = _quoted_command(number, "provider", attributes, problems)
+        elif not sep or not _NAME.match(name):
             problems.append(f'line {number}: expected "name: slots=<n>, wait=<seconds>", got "{text}"')
         elif name in locks:
             problems.append(f'line {number}: duplicate lock "{name}"')
@@ -297,6 +372,8 @@ def load_overlay(root: Path) -> Overlay:
 
     sections = {name: "\n".join(text for _, text in lines) for name, lines in bodies.items()}
     roles = _roles(bodies.get("Roles", []), problems, warnings)
+    rules = tuple(text for _, text in bodies.get("Rules", []))
+    deps, deps_command = _deps(bodies.get("Deps", []), problems)
     for number, text in bodies.get("Rote scripts", []):
         name, sep, body = (p.strip() for p in text.partition(":"))
         if not sep or not _NAME.fullmatch(name) or not body:
@@ -337,8 +414,8 @@ def load_overlay(root: Path) -> Overlay:
     if version_lines:
         number, text = version_lines[0]
         if len(version_lines) > 1 or not _VERSION.fullmatch(text):
-            problems.append(f'line {number}: Version needs one plugin version like 0.10.0, got "{text}"')
+            problems.append(f'line {number}: Version needs one plugin version like 0.11.0, got "{text}"')
         else:
             version = text
     return Overlay(path, True, sections, validators, tuple(extra), locks, parallel, cap, tuple(problems), roles,
-                   tuple(warnings), authoring, version)
+                   tuple(warnings), authoring, version, lock_provider, rules, deps, deps_command)

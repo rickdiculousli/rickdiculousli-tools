@@ -65,7 +65,8 @@ Prints the overlay's `## Authoring` policy, then:
 
 - **Candidates:** kinds with at least `--min` uses, no role of that name in the
   overlay, and no `approved` or `declined` mark. Each shows uses, worktrees,
-  distinct days, outcomes (`done`, `stuck`, `abandoned`, `open`) and tiers.
+  distinct days, outcomes (`done`, `stuck`, `abandoned`, `open`), tiers and,
+  when opens carried `--lane`, the lanes they came from (`lanes` in `--json`).
 - **Other kinds:** with why they aren't candidates.
 - **Unlabeled shapes** with at least `--min` uses; give them a label.
 

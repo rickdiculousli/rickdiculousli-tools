@@ -1,12 +1,20 @@
-"""Counting native locks with root-mutex protected holder/waiter lifecycles."""
+"""Counting native locks with root-mutex protected holder/waiter lifecycles.
+
+With an overlay lock provider, slots are leases held by an external command
+instead (see `lease`); the native files are not touched.
+"""
 from __future__ import annotations
 
 import contextlib
 from datetime import datetime, timezone
+import math
 import os
 from pathlib import Path
 import re
+import shlex
+import subprocess
 import sys
+import threading
 import time
 import uuid
 from typing import BinaryIO, Iterator
@@ -17,6 +25,9 @@ from .overlay import Lock
 
 POLL_S = 0.2
 ANNOUNCE_GRACE_S = 1.0
+PROVIDER_POLL_S = 1.0
+PROVIDER_BUSY = 3
+PROVIDER_TIMEOUT_S = 60.0
 
 
 def env_name(name: str) -> str:
@@ -80,10 +91,89 @@ def status(root: Path, name: str, lock: Lock) -> list[str]:
     return lines
 
 
+def _provider_call(root: Path, provider: str, *args: str) -> tuple[int, str, str]:
+    """Run `<provider> <args>` from the worktree root; a missing or hanging provider is an error."""
+    argv = [*shlex.split(provider), *args]
+    try:
+        done = subprocess.run(argv, cwd=root, stdin=subprocess.DEVNULL, capture_output=True,
+                              text=True, errors="replace", timeout=PROVIDER_TIMEOUT_S)
+    except FileNotFoundError as error:
+        raise DelegationError(f'lock provider not found: {error.filename or argv[0]} (overlay ## Locks provider)') from error
+    except subprocess.TimeoutExpired as error:
+        raise DelegationError(f'lock provider gave no answer in {PROVIDER_TIMEOUT_S:g}s: {shlex.join(argv)}') from error
+    return done.returncode, done.stdout, done.stderr
+
+
+def _ttl(lock: Lock) -> str:
+    return str(max(1, math.ceil(lock.ttl)))
+
+
 @contextlib.contextmanager
-def hold(root: Path, name: str, lock: Lock, holder: dict) -> Iterator[dict]:
+def lease(root: Path, name: str, lock: Lock, provider: str) -> Iterator[dict]:
+    """Hold one lease on `name` from the provider for the duration of the block.
+
+    `acquire <name> --ttl N` exits 0 with the lease key on stdout, 3 when every
+    slot is taken (polled until `wait` runs out), anything else is a provider
+    error and nothing runs. The lease is renewed every ttl/3 seconds in the
+    background; a failed renewal is reported in `lease.lost`, and `release <key>`
+    always runs when the block ends.
+    """
+    started, announced = time.monotonic(), False
+    while True:
+        code, out, err = _provider_call(root, provider, "acquire", name, "--ttl", _ttl(lock))
+        if code == 0:
+            key = next((line.strip() for line in out.splitlines() if line.strip()), "")
+            if not key:
+                raise DelegationError(f'lock provider acquired {name} but printed no lease key: {provider}')
+            break
+        reason = (err.strip() or out.strip()).splitlines()[-1:] or ["no reason given"]
+        if code != PROVIDER_BUSY:
+            raise DelegationError(f'lock provider failed to acquire {name} (exit {code}): {reason[0]}')
+        waited = time.monotonic() - started
+        if lock.wait is not None and waited >= lock.wait:
+            raise DelegationError(f'lock {name} still busy after {lock.wait:g}s: {reason[0]}')
+        if not announced:
+            print(f'waiting for lock {name} from provider: {reason[0]}', file=sys.stderr)
+            announced = True
+        time.sleep(PROVIDER_POLL_S)
+    info = {'provider': provider, 'key': key, 'ttl_s': lock.ttl, 'renewals': 0, 'lost': False}
+    stop = threading.Event()
+
+    def renew() -> None:
+        while not stop.wait(max(0.1, lock.ttl / 3)):
+            try:
+                code, _, err = _provider_call(root, provider, "renew", key, "--ttl", _ttl(lock))
+            except DelegationError as error:
+                code, err = -1, str(error)
+            if code == 0:
+                info['renewals'] += 1
+            else:
+                info['lost'] = True
+                print(f'lock provider could not renew {name} lease {key}: {err.strip() or code}', file=sys.stderr)
+
+    keeper = threading.Thread(target=renew, name=f'lease-{name}', daemon=True)
+    keeper.start()
+    try:
+        yield {'slot': None, 'wait_s': round(time.monotonic() - started, 3), 'lease': info}
+    finally:
+        stop.set()
+        keeper.join()
+        try:
+            code, _, err = _provider_call(root, provider, "release", key)
+        except DelegationError as error:
+            code, err = -1, str(error)
+        if code != 0:
+            print(f'lock provider could not release {name} lease {key}: {err.strip() or code}', file=sys.stderr)
+
+
+@contextlib.contextmanager
+def hold(root: Path, name: str, lock: Lock, holder: dict, provider: str | None = None) -> Iterator[dict]:
     if not re.fullmatch(r'[a-z0-9][a-z0-9_-]*', name):
         raise DelegationError('Invalid resource lock name: ' + name)
+    if provider:
+        with lease(root, name, lock, provider) as held:
+            yield held
+        return
     paths = state.Paths(root)
     count = slots(name, lock)
     token = uuid.uuid4().hex

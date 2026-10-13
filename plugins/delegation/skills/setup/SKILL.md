@@ -63,7 +63,9 @@ source in bulk. Collect:
 | `## Roles` | Repeated specialist briefs that can share a runbook. Propose tier, tracked `.agents/delegation/runbooks/<role>.md` source and at least one cap; prefer a use-count cap. |
 | `## Authoring` | Whether the judge adds roles and runbooks, or rote scripts, on its own when it sees repeated work. Both default to `allowed`. Write `roles: ask` and/or `scripts: ask` only for what the user wants to approve case by case. |
 | `## Host side effects` | User-wide configuration, live saves and other host paths outside the worktree that delegated work must never change. Record one prohibited change per line. |
-| `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. |
+| `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. Add `provider: "<command>"` only when an external lease service coordinates slots across machines (see the overlay reference's lock provider contract). |
+| `## Deps` | Only for repositories with several units (crates, packages) where a change in one must also run its dependents' validators: `<unit>: <dependent>, ...` lines or a `command:` that prints the map as JSON. Pair it with `paths=` on the units' validators. |
+| `## Rules` | Project rules every subagent must obey (what test output may never contain, where scratch goes, append-only caches). `check.py brief` injects them into every brief. |
 | `## Oracle` | What ultimately says work is right (golden files, reference traces, a spec suite). Tie prose to checks with `validator:<name>`. |
 | `## Extra inputs` | Git-ignored files the validators depend on: golden traces, built binaries, downloaded fixtures. Only paths inside the repo. |
 | `## Single writer` | Resources that break under concurrent writes or that only the judge should change: databases, tool projects behind an MCP server (Ghidra, Figma), generated tables fed to an apply step, shared lockfiles. |

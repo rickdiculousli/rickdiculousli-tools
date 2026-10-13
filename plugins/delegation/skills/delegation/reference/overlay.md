@@ -13,7 +13,9 @@ the `migrate` skill.
 | `## Oracle` | What verifies work mechanically | None |
 | `## Validators` | `name [attributes]: command` lines | None; all claims are `cited` or `asserted` |
 | `## Extra inputs` | Ignored paths folded into the tree hash | None |
-| `## Locks` | `name: slots=<n>, wait=<seconds>` lines | None |
+| `## Locks` | `name: slots=<n>, wait=<seconds>, ttl=<seconds>` lines, and optionally one `provider: "<command>"` line | None; native locks |
+| `## Deps` | `<unit>: <dependent>, <dependent>` lines, or one `command: <cmd>` line, for `check.py suggest --with-dependents` | None |
+| `## Rules` | Free-text bullets that `check.py brief` injects into every brief | None |
 | `## Roles` | Named tier/runbook pairs with reuse caps | None |
 | `## Rote scripts` | `name: command; what it replaces` proposals or approved helpers | None |
 | `## Host side effects` | Prohibited host changes outside the worktree, one per line | None |
@@ -24,7 +26,7 @@ the `migrate` skill.
 | `## Tier hints` | Known task types per tier | None |
 | `## Parallel limit` | Max parallel readers | 3 |
 | `## Return cap` | Max return length, in words | 400 |
-| `## Version` | Plugin version the overlay was last linted clean against, like `0.10.0` | None; lint warns `version-mismatch` |
+| `## Version` | Plugin version the overlay was last linted clean against, like `0.11.0` | None; lint warns `version-mismatch` |
 
 ## Parsing rules
 
@@ -65,8 +67,9 @@ the `migrate` skill.
     `ghidra-sync [paths=ghidra/**|exports/*.json]: ...`. It is a hint only; `run`
     never refuses on it. Absolute paths and `..` are lint problems.
   An unknown or malformed attribute is a lint problem.
-- **`## Locks`.** One `name: slots=<n>, wait=<seconds>` per line; both
-  attributes are optional (`name:` alone is one slot, waiting indefinitely).
+- **`## Locks`.** One `name: slots=<n>, wait=<seconds>, ttl=<seconds>` per line;
+  all attributes are optional (`name:` alone is one slot, waiting indefinitely;
+  `ttl` matters only with a lock provider, below, and defaults to 120).
   A lock limits how many commands that need it run at once across **every
   worktree of the repo**: give memory-hungry builds the same lock and at most
   `slots` of them run at a time, even from parallel worktrees and sandboxed
@@ -95,6 +98,31 @@ the `migrate` skill.
     acquisition, waiter registration and cleanup; no slot wait or validator runs
     while holding it. All coordinating processes must use the same XDG root.
     Metadata alone never breaks native contention. Unknown owners protect state.
+  - **`provider: "<command>"`** (one line in `## Locks`, quotes optional) replaces
+    the native files with leases from an external command, for slots shared
+    across machines. See [Lock provider contract](#lock-provider-contract). With
+    a provider, `slots=` and `DELEGATION_LOCK_<NAME>` are not consulted (the
+    provider owns the slot count), `wait` still bounds how long `run` and `exec`
+    poll, and `ttl` is the lease length passed to the provider. An empty or
+    unquotable command, or a second `provider:` line, is a lint problem. Without
+    the line, locking is unchanged.
+- **`## Deps`.** The dependency map for `check.py suggest --with-dependents`
+  (requirement: a change in one unit must also run the validators of the units
+  that depend on it). Units are repository-relative directories (a crate, a
+  package), written with or without a trailing slash. One
+  `<unit>: <dependent>, <dependent>` per line means the listed units depend on
+  `<unit>`; closure is transitive, a unit listing itself is ignored, and a
+  repeated unit, an absolute path or `..` is a lint problem. Alternatively (or
+  additionally; the command wins) one `command: <cmd>` line names a command run
+  from the worktree root that prints a JSON object `{"<unit>": ["<dependent>", ...]}`
+  on stdout, for example a wrapper over `cargo metadata`. A failing, hanging
+  (120 s) or malformed command makes `suggest --with-dependents` exit 2.
+- **`## Rules`.** Free-text lines (bullets). `check.py brief` appends them to
+  every brief, after the safety instructions and before the scratch directory,
+  as `Rules (overlay ## Rules); these apply to everything you do here:`. Put
+  project rules every subagent must obey here (what test output may never
+  contain, where scratch goes, cache keys being append-only). They are agent
+  instructions, not enforcement.
 - **`validator:<name>` references.** Anywhere in the file, `validator:<name>`
   must name a registered validator, or lint reports `unregistered validator`.
   Use it in `## Oracle` or `## Tier hints` to tie prose to a check.
@@ -153,6 +181,45 @@ the `migrate` skill.
   stop for human action rather than retrying indefinitely.
 - All other sections are free text for the judge; `check.py` doesn't interpret
   them.
+
+## Lock provider contract
+
+With `provider: "<command>"` under `## Locks`, `check.py run` (for a validator
+with `lock=<name>`) and `check.py exec --lock <name>` hold a lease from the
+provider for the lifetime of the foreground command instead of a native slot.
+`<command>` is split with POSIX shell rules and run from the worktree root with
+stdin closed, stdout and stderr captured, inheriting the environment; each call
+gets 60 seconds, after which it counts as an error. The provider must implement
+three subcommands, appended to `<command>`:
+
+| Call | Must do | stdout | Exit |
+|---|---|---|---|
+| `acquire <name> --ttl <seconds>` | Try once, without blocking, to take one free slot of lock `<name>` for `<seconds>` (an integer) | On success, the lease key on the first non-empty line (for example `cargo.0`) | `0` acquired; `3` every slot is taken (busy); anything else is a provider error |
+| `renew <key> --ttl <seconds>` | Extend the lease `<key>` by `<seconds>` from now | ignored | `0` renewed; anything else means the lease is gone |
+| `release <key>` | End the lease `<key>` (a missing lease is fine) | ignored | `0`; anything else is reported, not fatal |
+
+How check.py uses them:
+
+- `acquire` is polled once a second while it exits `3`; the lock's `wait`
+  bounds the polling (exit 2, nothing recorded, same as native locks), and the
+  last line of the provider's stderr is shown as the reason while waiting. An
+  exit other than `0` or `3`, a missing executable, a timeout, or exit `0`
+  without a key, refuse the run with exit 2 and record nothing.
+- `--ttl` is the lock's `ttl` rounded up to a whole second (default 120).
+  `renew` runs in the background every `ttl/3` seconds while the command runs.
+  A renewal that fails is printed to stderr and sets `lease.lost` in the ledger
+  result; the command is not interrupted, so the result stays usable evidence
+  but the provider may have handed the slot to someone else.
+- `release` always runs when the command ends, including after a timeout or a
+  forwarded signal. If it fails the lease expires at its TTL.
+- The ledger result records `lock`, `lock_wait_s` and a `lease` object
+  (`provider`, `key`, `ttl_s`, `renewals`, `lost`); `lock_slot` is `null` under a
+  provider. `check.py locks` prints the provider and each lock's ttl and wait;
+  holders are the provider's to show.
+
+The provider decides how many slots a lock has and may share them across
+machines; `tests/fake_lease_provider.py` in the plugin repository is a reference
+implementation backed by a directory.
 
 ## Fixture-backed validators
 
