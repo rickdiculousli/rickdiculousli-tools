@@ -1,0 +1,87 @@
+{
+  "acceptance": [
+    {
+      "check": "validator:unit",
+      "pending": false,
+      "record": null,
+      "recovery": "evidence prepare validator:unit",
+      "status": "missing"
+    },
+    {
+      "check": "observation:review",
+      "pending": false,
+      "record": null,
+      "recovery": "evidence prepare observation:review",
+      "status": "missing"
+    }
+  ],
+  "cache_directory": "<BASE>/cache/rickdiculousli-tools/long-horizon/<KEY>/worktrees/<KEY>",
+  "closure": {
+    "next": null,
+    "state": "none",
+    "steps": []
+  },
+  "command": "status",
+  "findings": [
+    {
+      "code": "version-mismatch",
+      "line": 0,
+      "message": "long-horizon plugin is <VERSION>; the overlay is untagged.",
+      "path": "<BASE>/repo/.agents/long-horizon.md",
+      "remedy": "Offer to run long-horizon:migrate.",
+      "severity": "warning"
+    }
+  ],
+  "git": {
+    "branch": "main",
+    "common_dir": "<BASE>/repo/.git",
+    "dirty": [],
+    "head": "351b56a30963ce54006ec33d03da1fdda6f957a3",
+    "root": "<BASE>/repo",
+    "target": "main"
+  },
+  "handoff": {
+    "blockers": {},
+    "budget": 80,
+    "context": [],
+    "decisions": [],
+    "last_commit": "351b56a30963ce54006ec33d03da1fdda6f957a3",
+    "lines": 3,
+    "state": "current"
+  },
+  "needs_you": [],
+  "ok": true,
+  "pending_evidence": [],
+  "selection": {
+    "blocked": [],
+    "context": [],
+    "goal": "tiny",
+    "goal_title": "Tiny project",
+    "milestone": "tiny:1",
+    "milestone_title": "1. Build",
+    "mode": "selected",
+    "progress": {
+      "done": 0,
+      "total": 2
+    },
+    "task": {
+      "checks": [],
+      "children": [],
+      "context": [],
+      "criteria": "",
+      "evidence": {},
+      "id": "1.1",
+      "kind": "task",
+      "line": 6,
+      "metadata": {},
+      "status": "open",
+      "tags": [
+        "any"
+      ],
+      "title": "Implement tiny function."
+    }
+  },
+  "state_directory": "<BASE>/state/rickdiculousli-tools/long-horizon/<KEY>/worktrees/<KEY>",
+  "version": 1
+}
+exit=0

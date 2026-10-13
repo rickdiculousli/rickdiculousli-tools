@@ -1087,3 +1087,72 @@ day-granular `lanes-config-changed` (now relative to the commit that recorded th
 Not performed: no model session has run a lanes-mode `resume`, `checkpoint`,
 `setup` scaffold or `migrate` yet; the pipeline daemon that calls `status --lane`
 and `--commit-in` is not part of this repository. Not run on Windows or macOS.
+
+## Lanes purely opt-in — long-horizon 0.6.1 and delegation 0.11.1
+
+Date: 2026-10-13. Evidence: `checked` unless marked.
+
+For a repository that uses none of the lanes features, nothing about lanes,
+lease providers, dependents or project rules reaches its files or the text its
+agent reads every session. `long-horizon:migrate` no longer adds a `## Lanes`
+stub: an absent section already means lanes are off, an existing comment-only
+heading is left alone, and a repository whose only finding is `version-mismatch`
+gets exactly the `## Version` tag. Every SKILL.md of both plugins (resume,
+checkpoint, setup, migrate; delegation, setup) carries at most one conditional
+pointer to the lanes reference or to the overlay reference's new "Parallel runs"
+section, which absorbed the lane-session, lander, setup-scaffolding, `--lane`,
+`--with-dependents`, `## Deps`, `## Rules` and lease text; the always-read
+long-horizon references (overlay grammar, goals format, evidence, cheatsheet) are
+down to a one-line pointer each. Setup skills offer those sections only when the
+user asks for parallel or cross-machine runs or the repo already has them. The
+tier instruction "Obey its Rules" stays. One code leak was found and fixed:
+`status`/`lint --json` task objects carried `lane: null` and `after: []` outside
+lanes mode; they are now omitted.
+
+Golden tests pin the lanes-free surface. `tests/test_long_horizon_baseline.py`
+and `tests/test_delegation_baseline.py` build one deterministic fixture
+repository per plugin (fixed content, author and commit dates, isolated XDG
+roots), run `status`/`lint`/`gate`/`closure verify` and `lint`/`suggest`/`open`/
+`brief`/`run`/`query`/`kinds`/`patterns`/`locks`/`paths`/`pending`/`tree`/`close`
+in text and JSON, normalize only run-specific bytes (temp base, checkout path,
+XDG keys, timestamps, durations, host names, the installed version inside the
+version finding) and compare byte for byte with goldens generated from the
+0.5.2 and 0.10.1 code (`--regenerate <plugins-root>` on commit b31b433).
+`tests/test_long_horizon_contract.py` adds the lanes-free migration test: only
+warning findings, an empty `lint --fix` diff, and after tagging `## Version` an
+overlay equal to the original plus that section, with no `## Lanes`.
+
+Verification on Linux 7.0.0-38-generic, run through delegation (sonnet execute
+tier wrote the tests, haiku routine tier ran the checks; results asserted by the
+tier and re-run by the judge):
+
+- `python3 scripts/sync_marketplaces.py --check`: passed; manifests declare
+  long-horizon 0.6.1 and delegation 0.11.1.
+- `python3 scripts/run_tests.py`: 471 tests passed, before and after the review
+  fixes below.
+- `python3 scripts/verify_lifecycle.py --report
+  ~/.cache/rickdiculousli-tools-scratch/plugin-verification-0.6.1.json`:
+  PASS at **2026-10-13T18:42:55Z** on **codex-cli 0.162.1** and **Claude Code
+  2.1.296**, in disposable profiles; both hosts observed long-horizon 0.6.1 and
+  delegation 0.11.1.
+
+An adversarial review by a fresh-context subagent on the most capable model
+(reading every SKILL.md and every unconditionally referenced file as a novice's
+agent would, and running the CLIs against lanes-free fixtures) found nine
+items, all fixed: the delegation overlay reference's heading table and parsing
+rules still carried the full `provider:`/`ttl`, `## Deps` and `## Rules` detail
+outside "Parallel runs" (moved there, the table now has one "Parallel runs"
+pointer row); `state.md` kept a seven-line evidence-index paragraph (now one
+line, the detail lives in the lanes reference); the README said migrate carried
+a lanes pointer (it carries none); the verification draft had a placeholder;
+the migrate skill named `## Lanes` three times (tightened to one sentence); the
+evidence reference pointer introduced the "lander" role (removed); the return
+format and patterns references each kept an unconditional `## Rules`/`--lane`
+clause (deleted); and the setup cheatsheet still advertised a lanes row
+(deleted). It found the six SKILL.md files, the interview and templates, the
+tier instructions and every lanes-free CLI output clean. After the fixes the
+three checks were rerun (`plugin-verification-0.6.1-final.json`, lifecycle PASS
+on the same host versions): the only failure was the new migration test's
+expected string, stale after the migrate wording was tightened; it was updated
+and `scripts/run_tests.py` passed again (471 tests) along with
+`sync_marketplaces.py --check` and `git diff --check`.

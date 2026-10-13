@@ -1,0 +1,4 @@
+opened d1 (routine, reader, kind read-files) at 2f42e5d7b3d9
+task: Run `python3 <PLUGIN>/plugins/delegation/skills/delegation/scripts/check.py --root <BASE>/repo brief --delegation d1` and follow the brief it prints exactly.
+task with instructions: Run `python3 <PLUGIN>/plugins/delegation/skills/delegation/scripts/check.py --root <BASE>/repo brief --with-instructions --delegation d1` and follow the brief it prints exactly.
+exit=0

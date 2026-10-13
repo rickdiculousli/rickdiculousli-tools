@@ -1,0 +1,2 @@
+No kinds yet. Open with --kind <label> --new-kind "<one-line description>" to register one.
+exit=0

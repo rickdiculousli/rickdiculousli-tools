@@ -1,0 +1,2 @@
+{"version": 1, "minimum": 3, "since_days": null, "kinds": [{"kind": "read-files", "description": "read files", "count": 1, "worktrees": 1, "days": 1, "outcomes": {"done": 1}, "tiers": ["routine"], "last": "<TIME>", "role": false, "status": null, "candidate": false}], "unlabeled": [], "aliases": {}, "authoring": {"roles": "allowed", "scripts": "allowed"}}
+exit=0

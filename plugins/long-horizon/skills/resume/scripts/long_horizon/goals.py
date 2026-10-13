@@ -28,6 +28,10 @@ def outside(text):
             yield number, raw
 
 
+# Task keys that exist only for lanes mode; status omits them for every other repository.
+LANE_OUTPUT_KEYS = ('lane', 'after', 'lane_line', 'after_line')
+
+
 def text_id(text):
     return hashlib.sha256(' '.join(text.split()).encode()).hexdigest()[:12]
 

@@ -1,0 +1,2 @@
+No open delegations.
+exit=0

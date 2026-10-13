@@ -60,3 +60,24 @@ class ContractTests(RepoTest):
         self.write('.agents/long-horizon.md', OVERLAY + f'## Version\n{INSTALLED}\n')
         codes = self.codes('lint')
         self.assertFalse({c for c in codes if c.startswith(('layout-', 'version-'))})
+
+    def test_lanes_free_migration_adds_only_the_version_tag(self):
+        # The support OVERLAY has no `## Lanes` section, so lanes are off.
+        overlay = self.root / '.agents/long-horizon.md'
+        original = overlay.read_text()
+        self.assertNotIn('## Lanes', original)
+        linted = self.cli('lint')
+        self.assertTrue(linted['findings'])
+        self.assertEqual({x['severity'] for x in linted['findings']}, {'warning'})
+        self.assertIn('version-mismatch', {x['code'] for x in linted['findings']})
+        fixed = self.cli('lint', '--fix')
+        self.assertFalse(fixed.get('diff'), fixed)
+        self.assertEqual(overlay.read_text(), original)
+        overlay.write_text(original + f'## Version\n{INSTALLED}\n')
+        self.assertFalse({x['code'] for x in self.cli('lint')['findings'] if x['code'].startswith('version-')})
+        self.assertEqual(overlay.read_text(), original + f'## Version\n{INSTALLED}\n')
+        self.assertNotIn('## Lanes', overlay.read_text())
+        skill = (ROOT / 'plugins/long-horizon/skills/migrate/SKILL.md').read_text()
+        self.assertNotIn('Lanes are off', skill)
+        self.assertNotIn('```markdown\n## Lanes', skill)
+        self.assertIn('never add a `## Lanes` section', skill)

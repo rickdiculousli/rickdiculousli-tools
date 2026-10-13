@@ -1,0 +1,3 @@
+warning: version-mismatch: delegation plugin is <VERSION>, repo overlay is untagged; offer to run delegation:migrate
+Overlay OK: <BASE>/repo/.agents/delegation.md
+exit=0

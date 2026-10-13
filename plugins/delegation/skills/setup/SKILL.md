@@ -63,9 +63,7 @@ source in bulk. Collect:
 | `## Roles` | Repeated specialist briefs that can share a runbook. Propose tier, tracked `.agents/delegation/runbooks/<role>.md` source and at least one cap; prefer a use-count cap. |
 | `## Authoring` | Whether the judge adds roles and runbooks, or rote scripts, on its own when it sees repeated work. Both default to `allowed`. Write `roles: ask` and/or `scripts: ask` only for what the user wants to approve case by case. |
 | `## Host side effects` | User-wide configuration, live saves and other host paths outside the worktree that delegated work must never change. Record one prohibited change per line. |
-| `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. Add `provider: "<command>"` only when an external lease service coordinates slots across machines (see the overlay reference's lock provider contract). |
-| `## Deps` | Only for repositories with several units (crates, packages) where a change in one must also run its dependents' validators: `<unit>: <dependent>, ...` lines or a `command:` that prints the map as JSON. Pair it with `paths=` on the units' validators. |
-| `## Rules` | Project rules every subagent must obey (what test output may never contain, where scratch goes, append-only caches). `check.py brief` injects them into every brief. |
+| `## Locks` | Each lock the validators use, with `slots` (how many such builds this machine can run at once; ask if unsure) and a `wait` limit. A validator with a lock needs a `timeout`. |
 | `## Oracle` | What ultimately says work is right (golden files, reference traces, a spec suite). Tie prose to checks with `validator:<name>`. |
 | `## Extra inputs` | Git-ignored files the validators depend on: golden traces, built binaries, downloaded fixtures. Only paths inside the repo. |
 | `## Single writer` | Resources that break under concurrent writes or that only the judge should change: databases, tool projects behind an MCP server (Ghidra, Figma), generated tables fed to an apply step, shared lockfiles. |
@@ -73,6 +71,11 @@ source in bulk. Collect:
 | `## Bulk work`, `## Tier hints` | Recurring high-volume work (per-module reading, porting, probe batches, triage of test output) and which tier fits: `execute` when it needs reasoning pinned by an oracle, `routine` when the right answer is obvious. |
 | `## Return fields` | Facts the judge always wants back for this repo's work (offsets touched, files read, APIs called). |
 | `## Parallel limit` | Lower it below 3 if a shared resource (an MCP server, a device, a rate-limited API) can't take parallel readers. |
+
+Only if the user asks for runs that span machines or parallel lanes, or an
+existing overlay already has a `## Deps` or `## Rules` section or a `provider:`
+line under `## Locks`, read [Parallel runs](../delegation/reference/overlay.md#parallel-runs)
+for those sections; otherwise do not mention or offer them.
 
 Also run `git status --porcelain`. Untracked files that aren't ignored and churn on
 their own (`.DS_Store`, editor swap files, local logs) change the tree hash and

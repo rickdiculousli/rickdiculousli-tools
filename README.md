@@ -164,6 +164,12 @@ lines are injected into every brief; and `check.py open --lane <name>` tags
 delegations for the audit and `patterns`. Overlays without these sections
 behave as before.
 
+Delegation 0.11.1 makes those pieces purely opt-in in the text agents read: the
+delegation and setup skills carry one conditional pointer to the overlay
+reference's "Parallel runs" section and otherwise never mention leases, `## Deps`,
+`## Rules` or lane tags, and setup offers them only when asked. A golden test pins
+every lanes-free command output to the 0.10.1 bytes.
+
 `check.py state gc` previews local collection and `check.py state gc --apply`
 applies it, even outside a checkout. `--if-due` limits applied sweeps to once per
 168 hours; normal writes do this automatically. Confirmed deleted, unregistered
@@ -586,6 +592,13 @@ lets a lander commit the record's detail file and trailer without touching stage
 work, backed by a regenerable evidence index in the XDG cache. Python 3.10 reads
 the lanes TOML with a built-in subset parser. See the
 [lanes reference](plugins/long-horizon/skills/resume/reference/lanes.md).
+
+Long-horizon 0.6.1 makes lanes purely opt-in for everyone else: migrate no longer
+adds or touches a `## Lanes` section (an absent section already means off, and a
+repository needing nothing else gets only the `## Version` tag), the resume,
+checkpoint and setup skills carry one conditional pointer to the lanes reference
+each, and `status` JSON omits lane metadata outside lanes mode. A golden test pins
+every lanes-free command output to the 0.5.2 bytes.
 
 | Project | Composition |
 | --- | --- |

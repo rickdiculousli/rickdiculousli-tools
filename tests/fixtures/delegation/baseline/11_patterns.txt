@@ -1,0 +1,4 @@
+Authoring: roles=allowed, scripts=allowed (overlay ## Authoring)
+Candidates (>= 3 uses, no role, not approved or declined):
+  none
+exit=0

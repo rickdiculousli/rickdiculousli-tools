@@ -37,8 +37,7 @@ delegation id, the validator command with absolute paths, the return format,
 and the overlay's return fields and cap. The footer also prohibits commits unless
 the brief explicitly authorizes them, first-person language in committed files,
 and host-side never-write changes outside the isolated worktree when the overlay
-section is nonempty, and carries the overlay's `## Rules` lines when there are
-any. These are agent instructions, not filesystem enforcement.
+section is nonempty. These are agent instructions, not filesystem enforcement.
 It names the delegation's scratch directory for throwaway scripts, so `May write`
 doesn't need to list it.
 

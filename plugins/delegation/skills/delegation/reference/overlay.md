@@ -13,9 +13,8 @@ the `migrate` skill.
 | `## Oracle` | What verifies work mechanically | None |
 | `## Validators` | `name [attributes]: command` lines | None; all claims are `cited` or `asserted` |
 | `## Extra inputs` | Ignored paths folded into the tree hash | None |
-| `## Locks` | `name: slots=<n>, wait=<seconds>, ttl=<seconds>` lines, and optionally one `provider: "<command>"` line | None; native locks |
-| `## Deps` | `<unit>: <dependent>, <dependent>` lines, or one `command: <cmd>` line, for `check.py suggest --with-dependents` | None |
-| `## Rules` | Free-text bullets that `check.py brief` injects into every brief | None |
+| `## Locks` | `name: slots=<n>, wait=<seconds>` lines | None; native locks |
+| Parallel runs | Sections used only by parallel or cross-machine runs; see [Parallel runs](#parallel-runs) | None |
 | `## Roles` | Named tier/runbook pairs with reuse caps | None |
 | `## Rote scripts` | `name: command; what it replaces` proposals or approved helpers | None |
 | `## Host side effects` | Prohibited host changes outside the worktree, one per line | None |
@@ -67,9 +66,8 @@ the `migrate` skill.
     `ghidra-sync [paths=ghidra/**|exports/*.json]: ...`. It is a hint only; `run`
     never refuses on it. Absolute paths and `..` are lint problems.
   An unknown or malformed attribute is a lint problem.
-- **`## Locks`.** One `name: slots=<n>, wait=<seconds>, ttl=<seconds>` per line;
-  all attributes are optional (`name:` alone is one slot, waiting indefinitely;
-  `ttl` matters only with a lock provider, below, and defaults to 120).
+- **`## Locks`.** One `name: slots=<n>, wait=<seconds>` per line; both
+  attributes are optional (`name:` alone is one slot, waiting indefinitely).
   A lock limits how many commands that need it run at once across **every
   worktree of the repo**: give memory-hungry builds the same lock and at most
   `slots` of them run at a time, even from parallel worktrees and sandboxed
@@ -98,37 +96,6 @@ the `migrate` skill.
     acquisition, waiter registration and cleanup; no slot wait or validator runs
     while holding it. All coordinating processes must use the same XDG root.
     Metadata alone never breaks native contention. Unknown owners protect state.
-  - **`provider: "<command>"`** (one line in `## Locks`, quotes optional) replaces
-    the native files with leases from an external command, for slots shared
-    across machines. See [Lock provider contract](#lock-provider-contract). With
-    a provider, `slots=` and `DELEGATION_LOCK_<NAME>` are not consulted (the
-    provider owns the slot count), `wait` still bounds how long `run` and `exec`
-    poll, and `ttl` is the lease length passed to the provider. An empty or
-    unquotable command, or a second `provider:` line, is a lint problem, and so
-    is a lock named `provider` (`provider: slots=2`): the name is reserved.
-    Without the line, locking is unchanged.
-- **`## Deps`.** The dependency map for `check.py suggest --with-dependents`
-  (requirement: a change in one unit must also run the validators of the units
-  that depend on it). Units are repository-relative directories (a crate, a
-  package), written with or without a trailing slash. One
-  `<unit>: <dependent>, <dependent>` per line means the listed units depend on
-  `<unit>`; closure is transitive, a unit listing itself is ignored, and a
-  repeated unit, an absolute path or `..` is a lint problem. Alternatively (or
-  additionally; the command wins) one `command: <cmd>` line names a command run
-  from the worktree root that prints a JSON object `{"<unit>": ["<dependent>", ...]}`
-  on stdout, for example a wrapper over `cargo metadata`. A failing, hanging
-  (120 s) or malformed command makes `suggest --with-dependents` exit 2. A
-  changed path belongs to the longest declared unit that contains it; a
-  dependent's validators are those whose `paths=` match a file Git tracks under
-  that unit (an untracked-only dependent contributes nothing). The repository
-  root (`.`) is not a unit.
-- **`## Rules`.** Free-text lines (bullets). `check.py brief` appends them to
-  every brief, after the safety instructions and before the scratch directory,
-  as `Rules (overlay ## Rules); these apply to everything you do here:`. Put
-  project rules every subagent must obey here (what test output may never
-  contain, where scratch goes, cache keys being append-only). One rule per
-  line; a line starting with `#` is skipped like any heading, so don't start a
-  rule with it. They are agent instructions, not enforcement.
 - **`validator:<name>` references.** Anywhere in the file, `validator:<name>`
   must name a registered validator, or lint reports `unregistered validator`.
   Use it in `## Oracle` or `## Tier hints` to tie prose to a check.
@@ -187,6 +154,70 @@ the `migrate` skill.
   stop for human action rather than retrying indefinitely.
 - All other sections are free text for the judge; `check.py` doesn't interpret
   them.
+
+## Parallel runs
+
+Everything in this section is optional and off unless the overlay names it. A
+repository without these sections sees no change in any command or output.
+
+- **Setup survey.** Offer these only when the user asks for runs spanning
+  machines or parallel lanes, or the overlay already has them:
+  - `## Locks` `provider: "<command>"`: only when an external lease service
+    coordinates slots across machines (contract below).
+  - `## Deps`: only for repositories with several units (crates, packages) where
+    a change in one must also run its dependents' validators: `<unit>:
+    <dependent>, ...` lines or a `command:` that prints the map as JSON. Pair it
+    with `paths=` on the units' validators.
+  - `## Rules`: project rules every subagent must obey (what test output may
+    never contain, where scratch goes, append-only caches). `check.py brief`
+    injects them into every brief, so don't repeat them in the brief body.
+- **Lane tags.** When this session works one lane of a parallel run, pass
+  `check.py open ... --lane <name>` (`[a-z0-9][a-z0-9_-]*`): the open event,
+  `pending --json`, the brief header and the pattern log carry it, and
+  `patterns` lists the lanes each kind was used from.
+- **Dependents.** `check.py suggest --with-dependents` also adds the validators
+  scoped to units that depend on a changed unit, from the `## Deps` map or
+  command (a changed shared crate then pulls in its dependents' suites; `--json`
+  marks each as `via: changed|dependents`).
+- **Leases.** With a `provider:` line under `## Locks` the slots are leases from
+  an external command; `run` and `exec` take and renew a lease instead of a
+  native slot, and the ledger records it under `lease`. A lock line may then
+  also carry `ttl=<seconds>` (default 120), the lease length. The contract
+  follows.
+
+Parsing rules for these sections:
+
+- **`provider: "<command>"`** (one line in `## Locks`, quotes optional) replaces
+  the native files with leases from an external command, for slots shared
+  across machines. See [Lock provider contract](#lock-provider-contract). With
+  a provider, `slots=` and `DELEGATION_LOCK_<NAME>` are not consulted (the
+  provider owns the slot count), `wait` still bounds how long `run` and `exec`
+  poll, and `ttl` is the lease length passed to the provider. An empty or
+  unquotable command, or a second `provider:` line, is a lint problem, and so
+  is a lock named `provider` (`provider: slots=2`): the name is reserved.
+  Without the line, locking is unchanged.
+- **`## Deps`.** The dependency map for `check.py suggest --with-dependents`
+  (requirement: a change in one unit must also run the validators of the units
+  that depend on it). Units are repository-relative directories (a crate, a
+  package), written with or without a trailing slash. One
+  `<unit>: <dependent>, <dependent>` per line means the listed units depend on
+  `<unit>`; closure is transitive, a unit listing itself is ignored, and a
+  repeated unit, an absolute path or `..` is a lint problem. Alternatively (or
+  additionally; the command wins) one `command: <cmd>` line names a command run
+  from the worktree root that prints a JSON object `{"<unit>": ["<dependent>", ...]}`
+  on stdout, for example a wrapper over `cargo metadata`. A failing, hanging
+  (120 s) or malformed command makes `suggest --with-dependents` exit 2. A
+  changed path belongs to the longest declared unit that contains it; a
+  dependent's validators are those whose `paths=` match a file Git tracks under
+  that unit (an untracked-only dependent contributes nothing). The repository
+  root (`.`) is not a unit.
+- **`## Rules`.** Free-text lines (bullets). `check.py brief` appends them to
+  every brief, after the safety instructions and before the scratch directory,
+  as `Rules (overlay ## Rules); these apply to everything you do here:`. Put
+  project rules every subagent must obey here (what test output may never
+  contain, where scratch goes, cache keys being append-only). One rule per
+  line; a line starting with `#` is skipped like any heading, so don't start a
+  rule with it. They are agent instructions, not enforcement.
 
 ## Lock provider contract
 

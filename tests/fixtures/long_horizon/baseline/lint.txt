@@ -1,0 +1,6 @@
+Goal: Tiny project
+Milestone: 1. Build (0/2 tasks)
+Next: 1.1 Implement tiny function.; Needs you: none
+Handoff: 3/80 lines
+warning: long-horizon plugin is <VERSION>; the overlay is untagged. Fix: Offer to run long-horizon:migrate.
+exit=0

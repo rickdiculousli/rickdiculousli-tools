@@ -1,0 +1,4 @@
+cargo: 2 slots, wait 10s
+  cargo.0 free
+  cargo.1 free
+exit=0

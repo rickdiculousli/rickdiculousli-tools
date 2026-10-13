@@ -1,0 +1,56 @@
+# Brief
+Settled: none
+Goal: read a file
+Inputs: crates/core
+May write: nothing
+Must not write: anything
+Done when: validator unit passes
+
+Delegation id: d1
+
+Evidence: run validators only with this command, and cite the printed id as
+[checked: d1#<n>] only when it printed PASS and not "unstable".
+Only a registered validator at the reviewed tree supports checked acceptance.
+Attributed exec records command evidence with validator=null, even when it prints PASS;
+cite its observations or mark them asserted, never checked validator acceptance.
+The overlay's timeouts apply; add `--timeout <seconds>` when the brief gives another:
+
+    python3 <PLUGIN>/plugins/delegation/skills/delegation/scripts/check.py --root <BASE>/repo run '<validator>' --delegation d1
+
+Order: run the cheap validators (none) while you work, and fix what they report
+before running anything slower. After your final edit, run the brief's validators
+cheapest first and stop at the first failure; fix it, then start that pass again.
+A failed run prints the path of its full output; search or slice it
+(grep, tail -n) rather than reading it whole, and don't rerun to see it.
+
+Locks: cargo (2 slots). Validators wait for theirs. Run any other command that needs
+one (a heavy build or test) through this, which waits for a free slot:
+
+    python3 <PLUGIN>/plugins/delegation/skills/delegation/scripts/check.py --root <BASE>/repo exec --lock '<lock>' --timeout '<seconds>' --delegation d1 -- '<command>'
+
+Do not commit unless the brief says so.
+No first person in committed files.
+
+Scratch: throwaway scripts and intermediate files go here, outside the worktree.
+Create it if needed. It is not evidence, and untouched files expire after 30 days:
+
+    <BASE>/cache/rickdiculousli-tools/delegation/<KEY>/worktrees/<KEY>/scratch/d1
+
+Prefer a short script there to repeating the same edit or command by hand. If one
+would help future briefs, name it under Surprises; don't copy it into the worktree
+unless "May write" covers that path.
+
+Return format:
+
+```
+Result: one paragraph.
+Claims:
+  - <claim> [checked: <ledger id>] | [cited: <refs>] | [asserted]
+Fields: <the overlay's return fields>
+Surprises: <anything unexpected>
+Ruled out: <approaches tried and rejected, and why>
+```
+
+Return fields: files read
+Return cap: 400 words
+exit=0

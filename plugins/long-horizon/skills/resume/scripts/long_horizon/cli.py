@@ -144,6 +144,9 @@ def inspect(args, git, policy, parsed):
         raise Invalid('--lane needs a ## Lanes section with config in the overlay.')
     else:
         selection = goals.select(parsed, policy, report, continuation['blockers'])
+        if selection.get('task'):
+            # Outside lanes mode the output carries no lane metadata at all.
+            selection['task'] = {k: v for k, v in selection['task'].items() if k not in goals.LANE_OUTPUT_KEYS}
     needs = continuation['decisions'][:]
     if selection['mode'] == 'awaiting-signoff':
         needs.append('sign off the completed goal')

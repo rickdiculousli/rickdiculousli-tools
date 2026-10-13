@@ -1,0 +1,25 @@
+{
+  "acceptance": [
+    {
+      "check": "validator:unit",
+      "pending": false,
+      "record": null,
+      "recovery": "evidence prepare validator:unit",
+      "status": "missing"
+    },
+    {
+      "check": "observation:review",
+      "pending": false,
+      "record": null,
+      "recovery": "evidence prepare observation:review",
+      "status": "missing"
+    }
+  ],
+  "command": "gate",
+  "completed": [],
+  "findings": [],
+  "ok": true,
+  "policy_changes": [],
+  "version": 1
+}
+exit=0

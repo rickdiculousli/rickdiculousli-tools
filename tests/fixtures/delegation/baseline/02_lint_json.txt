@@ -1,0 +1,2 @@
+{"ok": true, "overlay": "<BASE>/repo/.agents/delegation.md", "exists": true, "version": {"installed": "<VERSION>", "tagged": null, "status": "mismatch"}, "problems": [], "warnings": [], "layout": []}
+exit=0

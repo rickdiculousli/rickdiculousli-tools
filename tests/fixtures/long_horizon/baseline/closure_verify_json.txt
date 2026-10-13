@@ -1,0 +1,10 @@
+{
+  "command": "closure verify",
+  "findings": [],
+  "next": null,
+  "ok": true,
+  "state": "none",
+  "steps": [],
+  "version": 1
+}
+exit=0

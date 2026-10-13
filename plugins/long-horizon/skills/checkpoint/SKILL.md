@@ -95,11 +95,9 @@ leave durable evidence fresh and still means no current checked result. Exceptio
 need actual approval, reason, check, target and matching policy revision; they
 cannot waive sign-off or authorize integration operations.
 
-Under lanes mode with `landing: "lander"` (see [lanes](../resume/reference/lanes.md)),
-a lane session records evidence and edits its lane file and goals as usual but does
-not run `## Integration` steps. It submits its branch tip to the lander, which
-validates, records evidence with `evidence record --commit-in <dir>` and
-fast-forwards the target. `closure record` steps are the lander's.
+If the overlay has a `## Lanes` section with `config`, read
+[lanes](../resume/reference/lanes.md) before step 6: it says who runs the
+integration steps. Otherwise ignore lanes entirely.
 
 Preserve the host’s existing shared XDG state/cache roots across every CLI call.
 Never redirect them into a checkout, Git directory or installed plugin, including

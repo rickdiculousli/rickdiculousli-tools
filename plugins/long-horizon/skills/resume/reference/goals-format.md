@@ -32,14 +32,8 @@ warn that rewording changes it. IDs are globally unique. Adjacent
 must resolve to inspectable ancestor changes. They do not automatically pass a
 milestone. Unknown tags need configuration, never silently mean any.
 
-Lanes mode (see [lanes](lanes.md)) adds metadata. `Lane: <name>` (or `Lane:
-unassigned`) goes on the line after a task and is required for every open task in
-the active goal's unfinished milestones. `After: <task-id>[, <task-id>...]` names
-dependencies, which must exist and form no cycle. The goal line
-`Parallel: lanes, <who>, YYYY-MM-DD` records approval of running the goal as
-lanes. Outside lanes mode these lines parse and are ignored. Under lanes mode a
-session with `--lane` selects its lane's first open task whose `After:` tasks are
-done, across unfinished milestones in roadmap order, instead of the rule below.
+If the overlay has a `## Lanes` section with `config`, [lanes](lanes.md) adds
+task metadata and its own selection rule; otherwise it does not apply.
 
 Status selects first eligible unblocked task in the first incomplete milestone
 of the first active goal. States include selected, manual, all-blocked,

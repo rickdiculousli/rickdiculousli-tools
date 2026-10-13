@@ -17,6 +17,33 @@ change in behaviour or lint output.
   `## Integration` steps. Sessions submit their branch tip; the lander
   validates, records evidence with `--commit-in` and fast-forwards the target.
 
+## Sessions
+
+Resume under lanes mode: a session without a lane is the judge (`selection.mode`
+is `judge`). It selects no task; it reads the `lanes` object (critical path,
+per-lane eligible and blocked), assigns or reassigns `Lane:` within its
+authority, closes milestones with evidence and edits the handoff. A lane session
+runs `status --lane "$LANE" --json` and works only its selected task, in its own
+worktree, on its owned paths.
+
+Checkpoint under lanes mode with `landing: "lander"`: a lane session records
+evidence and edits its lane file and goals as usual but does not run
+`## Integration` steps. It submits its branch tip to the lander, which validates,
+records evidence with `evidence record --commit-in <dir>` (below) and
+fast-forwards the target. `closure record` steps are the lander's.
+
+## Setup
+
+When the user wants the active goal run as parallel lanes, `long-horizon:setup`
+drafts the lane plan (lane name, owned globs, validators, host), then
+`lanes.toml` (via `python3 -c` calling `long_horizon.lanes.scaffold(plan)` from
+the resume scripts directory, or by hand from the example below), the `## Lanes`
+section with `config`, the goal's `Parallel:` line, `Lane:` metadata, a lane
+file per lane from a small template (`# Lane <name>`, `## Status`, `## Next`,
+`## Asks`) and the handoff `Lanes:` line and links. It writes them only after
+actual approval of the lane plan, as part of the reviewed draft. Migrate never
+adds a `## Lanes` section: an absent section means lanes are off.
+
 ## Overlay: `## Lanes`
 
 An optional section of `.agents/long-horizon.md`; keys are `key: <JSON value>`
@@ -172,9 +199,14 @@ each lane's durable handoff is its lane file.
 A repository-wide evidence index under the XDG cache caches each
 trailer-carrying commit's validated records, shared by every worktree, so a
 worktree that has rebased onto landed evidence reads it without revalidating
-history (resolution itself still follows reachable history);
-see [state](state.md) for layout and retention. The index is written only under
-lanes mode and by `--commit-in`.
+history (resolution itself still follows reachable history). The index is
+written only under lanes mode and by `--commit-in`. It lives at
+`<cache>/rickdiculousli-tools/long-horizon/<repo-key>/evidence/` with
+`<commit>.json` per trailer-carrying commit and an `identity.json` recording the
+Git common directory. It is a regenerable cache, so deleting it loses nothing.
+Weekly `state gc` (see [state](state.md)) removes an entry whose commit object no
+longer exists, and the whole index follows the seven-day recovery window once the
+repository's Git directory is gone.
 
 `evidence record ... --commit-in <dir>` is for the lander. After recording, it
 commits exactly the record's detail file, with the `Accepted-Check:` or

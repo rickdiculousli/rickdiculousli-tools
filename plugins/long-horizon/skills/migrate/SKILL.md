@@ -38,16 +38,9 @@ goals repairs as `diff`. Migration findings are:
 If lint exits 2 with `invalid-environment`, the overlay doesn't parse; its
 message names the line. Fix that first, the same way as below.
 
-When the overlay has no `## Lanes` section, add one with defaults off: the
-heading followed by one full-line comment (the overlay grammar allows only
-single-line comments), exactly:
-
-```markdown
-## Lanes
-<!-- Lanes are off. Set config: ".agents/lanes.toml" to run the active goal as parallel lanes; see resume/reference/lanes.md. -->
-```
-
-Nothing else changes for such repositories; see [lanes](../resume/reference/lanes.md).
+Add nothing the findings don't ask for: never add a `## Lanes` section (absent
+means off), and leave an existing one alone. A repository whose only finding is
+`version-mismatch` gets exactly one change, the `## Version` tag (step 3).
 
 Without an installed overlay there is nothing to migrate; offer
 `long-horizon:setup`.
