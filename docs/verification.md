@@ -1156,3 +1156,21 @@ on the same host versions): the only failure was the new migration test's
 expected string, stale after the migrate wording was tightened; it was updated
 and `scripts/run_tests.py` passed again (471 tests) along with
 `sync_marketplaces.py --check` and `git diff --check`.
+
+## Lifecycle verifier scratch root (2026-10-13)
+
+`scripts/verify_lifecycle.py` created its disposable profiles with
+`tempfile.TemporaryDirectory()`, so under the system temp directory. On a Linux
+host whose `/tmp` is a small per-user tmpfs that fails under load, and Codex
+warns that it refuses helper binaries there. The profiles now go under
+`${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/verification/` (empty or
+relative `XDG_CACHE_HOME` counts as unset; Windows uses `LOCALAPPDATA`), or
+under `--scratch <dir>`. The documented `--report` path moved there too. Not a
+plugin content change, so no version bump.
+
+On the Linux host (Ubuntu 26.04, Python 3.14): `sync_marketplaces.py --check`
+current; `scripts/run_tests.py` 476 tests OK (5 new in `ScratchRootTests`);
+`verify_lifecycle.py --report ~/.cache/rickdiculousli-tools/verification/plugin-verification.json`
+PASS on codex-cli 0.162.1 and Claude Code 2.1.296, with no
+`/tmp/rickdiculousli-plugin-verification-*` directory created and no Codex
+helper-binary warning; the profiles were removed afterwards.

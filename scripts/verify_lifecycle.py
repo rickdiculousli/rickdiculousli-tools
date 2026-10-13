@@ -19,6 +19,24 @@ except ImportError:  # Direct script execution.
     from sync_marketplaces import ROOT, load_catalog, sync
 
 
+def scratch_root(env: dict[str, str], home: Path, os_name: str = os.name) -> Path:
+    """Where disposable profiles go: the XDG cache, never the system temp directory.
+
+    Some hosts mount /tmp as a small per-user tmpfs, and Codex refuses helper binaries
+    there. Empty or relative XDG values count as unset, as for the plugins themselves.
+    """
+    from pathlib import PurePosixPath, PureWindowsPath
+    pure = PureWindowsPath if os_name == "nt" else PurePosixPath
+    xdg = env.get("XDG_CACHE_HOME", "")
+    if xdg and pure(xdg).is_absolute():
+        return Path(xdg) / "rickdiculousli-tools" / "verification"
+    if os_name == "nt":
+        local = env.get("LOCALAPPDATA", "")
+        base = Path(local) if local and pure(local).is_absolute() else home / "AppData" / "Local"
+        return base / "rickdiculousli-tools" / "verification" / "cache"
+    return home / ".cache" / "rickdiculousli-tools" / "verification"
+
+
 def run_command(args: list[str], env: dict[str, str], cwd: Path) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(args, env=env, cwd=cwd, text=True, capture_output=True, timeout=45)
     if result.returncode:
@@ -301,10 +319,14 @@ def verify_host(host: str, root: Path, profile: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", type=Path, help="Write JSON evidence, including any failures")
+    parser.add_argument("--scratch", type=Path,
+                        help="Directory for the disposable profiles (default: the XDG cache, never /tmp)")
     parser.add_argument('--hosts', nargs='+', choices=('codex', 'claude'), default=['codex', 'claude'], help='Hosts to verify (default: both)')
     args = parser.parse_args()
     report = {"verifiedAt": datetime.now(timezone.utc).isoformat(), "repository": str(ROOT), "hosts": []}
-    with tempfile.TemporaryDirectory(prefix="rickdiculousli-plugin-verification-") as directory:
+    root = args.scratch or scratch_root(dict(os.environ), Path.home())
+    root.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="profiles-", dir=root) as directory:
         for host in args.hosts:
             print(f"Verifying {host} marketplace and plugin lifecycle…", flush=True)
             profile = Path(directory) / host

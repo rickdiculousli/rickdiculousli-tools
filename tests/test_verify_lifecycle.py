@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from scripts.sync_marketplaces import load_catalog
-from scripts.verify_lifecycle import compare_tree, missing_inventory, plugin_agents, verify_host
+from scripts.verify_lifecycle import compare_tree, missing_inventory, plugin_agents, scratch_root, verify_host
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -164,3 +164,28 @@ class CompareTreeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScratchRootTests(unittest.TestCase):
+    """Disposable profiles live under the XDG cache, never the system temp directory."""
+    home = Path("/home/someone")
+
+    def test_defaults_to_home_cache(self):
+        self.assertEqual(scratch_root({}, self.home, "posix"),
+                         self.home / ".cache" / "rickdiculousli-tools" / "verification")
+
+    def test_absolute_xdg_cache_home_is_honored(self):
+        self.assertEqual(scratch_root({"XDG_CACHE_HOME": "/srv/cache"}, self.home, "posix"),
+                         Path("/srv/cache/rickdiculousli-tools/verification"))
+
+    def test_empty_or_relative_xdg_cache_home_is_unset(self):
+        for value in ("", "relative/cache"):
+            self.assertEqual(scratch_root({"XDG_CACHE_HOME": value}, self.home, "posix"),
+                             self.home / ".cache" / "rickdiculousli-tools" / "verification")
+
+    def test_windows_uses_localappdata(self):
+        root = scratch_root({"LOCALAPPDATA": "C:/Users/someone/AppData/Local"}, self.home, "nt")
+        self.assertEqual(root, Path("C:/Users/someone/AppData/Local/rickdiculousli-tools/verification/cache"))
+
+    def test_never_the_system_temp_directory(self):
+        self.assertFalse(str(scratch_root({"TMPDIR": "/tmp"}, self.home, "posix")).startswith("/tmp"))

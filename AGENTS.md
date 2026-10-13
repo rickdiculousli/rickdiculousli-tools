@@ -62,7 +62,7 @@
   ```sh
   python3 scripts/sync_marketplaces.py --check
   python3 scripts/run_tests.py   # parallel; python3 -m unittest discover -s tests -v runs it serially
-  python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
+  python3 scripts/verify_lifecycle.py --report "${XDG_CACHE_HOME:-$HOME/.cache}/rickdiculousli-tools/verification/plugin-verification.json"
   ```
 
 - Use the verifier's disposable profiles for lifecycle tests. Do not modify a

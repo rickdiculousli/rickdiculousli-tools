@@ -455,7 +455,7 @@ Claude Code 2.1.296 and Codex 0.162.1 when updating delegation to 0.8.0.
 python3 scripts/sync_marketplaces.py
 python3 scripts/sync_marketplaces.py --check
 python3 scripts/run_tests.py   # parallel; python3 -m unittest discover -s tests -v runs it serially
-python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
+python3 scripts/verify_lifecycle.py --report "${XDG_CACHE_HOME:-$HOME/.cache}/rickdiculousli-tools/verification/plugin-verification.json"
 # For a Codex-only run, add --hosts codex.
 ```
 
@@ -486,7 +486,7 @@ the plugin subcommands used above. The tested versions are recorded in
 [docs/verification.md](docs/verification.md); older releases may differ.
 
 ```sh
-python3 scripts/verify_lifecycle.py --report /tmp/plugin-verification.json
+python3 scripts/verify_lifecycle.py --report "${XDG_CACHE_HOME:-$HOME/.cache}/rickdiculousli-tools/verification/plugin-verification.json"
 # For a Codex-only run, add --hosts codex.
 ```
 
