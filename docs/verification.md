@@ -1174,3 +1174,72 @@ current; `scripts/run_tests.py` 476 tests OK (5 new in `ScratchRootTests`);
 PASS on codex-cli 0.162.1 and Claude Code 2.1.296, with no
 `/tmp/rickdiculousli-plugin-verification-*` directory created and no Codex
 helper-binary warning; the profiles were removed afterwards.
+
+## Goal closure without the end stall — long-horizon 0.7.0 and delegation 0.11.2
+
+Date: 2026-10-14 (UTC). Evidence: `checked` unless marked.
+
+Case study: a consuming repository closed a nine-milestone goal under 0.6.1 and
+0.11.1. Its gaps (no goal criteria, an archive the gate rejected) surfaced only
+after the user said "sign off" and took several more question rounds. The
+archive could never validate: four milestones closed before Checks existed, one
+was proved in prose, and four more cited valid records in the goals file's
+`task=<id>` form, which the gate did not read. The JSON fence was written by
+hand. Recording a second validator from the same judge run failed because the
+first record's detail file changed the checker tree, as did a review-note edit.
+`--result 1` was rejected, `evidence prepare --json` printed about 200 KB, and an
+inline review note was refused without saying what was expected.
+
+What changed is in the README's 0.7.0 and 0.11.2 notes. `check.py` and its tree
+hash are unchanged. Long-horizon now matches a registered result's tree to the
+snapshot's tree instead of the current tree. Record still requires the check's
+scope to be unchanged since prepare, so the claim keeps exact-tree proof for
+its scope.
+
+Replay on a disposable clone of the consuming repository with isolated XDG roots
+(the repository itself was not modified):
+
+- At the sign-off commit, `archive check` lists five gaps at once: milestones
+  1, 2, 6 and 7 have no named checks, and 8 cites no recorded PASS. Before this
+  change the gate stopped at the first gap.
+- Adding a six-line `legacy_acceptance` block makes the archive validate.
+  `archive check` is clean, `gate --base HEAD~1` passes on the sign-off commit,
+  and lint is clean. A seven-line alternative also passes: legacy acceptance for
+  1, 2, 6 and 7 only, plus the record ID `archive prepare` found for milestone 8.
+  That record was in history but missing from the hand-written archive.
+- At the commit where the goal entered awaiting-signoff, `status` warns
+  `goal-criteria-missing` and `milestone-proof-missing` for 1, 2, 6 and 7. Its
+  `signoff` object lists the goal-criteria proposal, legacy acceptance and
+  sign-off together, and Needs you asks for them in one line.
+
+Tests: `tests/test_long_horizon_completion.py` is an invented fixture of the
+same shape. It covers pre-Checks milestones with commit citations, a recorded
+check cited as `task=<id>`, Checks added after the only run, and a goal without
+criteria until sign-off. The tests check the early warnings, the single
+pre-check, prepare/fill/refresh, gate and `archive check` with legacy
+acceptance, each way legacy acceptance can be malformed, a hand-written archive
+fixed by one block, and that legacy acceptance cannot cover a milestone
+completed in the gated batch. `tests/test_long_horizon_delegation.py` uses the
+real checker for two judge runs, then `prepare A B`, a written record and a
+review-doc edit, then the second record. It also covers `--result 1` with the
+candidate list, a late snapshot's guidance, the in-scope PASS block, and
+rerecord of a delegated record after a criteria edit.
+`tests/test_long_horizon_evidence.py` covers compact/`--full`/multi prepare and
+`--review-text`.
+
+Verification on macOS (Darwin 25.5.0):
+
+- `python3 scripts/sync_marketplaces.py --check`: passed. The manifests declare
+  long-horizon 0.7.0 and delegation 0.11.2.
+- `python3 scripts/run_tests.py`: 487 tests passed (476 before plus 11 new). The
+  0.5.2/0.10.1 golden baselines are unchanged.
+- `python3 scripts/verify_lifecycle.py --report
+  ~/.cache/rickdiculousli-tools/verification/plugin-verification.json`: PASS at
+  **2026-10-14T01:09:53Z** on **codex-cli 0.162.1** and **Claude Code
+  2.1.296**, in disposable profiles. Both hosts observed long-horizon 0.7.0 and
+  delegation 0.11.2. A first run failed on both hosts only because the new
+  module was not yet tracked, since the verifier compares against `git
+  ls-files`. It passed once committed.
+
+Not performed: no model session has run the updated resume/checkpoint/migrate
+skills, and the consuming repository's real archive was not edited.
