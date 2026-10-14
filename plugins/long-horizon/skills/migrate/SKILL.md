@@ -39,7 +39,13 @@ If lint exits 2 with `invalid-environment`, the overlay doesn't parse; its
 message names the line. Fix that first, the same way as below.
 
 Add nothing the findings don't ask for: never add a `## Lanes` section (absent
-means off), and leave an existing one alone. A repository whose only finding is
+means off), and leave an existing one alone. Goal-content findings are not
+migration findings: `goal-criteria-missing`, `milestone-proof-missing`,
+`signoff-precheck` and `archive-invalid` concern goal acceptance, which only the
+user can settle. Leave them for resume/checkpoint and mention them in the report.
+For an already completed goal whose archive fails, offer `archive check` and the
+legacy acceptance path in the [goals format](../resume/reference/goals-format.md)
+as a separate step, applied only after the user approves. A repository whose only finding is
 `version-mismatch` gets exactly one change, the `## Version` tag (step 3).
 
 Without an installed overlay there is nothing to migrate; offer
@@ -79,5 +85,6 @@ Wait for approval.
 ## 4. Report
 
 Run `status --root "$PROJECT" --brief`. Report what changed, what was deleted,
-what the user declined, and the new `## Version`. Migration records no evidence
+what the user declined, the new `## Version`, and any goal-content warnings left
+for the user. Migration records no evidence
 and creates no PASS; acceptance whose inputs changed needs its checks rerun.

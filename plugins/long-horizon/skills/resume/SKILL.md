@@ -49,8 +49,11 @@ Select the first eligible unblocked task within the first incomplete milestone
 of the first active goal. Do not skip a milestone because it is blocked. Offer
 specific choices when all tasks are blocked: recover the first input, research
 its blocker, obtain the listed user decision, or label requested off-milestone
-work. If all milestones are done, Needs you asks for goal sign-off and selects
-no new goal work. Dormant/no-active-goal reports that state without error.
+work. If all milestones are done, Needs you asks for goal sign-off (with any
+approvals it needs, listed under status `signoff`) and selects no new goal work;
+`long-horizon:checkpoint` closes the goal. `goal-criteria-missing` and
+`milestone-proof-missing` warnings mean closing will stall: bring them up with the
+user at the next milestone boundary. Dormant/no-active-goal reports that state without error.
 
 If quota is enabled and a declared script resolves, make at most one quota call
 at resume, using that script's documented CLI. Failure/absence is informational;

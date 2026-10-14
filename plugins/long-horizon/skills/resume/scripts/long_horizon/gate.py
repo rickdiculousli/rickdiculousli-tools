@@ -1,39 +1,14 @@
 """Compare proposed lifecycle claims with a base; never edit the roadmap."""
-import json
 from pathlib import Path
-import re
+from . import completion
 from .evidence import find
-from .git import confined
-from .goals import effective_policy, flatten, parse, TOKENS
+from .goals import effective_policy, flatten, parse
 from .model import Invalid, finding
 from .scope import policy_digest
 
 
 def archive(item, policy):
-    refs = item['metadata'].get('Archive', [])
-    if len(refs) != 1:
-        raise Invalid('Goal needs one Archive: <tracked-path> completion record.')
-    path = confined(policy['_base'], refs[0])
-    text = path.read_text(encoding='utf-8')
-    match = re.search(r'```json\s*\n(.*?)\n```', text, re.S)
-    if not match:
-        raise Invalid('Archive needs a version-1 JSON metadata fence.')
-    value = json.loads(match[1])
-    required = {'version', 'goal_id', 'status', 'outcome', 'milestones', 'goal_checks', 'signoff', 'limitations', 'refuted', 'followups'}
-    if not required <= value.keys() or value['version'] != 1 or value['goal_id'] != item['id'] or value['status'] != item['status']:
-        raise Invalid('Archive identity/status/schema does not match the goal.')
-    if not isinstance(value['milestones'], list) or not isinstance(value['goal_checks'], list) or not value['milestones']:
-        raise Invalid('Archive requires ordered milestone summaries and goal checks.')
-    if item['status'] in ('shelved', 'dropped'):
-        if not value.get('reason') or not value.get('original_roadmap'):
-            raise Invalid('Shelved/dropped archive must preserve reason and original_roadmap.')
-    else:
-        if not value['outcome'] or not value['goal_checks']:
-            raise Invalid('Completed archive needs goal criteria/checks and outcome.')
-        for summary in value['milestones']:
-            if not isinstance(summary, dict) or not all(summary.get(k) for k in ('id', 'criteria', 'evidence')):
-                raise Invalid('Completed archive milestone needs id, criteria and evidence.')
-    return value
+    return completion.load(item, policy)
 
 
 def run(git, policy, parsed, base='HEAD', pending=(), probe=False):
@@ -121,19 +96,12 @@ def run(git, policy, parsed, base='HEAD', pending=(), probe=False):
             try:
                 value = archive(item, policy)
                 expected = item['children'] or old.get(item['id'], {}).get('children', [])
-                summaries = value['milestones']
-                if not expected or [x['id'] for x in expected] != [x.get('id') for x in summaries]:
-                    raise Invalid('Archive must preserve every ordered milestone.')
-                for before, summary in zip(expected, summaries):
-                    if summary.get('criteria') != before['criteria'] or sorted(set(summary.get('checks', TOKENS.findall(summary.get('criteria', ''))))) != before['checks']:
-                        raise Invalid('Archive must preserve exact milestone criteria and required check lists.')
-                verify_archive_records(value, records)
-                if sorted(set(value['goal_checks'])) != item['checks'] or not value['outcome']:
-                    raise Invalid('Archive must preserve goal checks and readable outcome.')
-                if policy['goals and ownership']['goal-signoff'] == 'user' and (not value['signoff'] or not item['metadata'].get('Signed-off')):
-                    raise Invalid('Archive and goal require actual sign-off.')
+                problems = completion.validate(item, policy, value, records, expected)
             except (Invalid, OSError, ValueError, KeyError, TypeError) as error:
-                findings.append(finding('archive-invalid', 'Completion record is invalid: ' + str(error), 'Preserve complete milestone criteria/evidence and user sign-off in the version-1 archive.'))
+                problems = [str(error)]
+            for problem in problems:
+                findings.append(finding('archive-invalid', 'Completion record is invalid: ' + problem,
+                    'Run archive prepare/check; preserve milestone criteria and evidence, any user-approved legacy acceptance and user sign-off in the version-1 archive.'))
     for goal in parsed['goals']:
         if goal['status'] in ('shelved', 'dropped'):
             try:
@@ -142,31 +110,14 @@ def run(git, policy, parsed, base='HEAD', pending=(), probe=False):
                 findings.append(finding('stop-record-invalid', 'Shelved/dropped goal lacks a valid preserved record.', 'Preserve reason and original_roadmap in its version-1 archive after actual user instruction.'))
         if goal['status'] == 'done' and not goal['children']:
             try:
-                value = archive(goal, policy)
-                verify_archive_records(value, records)
+                if completion.record_problems(archive(goal, policy), records):
+                    raise Invalid('Compressed goal proof is incomplete.')
             except (Invalid, OSError, ValueError, KeyError, TypeError):
                 findings.append(finding('compressed-goal-invalid', 'Compressed goal has no valid archive.', 'Restore its children or provide the verified completion record.'))
     return {'completed': [x['id'] for x in completed], 'policy_changes': changed, 'acceptance': checks['checks']}, findings
 
 
 def verify_archive_records(value, records):
-    for summary in value['milestones']:
-        required = sorted(set(summary.get('checks', TOKENS.findall(summary['criteria']))))
-        if not required:
-            raise Invalid('Archived milestone needs named required checks.')
-        ids = summary['evidence'] + summary.get('exceptions', [])
-        for check in required:
-            valid = False
-            for id_ in ids:
-                record = records.get(id_)
-                if not record:
-                    continue
-                target = next((x for x in record.get('criteria', []) if x['id'] == summary['id']), None)
-                if not target or target['criteria'] != ' '.join(summary['criteria'].split()) or target['checks'] != required:
-                    continue
-                if record.get('exception'):
-                    valid |= record.get('target') == summary['id'] and record.get('check') == check
-                else:
-                    valid |= record.get('name') == check and record.get('outcome') == 'PASS' and record.get('stable') is True and record.get('exit') == 0
-            if not valid:
-                raise Invalid('Archive has no matching accepted criterion proof for ' + summary['id'] + '/' + check)
+    problems = completion.record_problems(value, records)
+    if problems:
+        raise Invalid(problems[0])

@@ -41,12 +41,39 @@ milestone-acceptance, awaiting-signoff, dormant and no-active-goal. Preparation
 is independent of check acceptance. If parsing fails use manual requested work;
 malformed parsed structure is a blocking consistency error.
 
-A last completed milestone enters awaiting-signoff. After actual configured-owner
+A goal needs its own `Done when` with named checks to complete; status and lint
+warn `goal-criteria-missing` while an active goal lacks them, and
+`milestone-proof-missing` for each done milestone of an active goal with no named
+checks or no recorded PASS under its current criteria. Both are warnings, raised
+early so they can be settled before sign-off.
+
+A last completed milestone enters awaiting-signoff. Status then adds a `signoff`
+object: `gaps` (archive file, Archive line, unfilled slots, goal checks without a
+fresh PASS) and `approvals` the user must give (`goal-criteria` with proposed
+lines, `legacy-acceptance` with each milestone's reason, `signoff`), so they can
+be asked together. After actual configured-owner
 approval add `Signed-off: user, YYYY-MM-DD`, complete the goal and keep its stable
 ID/sign-off/archive pointer. Archive metadata is a JSON fence with version=1,
-goal_id, status, outcome, milestones (ordered objects with id, criteria, evidence,
-exceptions), goal_checks, signoff, limitations, refuted and followups. Every
+goal_id, status, outcome, milestones (ordered objects with id, criteria, checks,
+evidence, exceptions), goal_checks, signoff, limitations, refuted and followups;
+goal_criteria and legacy_acceptance are optional. Every
 removed milestone must remain verifiable. A record in progress proves no closure.
+
+`archive prepare [--goal ID] [--write]` builds that JSON from the goals file and
+the committed plus this worktree's pending evidence: each milestone's proving
+record IDs, its other citations, and `<fill: ...>` slots for outcome, sign-off,
+limitations, refuted ideas, follow-ups and any legacy acceptance. Rerunning it
+keeps filled slots and the prose around the fence. `archive check` validates a
+goal's archive with the gate's rules. Neither edits the goals file.
+
+Milestone evidence proves a check through a record ID, bare or as `task=<id>`,
+whose PASS (or exception) names that milestone's current criteria. Prose, commit
+and tree-hash citations are kept but prove nothing. A milestone that closed before
+Checks existed, or whose proof is only prose, validates through `legacy_acceptance`:
+`{"milestones": [ids], "approved_by": who, "date": "YYYY-MM-DD", "reason": why}`,
+recorded only after the user actually approves it, usually with sign-off. It names
+exactly the milestones without recorded proof; it never covers a milestone or goal
+completed in the gated batch, whose checks still need fresh PASS.
 A shelved/dropped record also has reason and original_roadmap; shelving claims no
 completion. Unshelving restores work/evidence with its existing ID.
 

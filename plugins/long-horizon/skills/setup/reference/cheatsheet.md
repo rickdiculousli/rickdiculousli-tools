@@ -9,7 +9,7 @@
 | Park this idea | One dated Parked line; roadmap scope stays intact |
 | Do this instead | Requested work plus Override line and preserved original work |
 | Pause | Preserve work, record next step; no invented closure |
-| Sign off | Actual approval, completion archive, done marker and Signed-off |
+| Sign off | `archive prepare`, one question with every listed approval, done marker and Signed-off |
 | Reject sign-off | Reopen rejected work with reason and retained history |
 | Shelve / drop | Actual instruction, reason and archive of where work stopped |
 | Resume shelved goal | Restore preserved roadmap and ID |
@@ -25,6 +25,8 @@ python3 "$LONG_HORIZON_SCRIPT" lint --root "$PROJECT"
 python3 "$LONG_HORIZON_SCRIPT" lint --root "$PROJECT" --fix
 python3 "$LONG_HORIZON_SCRIPT" lint --root "$PROJECT" --fix --apply
 python3 "$LONG_HORIZON_SCRIPT" gate --root "$PROJECT"
+python3 "$LONG_HORIZON_SCRIPT" archive prepare --root "$PROJECT" --write
+python3 "$LONG_HORIZON_SCRIPT" archive check --root "$PROJECT"
 python3 "$LONG_HORIZON_SCRIPT" closure verify --root "$PROJECT"
 python3 "$LONG_HORIZON_SCRIPT" state gc --json
 ```

@@ -8,6 +8,7 @@ import shlex
 import subprocess
 import time
 import uuid
+from datetime import date
 from .delegation import Checker
 from .git import Git, confined, path_key
 from .model import Invalid, Blocked, digest, finding
@@ -100,14 +101,16 @@ def parse_trailer(line):
     return fields
 
 
-def prepare(git, policy, check, attempt=None, probe=False):
+def prepare(git, policy, check, attempt=None, probe=False, tree=None):
     value = snapshot(git, policy, check, probe)
     if any(x is None for x in value['inputs'].values()):
         raise Invalid('External checks require --probe-inputs before and after the check.')
     value.update(version=1, check=check, criteria=criterion_policy(policy, check), attempt=attempt or uuid.uuid4().hex)
-    checker = Checker(git, policy)
-    if checker.path:
-        value['tree'] = checker.tree()
+    if tree is None:
+        checker = Checker(git, policy)
+        tree = checker.tree() if checker.path else None
+    if tree:
+        value['tree'] = tree
     value['id'] = digest(value)
     state = State(git)
     # Same attempt identifies one execution; it cannot be silently retargeted.
@@ -130,6 +133,30 @@ def prepare(git, policy, check, attempt=None, probe=False):
     return value
 
 
+def prepare_many(git, policy, checks, attempt=None, probe=False):
+    """Snapshot several checks at one checker tree, so one validator run can be recorded for each."""
+    checks = list(dict.fromkeys(checks))
+    checker = Checker(git, policy)
+    tree = checker.tree() if checker.path else None
+    return [prepare(git, policy, check, (attempt + ':' + check) if attempt and len(checks) > 1 else attempt, probe, tree)
+            for check in checks]
+
+
+def compact(value):
+    """A snapshot without its per-file manifest, which state already keeps."""
+    return dict({k: v for k, v in value.items() if k != 'manifest'}, files=len(value.get('manifest', [])))
+
+
+def review_note(policy, check, args):
+    """A dated note for inline --review-text, under the evidence directory."""
+    today = date.today().isoformat()
+    content = ('# Review: ' + check + '\n\nDate: ' + today + '\nReviewer: ' + args.reviewer + ' (' + (args.reviewer_kind or 'unknown') + ')\n\n' +
+               args.review_text.strip() + '\n')
+    name = re.sub(r'[^a-z0-9]+', '-', check.split(':', 1)[1].lower()).strip('-') or 'review'
+    path = policy['continuation']['evidence'].rstrip('/') + '/' + today + '-review-' + name + '-' + hashlib.sha256(content.encode()).hexdigest()[:8] + '.md'
+    return path, content
+
+
 def recovery(git, policy, route):
     if not route:
         raise Invalid('A persistent --log recovery route is required.')
@@ -147,6 +174,7 @@ def record(git, policy, args):
     check = args.check
     definition(policy, check)
     state = State(git)
+    extra = None
     if args.exception:
         if not args.target or not args.reason or not args.reason.strip() or not args.by or not args.by.strip():
             raise Invalid('Exception requires --target, --reason and --by after actual approval.')
@@ -169,35 +197,54 @@ def record(git, policy, args):
         modes = [bool(args.command), bool(args.delegation), bool(args.reviewer)]
         if sum(modes) != 1:
             raise Invalid('Choose exactly one provenance: command/exit, delegation/result, or reviewer/review-note.')
+        if getattr(args, 'review_text', None) and not args.reviewer:
+            raise Invalid('--review-text records a reviewed observation; it needs --reviewer and --reviewer-kind.')
+        generated = review_note(policy, check, args) if args.reviewer and getattr(args, 'review_text', None) else None
+        if generated and args.log in (None, generated[0]):
+            # The generated note is also the review's durable log.
+            args.log, log_digest = generated[0], hashlib.sha256(generated[1].encode()).hexdigest()
+        else:
+            log_digest = recovery(git, policy, args.log)
         value = {'version': 1, 'name': check, 'outcome': args.outcome, 'scope': before['scope'],
                  'policy': before['policy'], 'inputs': before['inputs'],
                  'domain': args.domain or before['domain'], 'attempt': before['attempt'],
                  'snapshot': before['id'], 'criteria': before['criteria'], 'stable': stable, 'log': args.log,
-                 'log_digest': recovery(git, policy, args.log)}
+                 'log_digest': log_digest}
         if args.command:
             if args.exit is None:
                 raise Invalid('Solo provenance requires --exit.')
             value.update(command=args.command, exit=args.exit, claim='observed')
         elif args.reviewer:
-            if not check.startswith('observation:') or not args.review_note:
-                raise Invalid('Reviewed provenance requires observation:<name> and --review-note.')
+            if not check.startswith('observation:') or bool(args.review_note) == bool(generated):
+                raise Invalid('Reviewed provenance requires observation:<name> and exactly one of --review-note PATH '
+                              '(a file inside the checkout that states the review date as YYYY-MM-DD) or --review-text TEXT '
+                              '(written for you as a dated note under the evidence directory).')
             # Who reviewed is recorded, never inferred; agents review only where the check allows it.
             allowed = definition(policy, check).get('reviewer', 'human')
             if args.reviewer_kind not in ('human', 'agent'):
                 raise Invalid('Reviewed provenance requires --reviewer-kind human or agent.')
             if args.reviewer_kind == 'agent' and allowed != 'any':
                 raise Invalid(check + ' requires a human reviewer; an agent review needs "reviewer": "any" in its check definition.')
-            note = confined(git.root, args.review_note)
-            if not note.is_file() or not re.search(r'\b\d{4}-\d{2}-\d{2}\b', note.read_text(encoding='utf-8')):
-                raise Invalid('Review note must be a durable dated file.')
-            value.update(reviewer=args.reviewer, reviewer_kind=args.reviewer_kind, review_note=args.review_note,
-                         review_digest=hashlib.sha256(note.read_bytes()).hexdigest(), exit=0, claim='reviewed')
+            if generated:
+                note_path, data = generated[0], generated[1].encode()
+                confined(git.root, note_path)
+                extra = {note_path: generated[1]}
+            else:
+                note_path = args.review_note
+                note = confined(git.root, note_path)
+                if not note.is_file():
+                    raise Invalid('Review note ' + note_path + ' is not a file inside the checkout; pass the dated note file, or use --review-text TEXT.')
+                data = note.read_bytes()
+                if not re.search(rb'\b\d{4}-\d{2}-\d{2}\b', data):
+                    raise Invalid('Review note ' + note_path + ' has no YYYY-MM-DD date; add the review date to it, or use --review-text TEXT.')
+            value.update(reviewer=args.reviewer, reviewer_kind=args.reviewer_kind, review_note=note_path,
+                         review_digest=hashlib.sha256(data).hexdigest(), exit=0, claim='reviewed')
         else:
             if not args.result or not before.get('tree'):
                 raise Invalid('Delegated record requires --result and a snapshot prepared with its checker.')
             result = Checker(git, policy).result(args.delegation, args.result,
                          definition(policy, check).get('validator', check.removeprefix('validator:')), before['tree'])
-            value.update(delegation=args.delegation, result=args.result, tree=before['tree'],
+            value.update(delegation=args.delegation, result=result['id'], tree=before['tree'],
                          command=result['command'], exit=result['exit'], claim='checked', result_digest=digest(result))
             if args.outcome == 'PASS' and (result.get('ok') is not True or result.get('timed_out')):
                 raise Blocked('Delegated failure/timeout cannot be recorded as PASS.')
@@ -206,10 +253,10 @@ def record(git, policy, args):
     if not args.exception:
         before['last_use'] = time.time()
         state.put('snapshots/' + before['id'] + '.json', before)
-    return store(git, policy, state, value, args)
+    return store(git, policy, state, value, args, extra)
 
 
-def store(git, policy, state, value, args):
+def store(git, policy, state, value, args, extra=None):
     value['id'] = record_id(value)
     detail = args.detail or policy['continuation']['evidence'].rstrip('/') + '/' + value['id'] + '.json'
     confined(git.root, detail)
@@ -220,7 +267,7 @@ def store(git, policy, state, value, args):
         value = existing
     state.put('evidence/' + value['id'] + '.json', value, immutable=True)
     line = trailer(value)
-    files = {value['detail']: proposed(value)}
+    files = dict(extra or {}, **{value['detail']: proposed(value)})
     output = {'record': value, 'trailer': line, 'proposed_files': files, 'pending': True}
     if args.trailers_file:
         add_trailer(Path(args.trailers_file), line)
@@ -284,8 +331,7 @@ def rerecord(git, policy, args):
     if recovery(git, policy, old['log']) != old['log_digest']:
         raise Invalid('The recorded log changed or is missing; prepare and run the check again.')
     if old['claim'] == 'checked':
-        if snap.get('tree') != old['tree']:
-            raise Invalid('Delegation tree changed; the registered result no longer describes this tree.')
+        # Scope, inputs and domain are unchanged, so the result at its own tree still proves this scope.
         result = Checker(git, policy).result(old['delegation'], old['result'],
                      definition(policy, check).get('validator', check.removeprefix('validator:')), old['tree'])
         if digest(result) != old['result_digest']:

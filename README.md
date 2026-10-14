@@ -170,6 +170,11 @@ reference's "Parallel runs" section and otherwise never mention leases, `## Deps
 `## Rules` or lane tags, and setup offers them only when asked. A golden test pins
 every lanes-free command output to the 0.10.1 bytes.
 
+Delegation 0.11.2 changes only text: the composition notes say long-horizon
+0.7.0 matches a registered result to the tree its evidence snapshot was prepared
+at, so edits outside the check's scope after prepare no longer block recording.
+`check.py` and its tree hash are unchanged, so overlays tagged 0.11 need no migration.
+
 `check.py state gc` previews local collection and `check.py state gc --apply`
 applies it, even outside a checkout. `--if-due` limits applied sweeps to once per
 168 hours; normal writes do this automatically. Confirmed deleted, unregistered
@@ -599,6 +604,34 @@ repository needing nothing else gets only the `## Version` tag), the resume,
 checkpoint and setup skills carry one conditional pointer to the lanes reference
 each, and `status` JSON omits lane metadata outside lanes mode. A golden test pins
 every lanes-free command output to the 0.5.2 bytes.
+
+Long-horizon 0.7.0 keeps closing a long goal from stalling at the end.
+- `status` and `lint` warn `goal-criteria-missing` while an active goal has no
+  `Done when`/Checks of its own, and `milestone-proof-missing` for each done
+  milestone without named checks or a recorded PASS under its current criteria.
+- At awaiting-signoff, status adds a `signoff` object listing every gap and every
+  user approval closing needs (goal criteria with proposed lines, legacy
+  acceptance, sign-off), plus one Needs-you line asking for them together.
+- `archive prepare [--goal ID] [--write]` builds the version-1 archive from the
+  goals file and evidence, with `<fill: ...>` slots and the same validation the
+  gate uses; `archive check` validates an existing archive.
+- Archives may cite records as `task=<id>`, and an optional, user-approved
+  `legacy_acceptance` block (who, date, milestones, reason) accepts milestones that
+  closed before Checks existed or were proved in prose, without rerunning old
+  validators. The gate lists every archive problem, not just the first.
+- A delegated record matches the result's tree to the snapshot's tree instead of
+  the current tree; scope stability is still enforced, so the detail files a record
+  writes and edits outside the check's scope no longer block the next record.
+  `evidence rerecord` works for delegated records after criteria edits.
+- `evidence record --result 1` accepts the run number, and an unknown result lists
+  the delegation's results.
+- `evidence prepare A B` snapshots several checks at one tree, and its output
+  leaves out the per-file manifest unless you pass `--full`.
+- `--review-text` writes the dated review note for you, and a `--review-note`
+  error now says what the file needs.
+
+Existing overlays need only the `## Version` tag. The new warnings concern goal
+content, so migrate reports them and leaves them for the user.
 
 | Project | Composition |
 | --- | --- |

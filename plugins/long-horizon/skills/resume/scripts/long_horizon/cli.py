@@ -4,8 +4,8 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
-from . import closure, contract, evidence, gate, goals, handoff, lanes, lint, overlay, readiness, state
-from .git import Git
+from . import closure, completion, contract, evidence, gate, goals, handoff, lanes, lint, overlay, readiness, state
+from .git import Git, confined
 from .model import Invalid, Blocked, finding
 
 
@@ -35,12 +35,13 @@ def parser():
     check.add_argument('--pending', action='append', default=[])
     ev = commands.add_parser('evidence').add_subparsers(dest='action', required=True)
     prepare = common(ev.add_parser('prepare'))
-    prepare.add_argument('check')
+    prepare.add_argument('check', nargs='+', help='one or more checks; several are snapshotted at one checker tree')
     prepare.add_argument('--attempt')
     prepare.add_argument('--probe-inputs', action='store_true')
+    prepare.add_argument('--full', action='store_true', help='include the per-file scope manifest')
     record = common(ev.add_parser('record'))
     record.add_argument('check')
-    for key in ('snapshot', 'domain', 'log', 'detail', 'command', 'delegation', 'result', 'reviewer', 'review-note', 'trailers-file', 'target', 'reason', 'by'):
+    for key in ('snapshot', 'domain', 'log', 'detail', 'command', 'delegation', 'result', 'reviewer', 'review-note', 'review-text', 'trailers-file', 'target', 'reason', 'by'):
         record.add_argument('--' + key, dest='observed_command' if key == 'command' else key.replace('-', '_'))
     record.add_argument('--reviewer-kind', choices=('human', 'agent'))
     record.add_argument('--outcome', choices=('PASS', 'FAIL', 'SKIP', 'UNSTABLE'))
@@ -62,6 +63,13 @@ def parser():
     find.add_argument('check', nargs='?')
     find.add_argument('--probe-inputs', action='store_true')
     find.add_argument('--pending', action='append', default=[])
+    ar = commands.add_parser('archive').add_subparsers(dest='action', required=True)
+    for name in ('prepare', 'check'):
+        item = common(ar.add_parser(name))
+        item.add_argument('--goal', help='goal ID (default: the active goal awaiting sign-off)')
+        item.add_argument('--pending', action='append', default=[])
+        if name == 'prepare':
+            item.add_argument('--write', action='store_true', help='write the prepared archive file')
     cl = commands.add_parser('closure').add_subparsers(dest='action', required=True)
     build = common(cl.add_parser('manifest'))
     build.add_argument('--base', required=True)
@@ -111,7 +119,8 @@ def inspect(args, git, policy, parsed):
         findings.append(finding('pending-unreadable', 'Pending evidence is unreadable: ' + str(error), 'Inspect state gc and recover the records explicitly.', 'warning'))
     # Status shows local pending records; the gate still accepts only explicit --pending IDs.
     acceptance, acceptance_findings = evidence.find(git, policy, pending=[x['id'] for x in pending])
-    findings += acceptance_findings
+    records = {x['id']: x for x in acceptance['records']}
+    findings += acceptance_findings + completion.early(policy, parsed, records)
     pending = [{'id': x['id'], 'check': x.get('name') or x.get('check'), 'outcome': x.get('outcome', 'EXCEPTION'),
                 'detail': x['detail'], 'pending': True} for x in pending]
     archived = [x for x in parsed['goals'] if x['status'] == 'done' and not x['children']]
@@ -120,9 +129,11 @@ def inspect(args, git, policy, parsed):
         findings += history_findings
         for goal in archived:
             try:
-                gate.verify_archive_records(gate.archive(goal, policy), {x['id']: x for x in records})
+                problems = completion.record_problems(gate.archive(goal, policy), {x['id']: x for x in records})
             except (Invalid, OSError, ValueError, KeyError, TypeError) as error:
-                findings.append(finding('archive-invalid', 'Archived goal proof is invalid: ' + str(error),
+                problems = [str(error)]
+            for problem in problems:
+                findings.append(finding('archive-invalid', 'Archived goal proof is invalid: ' + problem,
                     'Restore the goal children or recover the complete matching archive/evidence.'))
     for section, name in [('evidence', 'delegation'), ('batch', 'quota')]:
         try:
@@ -148,8 +159,15 @@ def inspect(args, git, policy, parsed):
             # Outside lanes mode the output carries no lane metadata at all.
             selection['task'] = {k: v for k, v in selection['task'].items() if k not in goals.LANE_OUTPUT_KEYS}
     needs = continuation['decisions'][:]
+    signoff = None
     if selection['mode'] == 'awaiting-signoff':
-        needs.append('sign off the completed goal')
+        signoff = precheck(git, policy, parsed, records, acceptance['checks'])
+        needs.append(completion.ask(signoff))
+        if signoff['gaps'] or signoff['approvals']:
+            findings.append(finding('signoff-precheck', 'Goal %s awaits sign-off: %d gap(s) to close and %d approval(s) to ask for together: %s.' % (
+                signoff['goal'], len(signoff['gaps']), len(signoff['approvals']),
+                '; '.join([x['message'] for x in signoff['gaps']] + [x['message'] for x in signoff['approvals']])),
+                'Close the gaps (archive prepare builds the archive), then ask the user once for sign-off with every listed approval.', 'warning'))
     if selection['mode'] == 'all-blocked':
         needs += [reason for item in selection['blocked'] for reason in item['reasons']]
     try:
@@ -166,9 +184,49 @@ def inspect(args, git, policy, parsed):
             'closure': cl, 'state_directory': str(state.State(git).path), 'cache_directory': str(state.State(git).cache),
             'git': {'root': str(git.root), 'common_dir': str(git.common), 'branch': git.branch(),
                     'head': git.oid(), 'target': policy['integration'].get('target') or git.target(), 'dirty': git.dirty()}}
+    if signoff is not None:
+        result['signoff'] = signoff
     if lanes_data is not None:
         result['lanes'] = dict(lanes_data, policy={k: v for k, v in policy['lanes'].items()})
     return result, findings
+
+
+def precheck(git, policy, parsed, records, acceptance):
+    """What closing the awaiting-signoff goal still needs, without the archive's full text."""
+    goal = None
+    try:
+        goal = completion.target(parsed)
+        plan = completion.plan(git, policy, goal, records, acceptance)
+    except (Invalid, OSError, ValueError, KeyError, TypeError) as error:
+        return {'goal': goal['id'] if goal else None, 'path': None, 'current': False, 'goal_lines': [], 'pending_evidence': [], 'approvals': [],
+                'gaps': [{'code': 'archive-invalid', 'message': str(error), 'fix': 'Repair the roadmap or archive, then archive prepare.'}]}
+    return {k: v for k, v in plan.items() if k not in ('content', 'value')}
+
+
+def archive_command(args, git, policy, parsed):
+    ids = list(dict.fromkeys(([x['id'] for x in evidence.local_pending(git)] if args.action == 'prepare' else []) + args.pending))
+    values, findings = evidence.candidates(git, ids)
+    records = {x['id']: x for x in values}
+    if args.action == 'prepare':
+        goal = completion.target(parsed, args.goal)
+        plan = completion.plan(git, policy, goal, records, evidence.find(git, policy, pending=ids)[0]['checks'])
+        plan['written'] = False
+        if args.write and not plan['current']:
+            path = confined(policy['_base'], plan['path'])
+            path.parent.mkdir(parents=True, exist_ok=True)
+            state.atomic(path, plan['content'].encode(), raw=True)
+            plan.update(written=True, current=True, gaps=[x for x in plan['gaps'] if x['code'] != 'archive-unwritten'])
+        return plan, findings
+    goal = completion.target(parsed, args.goal)
+    done = goal['status'] == 'done'
+    value = completion.load(goal, policy, None if done else 'done')
+    if goal['children']:
+        problems = completion.validate(goal, policy, value, records, goal['children'], final=done)
+    else:
+        problems = completion.record_problems(value, records)
+    findings += [finding('archive-invalid', 'Completion record is invalid: ' + x, 'Repair it, or rerun archive prepare and fill its slots.') for x in problems]
+    return {'goal': goal['id'], 'path': goal['metadata']['Archive'][0], 'legacy': sorted(completion.legacy(value)[0]),
+            'problems': problems}, findings
 
 
 def execute(args):
@@ -197,7 +255,8 @@ def execute(args):
         if args.action == 'cleanup':
             return evidence.cleanup(git, args.commit, args.id), []
         if args.action == 'prepare':
-            return {'snapshot': evidence.prepare(git, policy, args.check, args.attempt, args.probe_inputs)}, []
+            shown = [x if args.full else evidence.compact(x) for x in evidence.prepare_many(git, policy, args.check, args.attempt, args.probe_inputs)]
+            return ({'snapshot': shown[0]} if len(shown) == 1 else {'snapshots': shown}), []
         if args.action == 'record':
             # Keep argparse's command discriminator separate from provenance.
             args.command = args.observed_command
@@ -210,6 +269,8 @@ def execute(args):
         if args.action == 'rerecord':
             return evidence.rerecord(git, policy, args), []
         return evidence.find(git, policy, args.check, args.probe_inputs, args.pending)
+    if args.command == 'archive':
+        return archive_command(args, git, policy, parsed)
     if args.command == 'gate':
         findings = []
         checker = evidence.Checker(git, policy)
@@ -264,6 +325,12 @@ def main(argv=None):
                 print('Handoff: %d/%d lines' % (handoff['lines'], handoff['budget']) + (' (over budget)' if handoff['lines'] > handoff['budget'] else ''))
             for item in output.get('pending_evidence', []):
                 print('Pending evidence: ' + item['check'] + ' ' + item['outcome'] + ' ' + item['id'] + ' (uncommitted; pass --pending to gate)')
+        elif 'approvals' in output:
+            print('Archive: ' + output['path'] + (' (written)' if output.get('written') else ' (current)' if output.get('current') else ' (not written; review, then --write)'))
+            for item in output['gaps']:
+                print('Gap: ' + item['message'] + ' Fix: ' + item['fix'])
+            for item in output['approvals']:
+                print('Ask the user: ' + item['message'])
         elif not output.get('findings'):
             print(json.dumps({k: v for k, v in output.items() if k not in ('version', 'command', 'ok', 'findings')}, indent=2))
         if output.get('diff'):

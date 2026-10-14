@@ -95,3 +95,38 @@ class EvidenceTests(RepoTest):
         self.assertEqual(self.cli('evidence', 'find')['checks'][0]['status'], 'unknown')
         self.write('input.data', 'bad output\n')
         self.cli('evidence', 'prepare', 'validator:unit', '--probe-inputs', code=2)
+
+
+class SnapshotAndReviewTests(RepoTest):
+    def test_prepare_is_compact_unless_full(self):
+        compact = self.cli('evidence', 'prepare', 'validator:unit')
+        self.assertNotIn('manifest', compact['snapshot'])
+        self.assertGreater(compact['snapshot']['files'], 0)
+        full = self.cli('evidence', 'prepare', 'validator:unit', '--full')['snapshot']
+        self.assertEqual(len(full['manifest']), compact['snapshot']['files'])
+        both = self.cli('evidence', 'prepare', 'validator:unit', 'observation:review')
+        self.assertEqual([x['check'] for x in both['snapshots']], ['validator:unit', 'observation:review'])
+        self.assertNotIn('snapshot', both)
+
+    def test_inline_review_text_becomes_a_dated_note(self):
+        before = self.prepare(check='observation:review')
+        args = ('evidence', 'record', 'observation:review', '--snapshot', before['id'], '--outcome', 'PASS',
+                '--reviewer', 'user', '--reviewer-kind', 'human')
+        missing = self.cli(*args, '--review-note', 'docs/evidence/none.md', '--log', 'regenerate:the review', code=2)
+        self.assertIn('--review-text', missing['findings'][0]['message'])
+        self.write('docs/evidence/undated.md', 'Looks right.\n')
+        undated = self.cli(*args, '--review-note', 'docs/evidence/undated.md', '--log', 'docs/evidence/undated.md', code=2)
+        self.assertIn('has no YYYY-MM-DD date', undated['findings'][0]['message'])
+        both = self.cli(*args, '--review-note', 'docs/evidence/undated.md', '--review-text', 'Fine.', code=2)
+        self.assertIn('exactly one of --review-note PATH', both['findings'][0]['message'])
+        output = self.cli(*args, '--review-text', 'Played the whole flow; accepted.', '--write-proposed')
+        note = output['record']['review_note']
+        self.assertRegex(note, r'^docs/evidence/\d{4}-\d{2}-\d{2}-review-review-[0-9a-f]{8}\.md$')
+        self.assertEqual(output['record']['log'], note)
+        self.assertIn(note, output['written'])
+        text = (self.root / note).read_text()
+        self.assertRegex(text, r'Date: \d{4}-\d{2}-\d{2}\nReviewer: user \(human\)\n\nPlayed the whole flow; accepted.\n')
+        self.carry(output)
+        self.assertEqual(self.cli('evidence', 'find', 'observation:review')['checks'][0]['status'], 'fresh')
+        self.cli('evidence', 'record', 'validator:unit', '--snapshot', self.prepare()['id'], '--outcome', 'PASS',
+                 '--command', 'true', '--exit', '0', '--log', 'regenerate:unit', '--review-text', 'no reviewer', code=2)

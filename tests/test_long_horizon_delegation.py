@@ -78,3 +78,71 @@ class DelegationTests(RepoTest):
         output = self.cli('evidence', 'record', 'validator:unit', '--snapshot', before['id'], '--outcome', 'PASS',
                           '--delegation', result.split('#')[0], '--result', result, '--log', 'regenerate:registered unit validator via judge run')
         self.assertEqual(output['record']['claim'], 'checked')
+
+
+class RecordingAfterOwnOutputTests(RepoTest):
+    """Judge runs first, then each result is recorded: the 0.6.1 flow that broke on its own output."""
+
+    def setUp(self):
+        super().setUp()
+        self.write('.agents/delegation.md', '## Validators\nunit: echo unit\nlint: echo lint\n## Parallel limit\n1\n')
+        overlay = OVERLAY.replace('"observation:review"', '"validator:lint": {"domain": "lint-v1"}, "observation:review"')
+        self.write('.agents/long-horizon.md', overlay + 'delegation-script: ' + json.dumps(str(CHECKER)) + '\n')
+        self.commit('Two registered validators')
+
+    def judge(self, validator):
+        result = subprocess.run([sys.executable, str(CHECKER), '--root', str(self.root), 'run', validator, '--judge'],
+                                capture_output=True, text=True, env=self.env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout.split()[0]
+
+    def record(self, check, snapshot, delegation, result, code=0, extra=()):
+        return self.cli('evidence', 'record', check, '--snapshot', snapshot, '--outcome', 'PASS', '--delegation', delegation,
+                        '--result', result, '--log', 'regenerate:registered validator via the declared checker', *extra, code=code)
+
+    def test_run_number_and_listed_candidates(self):
+        unit = self.judge('unit')
+        delegation = unit.split('#')[0]
+        snapshot = self.cli('evidence', 'prepare', 'validator:unit')['snapshot']['id']
+        failed = self.record('validator:unit', snapshot, delegation, '2', code=2)
+        message = failed['findings'][0]['message']
+        self.assertIn('Registered result ' + delegation + '#2 is missing', message)
+        self.assertIn(unit + ' (unit, PASS, tree ', message)
+        self.assertEqual(self.record('validator:unit', snapshot, delegation, '1')['record']['result'], unit)
+
+    def test_second_record_after_written_evidence_and_doc_edit(self):
+        unit, lint = self.judge('unit'), self.judge('lint')
+        snapshots = self.cli('evidence', 'prepare', 'validator:unit', 'validator:lint', '--attempt', 'batch')['snapshots']
+        self.assertEqual([x['check'] for x in snapshots], ['validator:unit', 'validator:lint'])
+        self.assertEqual(len({x['tree'] for x in snapshots}), 1)
+        self.assertEqual({x['attempt'] for x in snapshots}, {'batch:validator:unit', 'batch:validator:lint'})
+        trailers = self.base / 'trailers.txt'
+        first = self.record('validator:unit', snapshots[0]['id'], unit.split('#')[0], unit, extra=('--write-proposed', '--trailers-file', str(trailers)))
+        self.assertTrue(first['written'])
+        # The written detail file and a review-doc edit both change the checker tree, not the checks' scope.
+        self.write('docs/evidence/checklist.md', 'Reviewed 2026-10-13.\n')
+        tree = subprocess.run([sys.executable, str(CHECKER), '--root', str(self.root), 'tree'], capture_output=True, text=True, env=self.env).stdout.strip()
+        self.assertNotEqual(tree, snapshots[1]['tree'])
+        second = self.record('validator:lint', snapshots[1]['id'], lint.split('#')[0], lint, extra=('--write-proposed', '--trailers-file', str(trailers)))
+        self.assertEqual(second['record']['tree'], snapshots[1]['tree'])
+        self.assertEqual(len(trailers.read_text().splitlines()), 2)
+        # An in-scope change still blocks PASS, and a snapshot from after the run names the fix.
+        late = self.cli('evidence', 'prepare', 'validator:unit')['snapshot']['id']
+        failed = self.record('validator:unit', late, unit.split('#')[0], unit, code=2)
+        self.assertIn('Prepare every check of a run before writing records', failed['findings'][0]['message'])
+        snapshot = self.cli('evidence', 'prepare', 'validator:unit')['snapshot']['id']
+        fresh = self.judge('unit')
+        self.write('tiny.py', 'def tiny():\n    return 2\n')
+        self.record('validator:unit', snapshot, fresh.split('#')[0], fresh, code=1)
+
+    def test_rerecord_checked_result_after_criteria_change(self):
+        unit = self.judge('unit')
+        snapshot = self.cli('evidence', 'prepare', 'validator:unit')['snapshot']['id']
+        output = self.record('validator:unit', snapshot, unit.split('#')[0], unit)
+        self.carry(output)
+        self.write('docs/goals.md', (self.root / 'docs/goals.md').read_text().replace(
+            'Done when: validator:unit\n- [ ] [1.1]', 'Done when: validator:unit on the whole module\n- [ ] [1.1]'))
+        self.assertEqual(self.cli('evidence', 'find', 'validator:unit')['checks'][0]['status'], 'stale')
+        carried = self.cli('evidence', 'rerecord', output['record']['id'])
+        self.assertEqual(carried['record']['tree'], output['record']['tree'])
+        self.assertEqual(self.cli('evidence', 'find', 'validator:unit', '--pending', carried['record']['id'])['checks'][0]['status'], 'fresh')

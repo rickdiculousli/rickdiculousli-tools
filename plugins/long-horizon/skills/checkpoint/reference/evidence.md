@@ -12,6 +12,9 @@ Status markers, sign-off dates and task refinement do not invalidate it.
 
 Prepare captures before-scope/inputs/policy/domain and attempt; it runs no check.
 Repeated attempt with unchanged contents reuses it; changed attempt contents fail.
+`evidence prepare A B ...` snapshots several checks at one checker tree (an
+`--attempt` becomes `<attempt>:<check>` for each). Output omits the per-file scope
+manifest, reporting its `files` count; `--full` includes it.
 Record captures after-state and requires one provenance: observed command+exit,
 registered delegation+result, or dated reviewer+durable review-note for observation.
 Reviewed records also need `--reviewer-kind human|agent`, stored as `reviewer_kind`.
@@ -19,7 +22,12 @@ An observation check accepts only human reviewers unless its definition sets
 `"reviewer": "any"`. Milestone ownership decides who may mark work done, not who
 may review it.
 PASS requires stable inputs and exit 0; delegated PASS also requires registered
-validator, checker tree, stable true, ok true, exit 0 and no timeout. Arbitrary
+validator, stable true, ok true, exit 0 and no timeout, and a result tree equal to
+the snapshot's checker tree. Because scope is rechecked at record, edits outside
+the check's scope after prepare (the written detail files, goals, handoff, review
+notes) do not invalidate the result; a snapshot prepared after the run does, so
+prepare every check of a run before writing records. `--result` accepts the full
+result ID or the delegation's run number. Arbitrary
 checker exec is observed only. FAIL/SKIP/UNSTABLE remain their actual outcomes.
 A domain-limited skip only satisfies its explicit allowed domain; never call it PASS.
 
@@ -43,7 +51,10 @@ writes a file only with `--write-proposed`, and then only the record's own detai
 path; it refuses to overwrite different bytes. It never stages, commits or amends. Log must be a checkout file
 or a specific persistent http(s)/regenerate route, never scratch-only state.
 Copied logs can use their own content digest name; the evidence ID must not hash
-its own ID or a path containing it. Reviewer note is a durable dated record;
+its own ID or a path containing it. Reviewer note is a durable dated record: a
+file inside the checkout containing the review date as YYYY-MM-DD, or
+`--review-text TEXT`, which proposes `<evidence>/<date>-review-<name>-<hash>.md`
+(date, reviewer and kind, then the text) as review note and, without `--log`, log;
 the skill verifies the actual review and records which kind of reviewer signed.
 A recorded observation is not authenticated by the CLI. Sign-off/exception text cannot authenticate approval either.
 
@@ -68,8 +79,8 @@ python3 "$LONG_HORIZON_SCRIPT" evidence rerecord "$EVIDENCE" --root "$PROJECT" -
 
 It prepares a fresh snapshot and carries the same observation onto the current
 criteria only if scope, inputs, domain, log, check definition and validator policy
-are unchanged; a delegated record also needs the same checker tree and its still
-registered result, a reviewed one the same note. Otherwise rerun the check. A
+are unchanged; a delegated record also needs its still registered, unchanged
+result (at the tree it ran on), a reviewed one the same note. Otherwise rerun the check. A
 superseded pending record loses its XDG copy, its untracked unchanged detail file
 and its line in the trailers file; committed history is never touched. Update
 any `Evidence:` citation of the old ID to the new one.

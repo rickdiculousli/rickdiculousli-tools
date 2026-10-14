@@ -19,7 +19,11 @@ Resolve `../resume/scripts/lh.py` relative to this skill directory or an explici
    runs honestly. A current delegation claim needs the exact-tree registered
    stable result; convert it before changing goals/handoff. To run a registered
    validator yourself use delegation's `check.py run <name> --judge`; it records a
-   `judge-*` delegation that closes with the run. Reviewed observations record
+   `judge-*` delegation that closes with the run. When several validators ran
+   before you record, prepare them together (`evidence prepare A B`) before writing
+   any record: a delegated record needs the result's tree to equal its snapshot's,
+   and later edits outside the check's scope (written evidence, goals, review
+   notes) do not matter. Reviewed observations record
    `--reviewer-kind`; only a check with `"reviewer": "any"` accepts an agent.
    Subsequent docs edits retain historical scoped provenance, not new current-tree
    checked results.
@@ -33,9 +37,19 @@ Resolve `../resume/scripts/lh.py` relative to this skill directory or an explici
    ownership; obtain actual approval for reserved order/scope/criteria changes.
 4. Update only owned goals/handoff/findings. Before writing the handoff read its
    `lines`/`budget` from status and trim first if it is near or over. A tiny batch
-   needs one continuation line. On last milestone build a completion archive with every ordered milestone,
-   criteria, evidence/exceptions, limitations, refuted ideas and follow-ups; wait
-   for actual required user sign-off. Rejection reopens the rejected work. Shelve,
+   needs one continuation line. Status warns `goal-criteria-missing` and
+   `milestone-proof-missing` as soon as a goal would stall at sign-off; raise them
+   with the user at the next milestone boundary, not at the end. When the last
+   milestone closes, status enters awaiting-signoff and its `signoff` object lists
+   every gap and every approval closing needs. Run `archive prepare --write` to build
+   the archive (ordered milestones, criteria, evidence/exceptions) and fill its
+   `<fill: ...>` slots for outcome, limitations, refuted ideas and follow-ups from
+   the handoff and findings. Then ask the user once, in one message: sign-off, plus
+   each listed approval with concrete wording. For `goal-criteria`, propose the
+   goal's `Done when:` and `Checks:` lines and the `Policy-Approval:` line; for
+   `legacy-acceptance`, name each milestone, why its proof is legacy and what it
+   cites. Never fill sign-off or legacy approval without that actual answer.
+   Rejection reopens the rejected work. Shelve,
    drop, unshelve and wind-down follow setup's preserved-record flow.
 5. Gate against HEAD before committing, or explicit pre-batch base after commit.
    Pass each pending ID explicitly. Run lint; warning-only findings can proceed.
@@ -88,6 +102,43 @@ python3 "$LONG_HORIZON_SCRIPT" evidence prepare validator:unit --root "$PROJECT"
 # Run the registered validator via delegation (a worker's run, or the judge's own
 # `check.py run unit --judge`, whose judge-* ID is the delegation); do not restate its command.
 python3 "$LONG_HORIZON_SCRIPT" evidence record validator:unit --root "$PROJECT" --snapshot "$SNAPSHOT" --outcome PASS --delegation "$DELEGATION" --result "$RESULT" --log "regenerate:registered unit validator via the declared checker" --json
+```
+
+`--result` takes the full `judge-…#1` ID or just its run number (`1`); an unknown
+one lists the delegation's results.
+
+Human review (an `observation:` check). Put the review in a dated note file, or
+pass the reviewer's words with `--review-text` and the CLI writes the dated note
+under the evidence directory as both review note and log:
+
+```sh
+python3 "$LONG_HORIZON_SCRIPT" evidence prepare observation:review --root "$PROJECT" --json
+# The user actually reviews; record what they said and who they are.
+python3 "$LONG_HORIZON_SCRIPT" evidence record observation:review --root "$PROJECT" --snapshot "$SNAPSHOT" --outcome PASS --reviewer "$REVIEWER" --reviewer-kind human --review-text "$THEIR_VERDICT" --trailers-file "$TRAILERS" --write-proposed --json
+# Or, for an existing note that states the review date (YYYY-MM-DD):
+#   ... --review-note docs/evidence/2026-10-13-review.md --log docs/evidence/2026-10-13-review.md
+```
+
+After an approved criteria change (rewording, added Checks, or a goal's new
+criteria at sign-off), carry each affected record onto the new criteria instead of
+rerunning it, then cite the new ID:
+
+```sh
+python3 "$LONG_HORIZON_SCRIPT" evidence find --root "$PROJECT" --json   # stale checks name the old record
+python3 "$LONG_HORIZON_SCRIPT" evidence rerecord "$OLD_EVIDENCE" --root "$PROJECT" --trailers-file "$TRAILERS" --write-proposed --json
+python3 "$LONG_HORIZON_SCRIPT" gate --root "$PROJECT" --pending "$NEW_EVIDENCE"
+```
+
+Closing a goal:
+
+```sh
+python3 "$LONG_HORIZON_SCRIPT" status --root "$PROJECT" --json        # signoff: gaps and approvals
+python3 "$LONG_HORIZON_SCRIPT" archive prepare --root "$PROJECT" --write --json
+# Fill the agent slots; ask the user once (sign-off + listed approvals); apply their answer:
+# Signed-off, Archive and any approved goal criteria lines in goals, the archive's signoff and legacy_acceptance.
+python3 "$LONG_HORIZON_SCRIPT" archive prepare --root "$PROJECT" --write --json   # refresh; keeps filled slots
+python3 "$LONG_HORIZON_SCRIPT" archive check --root "$PROJECT" --pending "$EVIDENCE"
+python3 "$LONG_HORIZON_SCRIPT" gate --root "$PROJECT" --pending "$EVIDENCE"
 ```
 
 Do not use `check.py exec` as a forged registered validator. A missing ledger can

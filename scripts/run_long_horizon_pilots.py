@@ -131,7 +131,7 @@ def inspect(root, scenario, result, env):
             snapshot = json.loads(prepared.stdout)['snapshot']['id']
             rejected = run([sys.executable, str(SCRIPT), 'evidence', 'record', 'validator:unit', '--root', str(root), '--snapshot', snapshot,
                             '--outcome', 'PASS', '--delegation', 'd1', '--result', 'd1#1', '--log', 'regenerate:registered unit validator', '--json'], root, env)
-            checks['new_checked_claim_refused_for_missing_result'] = rejected.returncode == 2 and 'Registered result is missing/ambiguous' in rejected.stdout
+            checks['new_checked_claim_refused_for_missing_result'] = rejected.returncode == 2 and 'Registered result d1#1 is missing' in rejected.stdout
         else:
             checks['new_checked_claim_refused_for_missing_result'] = False
     if scenario == 'closure':
