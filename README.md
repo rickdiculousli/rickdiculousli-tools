@@ -98,7 +98,7 @@ claude plugin marketplace add "$PWD"
 claude plugin install visual-audit@rickdiculousli-tools
 claude plugin install hello-world@rickdiculousli-tools
 claude plugin install repository-info@rickdiculousli-tools
-claude plugin install delegation@rickdiculousli-tools
+claude plugin install quota@rickdiculousli-tools
 claude plugin install quota@rickdiculousli-tools
 claude plugin install yt-transcript@rickdiculousli-tools
 claude plugin list --available --json
@@ -115,7 +115,7 @@ codex plugin marketplace add "$PWD"
 codex plugin add visual-audit@rickdiculousli-tools
 codex plugin add hello-world@rickdiculousli-tools
 codex plugin add repository-info@rickdiculousli-tools
-codex plugin add delegation@rickdiculousli-tools
+codex plugin add quota@rickdiculousli-tools
 codex plugin add quota@rickdiculousli-tools
 codex plugin add yt-transcript@rickdiculousli-tools
 codex plugin list --marketplace rickdiculousli-tools --available --json
@@ -131,7 +131,7 @@ In a new Codex session, ask it to use the `audit-report` skill from
 claude plugin uninstall visual-audit@rickdiculousli-tools
 claude plugin uninstall hello-world@rickdiculousli-tools
 claude plugin uninstall repository-info@rickdiculousli-tools
-claude plugin uninstall delegation@rickdiculousli-tools
+claude plugin uninstall quota@rickdiculousli-tools
 claude plugin uninstall quota@rickdiculousli-tools
 claude plugin uninstall yt-transcript@rickdiculousli-tools
 claude plugin marketplace remove rickdiculousli-tools
@@ -139,7 +139,7 @@ claude plugin marketplace remove rickdiculousli-tools
 codex plugin remove visual-audit@rickdiculousli-tools
 codex plugin remove hello-world@rickdiculousli-tools
 codex plugin remove repository-info@rickdiculousli-tools
-codex plugin remove delegation@rickdiculousli-tools
+codex plugin remove quota@rickdiculousli-tools
 codex plugin remove quota@rickdiculousli-tools
 codex plugin remove yt-transcript@rickdiculousli-tools
 codex plugin marketplace remove rickdiculousli-tools
@@ -191,12 +191,12 @@ codex plugin list --marketplace rickdiculousli-tools --json
 
 Compare the installed versions with `plugins/<name>/plugin.json` and refresh
 outdated installed plugins. Keep the user's existing plugin selection and enabled
-state. For example, to update delegation:
+state. For example, to update quota:
 
 ```sh
 claude plugin marketplace update rickdiculousli-tools
-claude plugin update delegation@rickdiculousli-tools --scope user
-codex plugin add delegation@rickdiculousli-tools --json
+claude plugin update quota@rickdiculousli-tools --scope user
+codex plugin add quota@rickdiculousli-tools --json
 ```
 
 Claude's `update` refreshes an existing installation; Codex's `add` also refreshes
@@ -215,7 +215,7 @@ Use the repository's existing comparison helpers with the reported path:
 
 ```sh
 # Replace these values with the plugin name and the native reported cache path.
-PLUGIN_NAME=delegation
+PLUGIN_NAME=quota
 INSTALLED_PATH='/absolute/path/reported/by/the/host'
 PYTHONDONTWRITEBYTECODE=1 python3 - "$PLUGIN_NAME" "$INSTALLED_PATH" <<'PY'
 import sys
@@ -268,7 +268,7 @@ New plugins are included automatically in lifecycle verification. Future MCP
 servers, hooks, or host-specific components need explicit adapter support and
 host verification.
 
-A plugin with a `tiers.json` (currently only `delegation`) also gets generated
+A plugin with a `tiers.json` (none of the shipped plugins today; the retired `delegation` was one) also gets generated
 subagent tiers: one Claude Code agent `agents/<tier>.md` per tier marked
 `"subagent": true`, carrying its `model` and `effort`, and a host table at the
 path named by `reference`, which tells each host how to start a tier. Codex
