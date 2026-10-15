@@ -46,20 +46,6 @@
       "source": "./plugins/visual-audit"
     },
     {
-      "name": "delegation",
-      "version": "0.11.2",
-      "description": "Pods of judge, execute and routine agents: route bulk work to cheaper tiers and keep evidence by tree hash.",
-      "author": {
-        "name": "Rick Li"
-      },
-      "keywords": [
-        "delegation",
-        "subagents",
-        "evidence"
-      ],
-      "source": "./plugins/delegation"
-    },
-    {
       "name": "quota",
       "version": "0.1.2",
       "description": "Read Claude and Codex subscription usage: windows, resets, weekly pace and projected unused quota.",
@@ -87,21 +73,6 @@
         "whisper"
       ],
       "source": "./plugins/yt-transcript"
-    },
-    {
-      "name": "long-horizon",
-      "version": "0.7.0",
-      "description": "Bounded progress across sessions with shared setup, resume, checkpoint and durable scoped acceptance.",
-      "author": {
-        "name": "Rick Li"
-      },
-      "keywords": [
-        "goals",
-        "continuation",
-        "evidence",
-        "checkpoint"
-      ],
-      "source": "./plugins/long-horizon"
     }
   ]
 }

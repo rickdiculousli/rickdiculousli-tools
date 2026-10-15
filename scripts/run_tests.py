@@ -8,7 +8,7 @@ split into chunks of at most --chunk tests from one module; each chunk runs as
 would. No test uses setUpClass or setUpModule, which chunking would repeat.
 
     python3 scripts/run_tests.py                    # whole suite
-    python3 scripts/run_tests.py 'test_delegation_*.py' -j 4 --chunk 8
+    python3 scripts/run_tests.py 'test_visual_audit_*.py' -j 4 --chunk 8
 """
 
 import argparse

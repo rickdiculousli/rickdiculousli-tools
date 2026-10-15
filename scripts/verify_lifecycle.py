@@ -107,58 +107,8 @@ def plugin_id(item: dict) -> str:
 
 
 def verify_installed_state(root, installed, name, profile, env):
-    """Run installed state scripts in a disposable repo with external XDG roots."""
-    if name not in {'delegation', 'long-horizon'}:
-        return None
-    work = profile / ('state-fixture-' + name)
-    work.mkdir()
-    fixture_env = dict(env, XDG_STATE_HOME=str(profile / 'xdg-state'), XDG_CACHE_HOME=str(profile / 'xdg-cache'))
-    def run(*argv):
-        return run_command(list(argv), fixture_env, work).stdout
-    run('git', 'init', '-b', 'main')
-    run('git', 'config', 'user.name', 'Disposable Lifecycle')
-    run('git', 'config', 'user.email', 'lifecycle@example.invalid')
-    run('git', 'config', 'commit.gpgsign', 'false')
-    (work / 'a.txt').write_text('fixture\n')
-    (work / '.agents').mkdir()
-    if name == 'delegation':
-        script = installed / 'skills/delegation/scripts/check.py'
-        (work / '.agents/delegation.md').write_text('## Validators\nok [lock=mem, timeout=5]: echo lifecycle\n## Locks\nmem: wait=2\n')
-        run('git', 'add', '.')
-        run('git', 'commit', '-m', 'Fixture')
-        paths = json.loads(run(sys.executable, str(script), 'paths', '--json'))
-        require(not Path(paths['worktree_state_directory']).exists(), 'paths inspection created payload')
-        brief = Path(paths['brief_directory']) / 'lifecycle.md'
-        brief.parent.mkdir(parents=True)
-        brief.write_text('Run the installed validator.\n')
-        before = run(sys.executable, str(script), 'tree').strip()
-        run(sys.executable, str(script), 'open', '--delegation', 'lifecycle', '--tier', 'routine', '--brief', str(brief))
-        output = run(sys.executable, str(script), 'run', 'ok', '--delegation', 'lifecycle')
-        require('PASS' in output and 'unstable' not in output, 'Installed validator did not produce stable PASS')
-        run(sys.executable, str(script), 'close', '--delegation', 'lifecycle', '--outcome', 'done')
-        require(run(sys.executable, str(script), 'tree').strip() == before, 'Bookkeeping changed acceptance tree')
-        require(not (work / '.delegation').exists(), 'Installed checker created legacy payload')
-        result = {'paths': paths, 'stable_validator': True}
-    else:
-        script = installed / 'skills/resume/scripts/lh.py'
-        fixture = root / 'tests/fixtures/long_horizon/pilots/configured'
-        for source in fixture.rglob('*'):
-            if source.is_file():
-                target = work / source.relative_to(fixture)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(source, target)
-        run('git', 'add', '.')
-        run('git', 'commit', '-m', 'Fixture')
-        output = json.loads(run(sys.executable, str(script), 'evidence', 'prepare', 'validator:unit', '--json'))
-        require(bool(output.get('snapshot')), 'Installed long-horizon did not prepare evidence')
-        draft = json.loads(run(sys.executable, str(script), 'state', 'draft', '--id', 'lifecycle', '--json'))
-        require(Path(draft['draft_directory']).is_relative_to(profile / 'xdg-cache'), 'Installed draft escaped isolated XDG cache')
-        require((Path(draft['draft_directory']) / 'identity.json').is_file(), 'Installed draft lacks identity')
-        result = {'prepared_snapshot': output['snapshot']['id'], 'draft': draft}
-    require(not any(installed.rglob('state.lock')), 'Installed plugin contains runtime lock')
-    result['isolated_state_root'] = fixture_env['XDG_STATE_HOME']
-    result['isolated_cache_root'] = fixture_env['XDG_CACHE_HOME']
-    return result
+    """No shipped plugin has installed-state scripts: delegation and long-horizon, which did, are retired under retired/."""
+    return None
 
 
 def verify_host(host: str, root: Path, profile: Path) -> dict:

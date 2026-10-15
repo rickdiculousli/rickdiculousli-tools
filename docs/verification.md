@@ -1,5 +1,9 @@
 # Native lifecycle verification
 
+2026-10-15: `delegation` and `long-horizon` are retired (moved to `retired/`, removed from the
+marketplace; buildermesh replaces them). The rows and hashes below that name them are the record of
+the last verification they were part of, not a current claim; the marketplace now ships five plugins.
+
 Baseline verified on October 10, 2026 (report timestamp 2026-10-11T01:27:25Z, UTC),
 using the real locally installed CLIs, with a fresh temporary configuration
 profile for each host. Evidence labels: `checked` (observed running), `cited`

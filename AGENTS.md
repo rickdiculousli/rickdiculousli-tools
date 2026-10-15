@@ -24,8 +24,7 @@
   `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/<plugin>/`,
   regenerable caches and temporary hashing/build files under
   `${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/<plugin>/`.
-  For delegation and long-horizon on Windows, honor explicit absolute XDG
-  overrides; otherwise use `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/state/`
+  On Windows, honor explicit absolute XDG overrides; otherwise use `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/state/`
   and `%LOCALAPPDATA%/rickdiculousli-tools/<plugin>/cache/`. If LOCALAPPDATA is
   missing, empty or relative, resolve `Path.home() / "AppData" / "Local"`.
   Treat empty or relative XDG values as unset and use the platform defaults.
@@ -54,8 +53,9 @@
   Unreferenced snapshots/drafts expire after 30 days. Cleanup never removes
   durable Git evidence, live locks or active resource holders/waiters. Plugin-wide
   histories/caches need their own documented retention rules, not worktree expiry.
-  Plugins support only the current layout: each plugin's `migrate` skill lints
-  a consuming repository against it and tags the overlay's `## Version`; see
+  Plugins support only the current layout: a plugin that keeps an overlay in a
+  consuming repository ships a `migrate` skill that lints the repository against it
+  and tags the overlay's `## Version`; see
   [the migrate skills design](docs/superpowers/specs/2026-10-12-migrate-skills-design.md).
 - After packaging changes run:
 

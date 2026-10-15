@@ -13,8 +13,6 @@ the current user. Author and marketplace names are shared package identity.
 | --- | --- |
 | `hello-world`, `repository-info` | Claude Code or Codex with plugin support |
 | `visual-audit` | Supported host and Python 3.10+ |
-| `long-horizon` | Supported host, Git, Python 3.10+; optional declared delegation/quota scripts |
-| `delegation` | Supported host with subagents, Git, Python 3.10+, and repository-specific setup |
 | `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
 
@@ -34,11 +32,9 @@ See [verification evidence and scope](docs/verification.md).
 | --- | --- |
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
-| `long-horizon` | Shared setup/resume/checkpoint/migrate skills and deterministic scoped acceptance across sessions |
 | `repository-info` | Informational stub describing this layout |
 | `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
-| `delegation` | `setup` skill prepares a repo and `migrate` brings it up to the installed version; `delegation` skill: the main session (judge) routes bulk work to `execute` and `routine` tier subagents and records validator evidence by git tree hash. |
 
 ## Visual audit reports
 
@@ -59,206 +55,6 @@ To render a report by hand:
 ```sh
 python3 plugins/visual-audit/skills/audit-report/scripts/render_report.py report.json -o report.html
 ```
-
-## Delegation
-
-The `delegation` skill makes the main session the judge: it routes bulk work to
-`execute` and `routine` tier subagents and records validator results against the
-git tree hash. Claude Code gets generated `delegation:execute` and
-`delegation:routine` agents; Codex has no plugin agent definitions, so the skill
-spawns its default subagent with the tier's model and effort.
-
-Claude tiers use the `opus`, `sonnet`, and `haiku` family aliases, so the host
-selects the corresponding model for your account/provider; see
-[Claude model configuration](https://code.claude.com/docs/en/model-config).
-Codex model preferences are in `plugins/delegation/tiers.json`; unavailable model
-overrides fall back to the host's default subagent. A host without subagent tools
-can use the other plugins; delegation requires that capability. Repository
-validator commands must fit the host's shell (`/bin/sh` on POSIX, `cmd.exe` on
-Windows), or invoke the intended shell explicitly. The overlay's `requires`
-attribute can limit validators to specific platforms.
-
-To set a repository up, open a session there and run `/delegation:setup` in Claude Code
-(or ask Codex to use the `setup` skill from `delegation`). It surveys the repo, drafts the
-overlay and pointer line for your approval, writes them, and runs every validator once
-through the ledger. To do it by hand, add this line to that repository's `AGENTS.md`:
-
-```text
-Delegation: follow the delegation skill; this repo's overlay is .agents/delegation.md.
-```
-
-The overlay at `.agents/delegation.md` holds that repository's validators (with
-optional `cheap`, `needs-human`, `timeout`, `lock`, `requires` and `paths` attributes), locks that cap heavy
-commands across every worktree (`check.py exec --lock`, `check.py locks`), tier
-hints, findings sink and parallel limit. Its state, including each validator run's full
-output, lives under `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/delegation/`,
-scoped by canonical repository and worktree identities. Scratch indexes/objects use
-`${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/delegation/`. Check the overlay and the
-evidence ledger with the bundled script. These paths exist only in this
-checkout; in a consuming repository the skill resolves the script as
-`<skill-dir>/scripts/check.py`:
-
-```sh
-python3 plugins/delegation/skills/delegation/scripts/check.py lint [--json]
-python3 plugins/delegation/skills/delegation/scripts/check.py tree
-python3 plugins/delegation/skills/delegation/scripts/check.py pending
-python3 plugins/delegation/skills/delegation/scripts/check.py query --help
-python3 plugins/delegation/skills/delegation/scripts/check.py brief --help
-python3 plugins/delegation/skills/delegation/scripts/check.py locks
-python3 plugins/delegation/skills/delegation/scripts/check.py exec --help
-python3 plugins/delegation/skills/delegation/scripts/check.py kinds
-python3 plugins/delegation/skills/delegation/scripts/check.py patterns
-python3 plugins/delegation/skills/delegation/scripts/check.py suggest
-python3 plugins/delegation/skills/delegation/scripts/check.py run --help
-```
-
-Since 0.9.0 the judge runs a registered validator itself with
-`check.py run <name> --judge`: no brief, and the `judge-*` delegation that records
-the result opens and closes with the run, so nothing is left pending. A validator's
-`paths=<glob>|<glob>` attribute says which changes call for it; `check.py suggest
-[--base <commit>]` maps changed and untracked paths to those validators.
-
-Since 0.8.0 the judge labels each delegation with a work kind
-(`open --kind <label>`, or `--kind <label> --new-kind "<description>"` to register
-one; an unknown label is refused with the closest existing ones). Labels and a
-pattern log are shared by every worktree and session of a repository.
-`check.py patterns` lists kinds used three or more times that have no role, plus
-unlabeled briefs grouped by shape. The judge then adds a role or repository
-script, or proposes it where you asked to approve; `kinds merge`, `kinds rename` and
-`kinds mark <kind> proposed|approved|declined` keep labels and decisions tidy.
-By default the judge adds such roles and scripts itself and tells you; an
-overlay `## Authoring` section with `roles: ask` or `scripts: ask` makes it ask
-first (setup asks which you want). Briefs also name a per-delegation scratch directory
-outside the worktree for throwaway scripts. Pattern lines are kept 180 days, then
-folded into per-kind counts; untouched scratch files are kept 30 days. See
-[the patterns reference](plugins/delegation/skills/delegation/reference/patterns.md).
-
-Optional overlay sections add script proposals (`name: command; what it
-replaces`), host-side never-write restrictions, and reusable roles:
-
-Delegation 0.7.2 uses `check.py paths --json` (or the text view) to resolve
-`brief_directory`, `context_directory`, `log_directory`, the repository resource
-locks and permanent root mutex. Quote returned paths. Context references in
-briefs and `Extra inputs` use `state:context/<relative-path>`; roles name tracked
-repository-relative sources. The checker
-rejects traversal and symlink escapes. Recorded generated paths are state-relative
-with `location: state`; caller brief paths may remain absolute.
-
-Delegation 0.10.0 tags each overlay with `## Version`. `check.py lint` compares
-it with the installed plugin and warns `version-mismatch` when the major.minor is
-older or the tag is missing; the delegation skill then offers a migration. Lint
-knows only the current contract: it reports overlay problems plus `missing`,
-`unexpected` and `outdated` repository paths (`--json` for all of it), such as a
-stray `.delegation/` directory, files under `.agents/delegation/` the overlay
-never names, or a role runbook given as `state:context/...`. Run
-`/delegation:migrate` (or ask Codex for the `migrate` skill from `delegation`) to
-review those findings, approve rewrites and deletions, re-lint until clean and
-tag the overlay. Checkout-local `.delegation/` state and `state migrate` are gone.
-
-Delegation 0.11.0 adds the pieces a parallel-lane run needs. `## Locks` may
-name a `provider: "<command>"` whose `acquire`/`renew`/`release` subcommands
-hand out leases instead of native slots (the contract is in the overlay
-reference); `check.py suggest --with-dependents` adds the validators of units
-that depend on a changed one, from a `## Deps` map or command; `## Rules`
-lines are injected into every brief; and `check.py open --lane <name>` tags
-delegations for the audit and `patterns`. Overlays without these sections
-behave as before.
-
-Delegation 0.11.1 makes those pieces purely opt-in in the text agents read: the
-delegation and setup skills carry one conditional pointer to the overlay
-reference's "Parallel runs" section and otherwise never mention leases, `## Deps`,
-`## Rules` or lane tags, and setup offers them only when asked. A golden test pins
-every lanes-free command output to the 0.10.1 bytes.
-
-Delegation 0.11.2 changes only text: the composition notes say long-horizon
-0.7.0 matches a registered result to the tree its evidence snapshot was prepared
-at, so edits outside the check's scope after prepare no longer block recording.
-`check.py` and its tree hash are unchanged, so overlays tagged 0.11 need no migration.
-
-`check.py state gc` previews local collection and `check.py state gc --apply`
-applies it, even outside a checkout. `--if-due` limits applied sweeps to once per
-168 hours; normal writes do this automatically. Confirmed deleted, unregistered
-worktrees get seven days of recovery before removal. Existing unfinished work,
-ledger-referenced bytes, declared role inputs, live locks and uncertain processes
-are retained. Unreferenced briefs/context expire after 30 days. Hash scratch is
-removed on exit; a weekly sweep removes interrupted attempts only when the owner
-is confirmed gone. No background service runs. Durable knowledge and acceptance stay in tracked documents.
-Both plugins honor explicit absolute XDG state/cache overrides on every platform.
-Without overrides, Windows uses `%LOCALAPPDATA%\rickdiculousli-tools\<plugin>\state\`
-and `%LOCALAPPDATA%\rickdiculousli-tools\<plugin>\cache\`; missing/invalid LOCALAPPDATA
-uses the Python-resolved home `AppData\Local` directory. POSIX retains the home
-`.local/state` and `.cache` defaults. Empty/relative XDG values select these
-platform defaults. Unwritable roots
-fail with a diagnostic and never switch lock domains. Workspace sandboxes must
-allow both configured external XDG roots; grant those paths through the host’s
-permission configuration rather than changing roots for individual commands.
-
-```text
-## Roles
-capture: tier=execute, runbook=.agents/delegation/runbooks/capture.md, max-uses=8, max-context-bytes=100000
-## Locks
-games: slots=6, wait=3600
-```
-
-The overlay stays at `.agents/delegation.md`; optional tracked runbook sources
-and approved rote scripts default to `.agents/delegation/runbooks/` and
-`.agents/delegation/scripts/`. `open` copies role sources into external context,
-refuses changes while any open delegation pins those bytes, and refreshes after
-all pins close. Edit tracked sources on final use. General tools may stay in
-their own location; the judge adds scripts and roles per the overlay's
-`## Authoring` policy. See the
-[layout guide](plugins/delegation/skills/delegation/reference/overlay.md#repository-material).
-
-Wrap each native process with one foreground
-`python3 "$DELEGATION_CHECKER" exec --lock games --timeout 300 -- <command>`.
-Configure the checker path from an installed skill or any checkout and quote
-paths with spaces. Slots apply across worktrees sharing the same XDG state root;
-keep children in the foreground. Since 0.7.3, on POSIX, signalling `check.py`
-(SIGTERM, SIGINT, SIGHUP) forwards to the wrapped process group, kills it after
-a one-second grace, and releases the lock. Outer orchestration is optional, and validators
-and general tools remain usable standalone through their existing commands.
-
-Roles require at least one cap; prefer `max-uses`. Counts include the first brief
-and all ancestor branches. Byte caps accumulate brief/context file sizes per use,
-excluding outputs; they do not measure actual model context. Start with
-`check.py open --delegation <id> --tier execute --role capture --brief <path>`; reuse a closed
-prior brief with `open --delegation <new-id> --tier execute --continue <prior-id> --brief <new-path>`.
-`--tier` remains required and must match the role. The tier stays the same and
-each use records new brief/runbook hashes. The judge
-maps delegation ids to host agent ids and uses the printed follow-up loader.
-
-Peer roles can execute caller commands asynchronously while independent work
-continues. The caller brief names the peer host id and caller delegation id, and
-stays open until completion. Use `run ... --delegation <caller-id>` or
-`exec --lock games --timeout 300 --delegation <caller-id> -- <command>` to attribute
-evidence to the caller. `exec` records `validator=null`; its observations must be
-cited or asserted rather than accepted as checked registered-validator results.
-A lock covers the full foreground process lifetime. Never detach launches; one
-command owns one slot, so multiple jobs need a slot per child or serialization.
-Windows uses standard-library byte locks; macOS/Linux use `flock`. Host peer support is checked before
-use, with judge relay as the fallback.
-
-Setup proposes deterministic repository helpers but writes scripts only with
-explicit approval. Later, the judge adds roles and scripts for repeated work
-under the overlay's `## Authoring` policy (default `allowed`); where it says
-`ask`, it proposes them and records unaccepted proposals in the findings/handoff
-sink, falling back to the execution log. `needs-human` checks require user notification before work and
-early while the user is present, without infinite retries. Existing
-overlays remain valid. Brief footers prohibit commits unless explicitly allowed,
-first-person committed text, and host changes named by a nonempty restrictions
-section outside the worktree. These are agent instructions, not filesystem
-enforcement.
-
-Install and remove it like the other plugins:
-
-```sh
-claude plugin install delegation@rickdiculousli-tools
-codex plugin add delegation@rickdiculousli-tools
-claude plugin uninstall delegation@rickdiculousli-tools
-codex plugin remove delegation@rickdiculousli-tools
-```
-
-Routing quality has not been evaluated; that is for a pilot.
 
 ## Quota and YouTube transcripts
 
@@ -363,7 +159,7 @@ plugins/<name>/
   skills/<skill>/SKILL.md             # authored once; shared by both hosts
   .claude-plugin/plugin.json          # generated compatibility metadata
   .codex-plugin/plugin.json           # generated compatibility metadata
-  tiers.json                          # optional: subagent tiers (delegation)
+  tiers.json                          # optional: subagent tiers
   agents/<tier>.md                    # generated from tiers.json (Claude Code)
 .claude-plugin/marketplace.json       # generated Claude marketplace
 .agents/plugins/marketplace.json      # generated Codex marketplace
@@ -375,8 +171,7 @@ tests/                               # generator, verifier, and renderer tests
 `visual-audit` ships its renderer, templates, and references inside its skill
 folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
 without credentials or external services. Quota uses provider logins/services;
-transcripts download from YouTube and model/package hosts. Delegation uses the
-host's authenticated model service. The adapters share identity and content, while translating the hosts'
+transcripts download from YouTube and model/package hosts. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.
 
 ## Update installed plugins from a local checkout
@@ -506,161 +301,14 @@ and any cleanup failures. Temporary profiles are deleted afterward.
 Contributor instructions live in [AGENTS.md](AGENTS.md); Claude Code imports
 that same file through [CLAUDE.md](CLAUDE.md).
 
-## Long-horizon
+## Retired
 
-`long-horizon` 0.1.0 provides `long-horizon:setup`, `long-horizon:resume` and
-`long-horizon:checkpoint` for bounded progress across sessions. Setup can create
-or adopt goals, update policy, add a goal or wind down; it shows concrete drafts
-and a selected-task dry run before applying them. Quick setup asks at most five
-questions and accepts “you decide” defaults. See the
-[cheat sheet](plugins/long-horizon/skills/setup/reference/cheatsheet.md),
-[overlay format](plugins/long-horizon/skills/resume/reference/overlay.md) and
-[observed pilot scope](docs/long-horizon-pilots.md).
-
-Install through the already-registered marketplace:
-
-```sh
-claude plugin install long-horizon@rickdiculousli-tools
-codex plugin add long-horizon@rickdiculousli-tools
-```
-
-Use `/long-horizon:setup`, `/long-horizon:resume` or `/long-horizon:checkpoint` in
-Claude Code; ask Codex for those plugin-qualified skills. “Where are we?” is
-read-only status; “continue” selects one eligible task or blocker resolution.
-Readiness describes prepared inputs; it never supplies validator acceptance.
-A newly done task needs evidence, a milestone needs its whole acceptance checks,
-and goal completion requires the configured sign-off and a durable archive.
-
-The same Python 3.10+ standard-library CLI ships on both hosts. From this checkout:
-
-```sh
-python3 plugins/long-horizon/skills/resume/scripts/lh.py status --brief
-python3 plugins/long-horizon/skills/resume/scripts/lh.py lint
-python3 plugins/long-horizon/skills/resume/scripts/lh.py paths --root "$PROJECT" --json
-python3 plugins/long-horizon/skills/resume/scripts/lh.py state gc --json
-```
-
-Consumers declare `LONG_HORIZON_SCRIPT` or an explicit script path pointing at
-an installed skill's resume/scripts/lh.py or any checkout's
-plugins/long-horizon/skills/resume/scripts/lh.py. Quote paths with spaces; never
-glob a versioned plugin cache. Setup/checkpoint resolve the sibling resume script. Long-horizon 0.2.0 adds
-`state draft --root "$PROJECT" --json`: it returns an identity-bearing setup
-`draft_directory` under the repository/worktree-scoped XDG cache. Renew recovered
-drafts with `state draft --id <id>` before use. Weekly GC removes unused recognized
-drafts after 30 days and applies the seven-day recovery window to deleted,
-unregistered worktrees; active/uncertain owners, unknown files and symlinks protect
-recovery bytes. Existing plugin-wide drafts remain for explicit review.
-
-
-Long-horizon 0.3.0 supports Startup `readiness: "cache:readiness.json"`.
-`paths --root "$PROJECT" --json` discovers `readiness_path` under the current
-worktree cache’s `readiness/` directory, `state_directory`, `cache_directory`,
-`readiness_directory`, `cache_identity_path` and `cache_identity`, without creating
-files. Helpers publish the cache identity and report under the lifecycle lock;
-see [readiness publication](plugins/long-horizon/skills/resume/reference/readiness.md).
-Since 0.5.0, readiness paths without `cache:` are not read. Readiness remains
-unknown when missing/stale/for another checkout. Weekly GC recognises readiness
-JSON and applies the deleted-worktree recovery window.
-
-Long-horizon 0.4.0 lints `Done when` lines without a colon and milestones whose
-criteria are missing or sit after their tasks, and `lint --fix` repairs both; the
-gate ignores whitespace/punctuation-only criteria moves. Status lists uncommitted
-pending evidence and the handoff's line count against its budget. `evidence record
---write-proposed` writes the record's detail file and `--trailers-file` accumulates
-a batch's trailers. `evidence rerecord <id>` carries an unchanged observation onto
-revised criteria. `closure manifest --base <commit>` builds the reviewed batch
-manifest and ID. Reviewed observations record `--reviewer-kind human|agent`; agents
-review only checks declaring `"reviewer": "any"`.
-
-Long-horizon 0.5.0 replaces the overlay's `## Schema` heading with `## Version`,
-the plugin version it was last linted clean against. `status` warns
-`version-mismatch` when the major.minor is older or the tag is missing, and
-resume offers `/long-horizon:migrate`. `lint` knows only the current contract
-and reports `layout-outdated` (`## Schema`, readiness paths without `cache:`,
-milestones without `# Goal:`), `layout-missing` and `layout-unexpected` (a stray
-`.long-horizon/` directory) findings; migrate fixes them through a reviewed
-draft, deletes only approved paths and tags the overlay.
-
-Long-horizon 0.6.0 adds optional lanes mode for running one goal as parallel
-streams. An overlay `## Lanes` section with `config: ".agents/lanes.toml"` turns
-it on (without `config` nothing changes); goals gain `Lane:` and `After:` task
-metadata and a `Parallel: lanes, <who>, YYYY-MM-DD` approval line. `status --lane
-<name> --json` selects that lane's first open task whose dependencies are done
-(modes `selected`, `all-blocked`, `lane-done`, and `judge` without `--lane`) and
-every lanes-mode `status`/`lint` adds a `lanes` object with the critical path and
-per-lane counts. Lint reports `lanes-config-missing`, `lanes-config-invalid`,
-`lane-missing`, `lane-unknown`, `after-missing`, `after-cycle`,
-`parallel-approval-missing`, `lanes-config-changed`,
-`mac-task-on-non-native-lane`, `lane-file-missing`, `lane-file-template`,
-`handoff-lanes-line` and `handoff-lane-link`. `evidence record --commit-in <dir>`
-lets a lander commit the record's detail file and trailer without touching staged
-work, backed by a regenerable evidence index in the XDG cache. Python 3.10 reads
-the lanes TOML with a built-in subset parser. See the
-[lanes reference](plugins/long-horizon/skills/resume/reference/lanes.md).
-
-Long-horizon 0.6.1 makes lanes purely opt-in for everyone else: migrate no longer
-adds or touches a `## Lanes` section (an absent section already means off, and a
-repository needing nothing else gets only the `## Version` tag), the resume,
-checkpoint and setup skills carry one conditional pointer to the lanes reference
-each, and `status` JSON omits lane metadata outside lanes mode. A golden test pins
-every lanes-free command output to the 0.5.2 bytes.
-
-Long-horizon 0.7.0 keeps closing a long goal from stalling at the end.
-- `status` and `lint` warn `goal-criteria-missing` while an active goal has no
-  `Done when`/Checks of its own, and `milestone-proof-missing` for each done
-  milestone without named checks or a recorded PASS under its current criteria.
-- At awaiting-signoff, status adds a `signoff` object listing every gap and every
-  user approval closing needs (goal criteria with proposed lines, legacy
-  acceptance, sign-off), plus one Needs-you line asking for them together.
-- `archive prepare [--goal ID] [--write]` builds the version-1 archive from the
-  goals file and evidence, with `<fill: ...>` slots and the same validation the
-  gate uses; `archive check` validates an existing archive.
-- Archives may cite records as `task=<id>`, and an optional, user-approved
-  `legacy_acceptance` block (who, date, milestones, reason) accepts milestones that
-  closed before Checks existed or were proved in prose, without rerunning old
-  validators. The gate lists every archive problem, not just the first.
-- A delegated record matches the result's tree to the snapshot's tree instead of
-  the current tree; scope stability is still enforced, so the detail files a record
-  writes and edits outside the check's scope no longer block the next record.
-  `evidence rerecord` works for delegated records after criteria edits.
-- `evidence record --result 1` accepts the run number, and an unknown result lists
-  the delegation's results.
-- `evidence prepare A B` snapshots several checks at one tree, and its output
-  leaves out the per-file manifest unless you pass `--full`.
-- `--review-text` writes the dated review note for you, and a `--review-note`
-  error now says what the file needs.
-
-Existing overlays need only the `## Version` tag. The new warnings concern goal
-content, so migrate reports them and leaves them for the user.
-
-| Project | Composition |
-| --- | --- |
-| Goal spans sessions, solo work | long-horizon |
-| Goal spans sessions, batches need workers/registered validators | long-horizon + delegation |
-| Bulk task fits one session | delegation alone |
-| Optional capacity-aware smaller batch | one opt-in quota read, never blocking |
-
-One survey feeds both setups. Check names refer to registered validators rather
-than duplicating their commands. Solo checkpoint prepares a scope snapshot, runs
-an authorized check, records its actual outcome and reviews the proposed durable
-JSON/trailer. Combined checkpoint records an exact-tree delegation result before
-roadmap edits. Later docs-only changes may reuse scoped historical acceptance;
-they do not invent a current-tree ledger result. See
-[standalone and combined walkthroughs](plugins/long-horizon/skills/checkpoint/SKILL.md).
-
-No validators or Git integration operations are launched by the CLI. Skills
-perform only actually authorized operations. Commit, merge, push and host sync
-have separate observed/verified closure steps; rejected push/sync preserves earlier
-success and offers the exact remaining step. Remote containment is explicitly
-qualified as a local remote-ref observation, not server-present-state proof.
-
-Runtime state follows [XDG retention](plugins/long-horizon/skills/resume/reference/state.md):
-one fixed root lock, repository/worktree SHA-256 keys, weekly opportunistic cleanup,
-a seven-day confirmed-deleted-worktree recovery window, and 30-day unreferenced
-snapshot/draft expiry. Existing worktrees retain unfinished work. Read-only
-inspection creates no state. Approved wind-down clears only the displayed current
-payload; durable Git evidence and other plugins survive. Manual `state gc` works
-outside Git. No scheduler, hooks, background workers or consumer build are needed.
+`delegation` and `long-horizon` were retired on 2026-10-15 and live under `retired/` with their
+tests, fixtures and pilot notes; they are not in the marketplace and cannot be installed from it.
+[buildermesh](https://github.com/rickdiculousli/buildermesh) replaces both: a lead thread owns one
+spec, delegates to executors and routines over a NATS mesh, and results are recorded by git tree
+hash (the idea `delegation` kept in its ledger). A goal that spanned sessions is now a long spec in
+the same place as any other.
 
 ## License
 

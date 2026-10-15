@@ -125,7 +125,12 @@ Component inventory
         self.assertEqual(missing_inventory("Skills (1)  a", ["a"], ["execute"]), ["missing agent: execute"])
 
     def test_plugin_agents_lists_generated_definitions(self):
-        self.assertEqual(plugin_agents(ROOT / "plugins/delegation"), ["execute", "routine"])
+        with tempfile.TemporaryDirectory() as temp:
+            plugin = Path(temp) / "plugin"
+            (plugin / "agents").mkdir(parents=True)
+            for name in ("routine", "execute"):
+                (plugin / "agents" / f"{name}.md").write_text(f"# {name}\n")
+            self.assertEqual(plugin_agents(plugin), ["execute", "routine"])
         self.assertEqual(plugin_agents(ROOT / "plugins/hello-world"), [])
 
 

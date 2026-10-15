@@ -8,9 +8,7 @@
     "plugins/hello-world",
     "plugins/repository-info",
     "plugins/visual-audit",
-    "plugins/delegation",
     "plugins/quota",
-    "plugins/yt-transcript",
-    "plugins/long-horizon"
+    "plugins/yt-transcript"
   ]
 }
