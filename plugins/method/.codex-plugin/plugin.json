@@ -1,0 +1,14 @@
+{
+  "name": "method",
+  "version": "0.1.0",
+  "description": "Working-method skills copied verbatim from upstream: grill-me and grilling (mattpocock/skills), writing-plans (obra/superpowers).",
+  "author": {
+    "name": "Rick Li"
+  },
+  "keywords": [
+    "grilling",
+    "planning",
+    "method"
+  ],
+  "skills": "./skills/"
+}

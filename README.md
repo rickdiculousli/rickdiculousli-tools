@@ -15,6 +15,7 @@ the current user. Author and marketplace names are shared package identity.
 | `visual-audit` | Supported host and Python 3.10+ |
 | `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
+| `method` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
 
 Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
 Intel Mac Whisper dependency selection is covered by a metadata regression test;
@@ -35,6 +36,7 @@ See [verification evidence and scope](docs/verification.md).
 | `repository-info` | Informational stub describing this layout |
 | `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
+| `method` | `grill-me` and `grilling` (a relentless interview to stress-test a plan) and `writing-plans` (an implementation plan from a spec), copied verbatim from upstream |
 
 ## Visual audit reports
 
@@ -86,6 +88,27 @@ do not fall back to the default account. Codex's app server inherits `CODEX_HOME
 These subscription interfaces are undocumented and may report a provider as
 unknown; API-key-only accounts do not supply subscription quota.
 
+## Method skills
+
+`method` carries three skills unchanged from their upstreams: `grill-me` and `grilling` from
+[mattpocock/skills](https://github.com/mattpocock/skills) and `writing-plans` from
+[obra/superpowers](https://github.com/obra/superpowers). `writing-plans` still names other
+superpowers skills for running a plan; they are not part of this plugin. In Claude Code they are
+`/method:grill-me`, `/method:grilling` and `/method:writing-plans`.
+
+`plugins/method/UPSTREAM` pins the commit each upstream was copied at. `update.sh` fetches each
+upstream shallow into a temp dir, at its pin or at the ref `--to` names, prints the diff per skill,
+copies the skill directories over, records the new commits in `UPSTREAM` and reminds you to bump
+the version when a skill changed. `--check` prints the diffs and changes nothing; it exits 1 when a
+skill differs from upstream. For a repo fetched at its pin, both modes say when its default
+branch has moved past the pin.
+
+```sh
+plugins/method/update.sh --check                                   # the copy against the pins
+plugins/method/update.sh --check --to obra/superpowers=HEAD        # against upstream's latest
+plugins/method/update.sh --to obra/superpowers=HEAD --to mattpocock/skills=HEAD
+```
+
 ## Install from this checkout
 
 Run these commands from the repository root. They register this local checkout
@@ -101,12 +124,13 @@ claude plugin install repository-info@rickdiculousli-tools
 claude plugin install quota@rickdiculousli-tools
 claude plugin install quota@rickdiculousli-tools
 claude plugin install yt-transcript@rickdiculousli-tools
+claude plugin install method@rickdiculousli-tools
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
 
 In a new Claude Code session, invoke `/visual-audit:audit-report`,
-`/hello-world:hello`, or `/repository-info:about`. Restart an existing session after changing plugins.
+`/hello-world:hello`, `/repository-info:about`, or `/method:grill-me`. Restart an existing session after changing plugins.
 
 ### Codex
 
@@ -118,6 +142,7 @@ codex plugin add repository-info@rickdiculousli-tools
 codex plugin add quota@rickdiculousli-tools
 codex plugin add quota@rickdiculousli-tools
 codex plugin add yt-transcript@rickdiculousli-tools
+codex plugin add method@rickdiculousli-tools
 codex plugin list --marketplace rickdiculousli-tools --available --json
 ```
 
@@ -134,6 +159,7 @@ claude plugin uninstall repository-info@rickdiculousli-tools
 claude plugin uninstall quota@rickdiculousli-tools
 claude plugin uninstall quota@rickdiculousli-tools
 claude plugin uninstall yt-transcript@rickdiculousli-tools
+claude plugin uninstall method@rickdiculousli-tools
 claude plugin marketplace remove rickdiculousli-tools
 
 codex plugin remove visual-audit@rickdiculousli-tools
@@ -142,6 +168,7 @@ codex plugin remove repository-info@rickdiculousli-tools
 codex plugin remove quota@rickdiculousli-tools
 codex plugin remove quota@rickdiculousli-tools
 codex plugin remove yt-transcript@rickdiculousli-tools
+codex plugin remove method@rickdiculousli-tools
 codex plugin marketplace remove rickdiculousli-tools
 ```
 
@@ -169,7 +196,8 @@ tests/                               # generator, verifier, and renderer tests
 ```
 
 `visual-audit` ships its renderer, templates, and references inside its skill
-folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
+folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way, and `method` its
+`UPSTREAM` pins and `update.sh` at the plugin root. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
 without credentials or external services. Quota uses provider logins/services;
 transcripts download from YouTube and model/package hosts. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.
