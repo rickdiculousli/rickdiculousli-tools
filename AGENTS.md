@@ -76,3 +76,18 @@
   apply, commit, merge any work branch or worktree into `main`, and push `main`
   without asking again. If a check fails, the merge conflicts or the push is
   rejected, stop and report; never force-push, skip checks or rewrite `main`.
+
+<!-- command-center:done -->
+## Definition of done
+A change is done when all of these hold: the repo's verify commands pass (`python3 scripts/sync_marketplaces.py --check`, `python3 scripts/run_tests.py`, `python3 scripts/verify_lifecycle.py --report "${XDG_CACHE_HOME:-$HOME/.cache}/rickdiculousli-tools/verification/plugin-verification.json"`); a validation agent that didn't write the change reviewed it against its spec and the findings were fixed; the branch is rebased onto `main` with verify re-run; it is merged fast-forward to `main` and pushed to `rickdiculousli/rickdiculousli-tools`. If the rebase conflicts, resolve it: read your spec and the specs that landed since you branched, make every intent hold, widen your spec if a landed one changes what yours must look like, re-validate, then merge. Stop only when the widened scope can't be met from the specs alone; then mark your spec `blocked` with the reason, push, and report. End with one line: what's done (commit on main) and what, if anything, waits on the operator.
+<!-- /command-center:done -->
+
+<!-- command-center:proposals -->
+## Proposals
+Half-page specs live in `docs/proposals/NNN-slug.md` (the template is `bmesh spec template`; the lifecycle is in `docs/proposals/README.md`). The build thread owns its spec's status: `building` when dispatched, `done` with the merge SHA when merged, `blocked` with a reason if it can't finish. Rejected specs stay so they aren't re-proposed. Accepted specs are built by buildermesh leads (see Buildermesh below).
+<!-- /command-center:proposals -->
+
+<!-- command-center:mesh -->
+## Buildermesh
+Builds here run as nodes on a buildermesh mesh through the `bmesh` CLI: a lead owns one spec in its own worktree, executors build pieces on branches under the lead's and hand them back through the mesh, and routines run this repo's checks. The repo's routine kinds live in `.bmesh/routines/<kind>.toml` (`verify` runs `python3 scripts/sync_marketplaces.py --check`, `python3 scripts/run_tests.py`, `python3 scripts/verify_lifecycle.py --report "${XDG_CACHE_HOME:-$HOME/.cache}/rickdiculousli-tools/verification/plugin-verification.json"`; `review` asks a model of another family for findings; add a kind rather than a script when a check should be recorded). Commit before queueing a job: a job names a commit, and every result is recorded under that commit's tree hash, so a deterministic kind answers a repeat run from its record. A spec is done only when its frontmatter carries a `verified` line (`verify ok t:<tree8>; review ok t:<tree8> m:<model>`), composed by `bmesh spec verified --write` from the results recorded for the landed tree, and `bmesh done` is the last word: it refuses until the spec on `origin/main` reads `done` with a merged commit and a result for every entry.
+<!-- /command-center:mesh -->
