@@ -13,7 +13,8 @@ byte-compared against the source (including `method`'s `UPSTREAM`, `update.sh` a
 `a6c67c1900064347c2a329990dd3c555657c51c3ec53b259a08aa01a2c26139a`. `update.sh --check` exited 0
 at the pins; `--check --to obra/superpowers=v6.2.0` printed the `writing-plans` diff and exited 1;
 `--to` that tag on a scratch copy copied it, rewrote the pin, and a following `--check` exited 0
-(`checked`). No model has run these skills from the plugin yet.
+(`checked`). A bad `--to` ref for one repo exits nonzero with every skill and `UPSTREAM` unchanged,
+and a missing skill directory diffs as all new (`checked`). No model has run these skills from the plugin yet.
 
 Baseline verified on October 10, 2026 (report timestamp 2026-10-11T01:27:25Z, UTC),
 using the real locally installed CLIs, with a fresh temporary configuration
