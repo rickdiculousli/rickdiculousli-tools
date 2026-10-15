@@ -4,6 +4,17 @@
 marketplace; buildermesh replaces them). The rows and hashes below that name them are the record of
 the last verification they were part of, not a current claim; the marketplace now ships five plugins.
 
+2026-10-15: `method` 0.1.0 added (the marketplace ships six plugins). `verify_lifecycle.py` passed on
+codex-cli 0.162.1 and Claude Code 2.1.300 on the Linux host: all six plugins discovered, installed,
+byte-compared against the source (including `method`'s `UPSTREAM`, `update.sh` and the skills'
+`agents/openai.yaml`) and uninstalled. Both hosts installed identical `method` skills: `grill-me`
+`caaf8b8de1684f96e26b28f3c29189db5c89cce4b73e1c93d86164f66ef88637`, `grilling`
+`befdff1e27a1dfe2a294d5871169ac1afe16d983911daa4f32627514a48c1e15`, `writing-plans`
+`a6c67c1900064347c2a329990dd3c555657c51c3ec53b259a08aa01a2c26139a`. `update.sh --check` exited 0
+at the pins; `--check --to obra/superpowers=v6.2.0` printed the `writing-plans` diff and exited 1;
+`--to` that tag on a scratch copy copied it, rewrote the pin, and a following `--check` exited 0
+(`checked`). No model has run these skills from the plugin yet.
+
 Baseline verified on October 10, 2026 (report timestamp 2026-10-11T01:27:25Z, UTC),
 using the real locally installed CLIs, with a fresh temporary configuration
 profile for each host. Evidence labels: `checked` (observed running), `cited`
