@@ -23,7 +23,8 @@ while [ $# -gt 0 ]; do
     --check) check=1 ;;
     --to)
       [ $# -ge 2 ] || { echo "update.sh: --to needs <repo>=<ref>" >&2; exit 2; }
-      case $2 in *=?*) ;; *) echo "update.sh: --to needs <repo>=<ref>, got '$2'" >&2; exit 2 ;; esac
+      case $2 in *=-*|*=) echo "update.sh: --to needs <repo>=<ref>, got '$2'" >&2; exit 2 ;; *=*) ;;
+        *) echo "update.sh: --to needs <repo>=<ref>, got '$2'" >&2; exit 2 ;; esac
       overrides+=("$2"); shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "update.sh: unknown argument '$1'" >&2; usage >&2; exit 2 ;;
@@ -42,13 +43,15 @@ trap 'rm -rf "$work"' EXIT
 ref_for() {   # the --to ref for a repo, else its pin
   local repo=$1 pin=$2 o
   for o in ${overrides[@]+"${overrides[@]}"}; do
-    [ "${o%%=*}" = "$repo" ] && { echo "${o#*=}"; return; }
+    [ "${o%%=*}" = "$repo" ] && { printf '%s\n' "${o#*=}"; return; }
   done
-  echo "$pin"
+  printf '%s\n' "$pin"
 }
 
+# Fetch and diff every repo first, so a failed fetch or a missing directory changes nothing here.
+mkdir "$work/empty"
 changed=0
-pins=()   # "repo commit" for every repo, in UPSTREAM order
+fetched=()   # "repo commit dir path..." for every repo, in UPSTREAM order
 while read -r repo pin paths <&3; do
   case $repo in ''|\#*) continue ;; esac
   ref=$(ref_for "$repo" "$pin")
@@ -58,7 +61,7 @@ while read -r repo pin paths <&3; do
   git -C "$dir" fetch -q --depth 1 "$url" "$ref"
   git -C "$dir" -c advice.detachedHead=false checkout -q FETCH_HEAD
   commit=$(git -C "$dir" rev-parse HEAD)
-  pins+=("$repo $commit")
+  fetched+=("$repo $commit $dir $paths")
   echo "== $repo at $ref ($commit)"
   if [ "$ref" = "$pin" ]; then
     head=$(git ls-remote "$url" HEAD | cut -f1)
@@ -67,16 +70,14 @@ while read -r repo pin paths <&3; do
   for path in $paths; do
     name=$(basename "$path")
     [ -d "$dir/$path" ] || { echo "update.sh: $repo has no $path at $ref" >&2; exit 1; }
-    if diff -ruN "$here/skills/$name" "$dir/$path" >"$work/diff"; then
+    ours="$here/skills/$name"
+    [ -d "$ours" ] || ours="$work/empty"   # a skill not copied yet diffs as all new
+    if diff -ruN "$ours" "$dir/$path" >"$work/diff"; then
       echo "-- $name: unchanged"
     else
       echo "-- $name: differs"
       cat "$work/diff"
       changed=1
-    fi
-    if [ $check = 0 ]; then
-      rm -rf "${here:?}/skills/$name"
-      cp -R "$dir/$path" "$here/skills/$name"
     fi
   done
 done 3<"$upstream"
@@ -85,9 +86,17 @@ if [ $check = 1 ]; then
   exit $changed
 fi
 
-# Record the commits copied: rewrite each repo line's commit, keep everything else.
-for p in "${pins[@]}"; do
-  awk -v repo="${p%% *}" -v commit="${p#* }" '$1 == repo { $2 = commit } { print }' "$upstream" >"$work/UPSTREAM"
+# Copy each repo's skills, then record its commit: rewrite its line's commit, keep everything else.
+for f in ${fetched[@]+"${fetched[@]}"}; do
+  set -- $f
+  repo=$1 commit=$2 dir=$3
+  shift 3
+  for path in "$@"; do
+    name=$(basename "$path")
+    rm -rf "${here:?}/skills/$name"
+    cp -R "$dir/$path" "$here/skills/$name"
+  done
+  awk -v repo="$repo" -v commit="$commit" '$1 == repo { $2 = commit } { print }' "$upstream" >"$work/UPSTREAM"
   cat "$work/UPSTREAM" >"$upstream"
 done
 if [ $changed = 1 ]; then
