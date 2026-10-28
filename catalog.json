@@ -10,6 +10,7 @@
     "plugins/visual-audit",
     "plugins/quota",
     "plugins/yt-transcript",
-    "plugins/method"
+    "plugins/method",
+    "plugins/skill-shaper"
   ]
 }

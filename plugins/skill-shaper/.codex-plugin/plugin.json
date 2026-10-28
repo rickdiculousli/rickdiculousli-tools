@@ -1,0 +1,14 @@
+{
+  "name": "skill-shaper",
+  "version": "0.1.0",
+  "description": "Skill-shaper skill copied verbatim from upstream (overment/skills): creates a new agent skill or reshapes one that triggers on the wrong requests.",
+  "author": {
+    "name": "Rick Li"
+  },
+  "keywords": [
+    "skills",
+    "authoring",
+    "triggering"
+  ],
+  "skills": "./skills/"
+}

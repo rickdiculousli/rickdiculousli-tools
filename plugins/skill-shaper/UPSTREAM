@@ -1,0 +1,4 @@
+# The upstream each skill is copied from, verbatim, and the commit it was copied at.
+# <github owner/repo> <commit> <skill directory in that repo>...
+# update.sh reads and rewrites this file; skills/<basename of each directory> is the copy.
+overment/skills 8c6ea248cfadea782b5345397704cfc9e49fbe77 skills/skill-shaper

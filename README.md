@@ -15,7 +15,7 @@ the current user. Author and marketplace names are shared package identity.
 | `visual-audit` | Supported host and Python 3.10+ |
 | `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
-| `method` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
+| `method`, `skill-shaper` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
 
 Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
 Intel Mac Whisper dependency selection is covered by a metadata regression test;
@@ -37,6 +37,7 @@ See [verification evidence and scope](docs/verification.md).
 | `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
 | `method` | `grill-me` and `grilling` (a relentless interview to stress-test a plan) and `writing-plans` (an implementation plan from a spec), copied verbatim from upstream |
+| `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, copied verbatim from upstream |
 
 ## Visual audit reports
 
@@ -109,6 +110,18 @@ plugins/method/update.sh --check --to obra/superpowers=HEAD        # against ups
 plugins/method/update.sh --to obra/superpowers=HEAD --to mattpocock/skills=HEAD
 ```
 
+## Skill shaper
+
+`skill-shaper` carries the `skill-shaper` skill and its `references/placement.md` unchanged from
+[overment/skills](https://github.com/overment/skills) (MIT). It is `/skill-shaper:skill-shaper` in
+Claude Code. `plugins/skill-shaper/UPSTREAM` pins the commit it was copied at, and its `update.sh`
+works as `method`'s does:
+
+```sh
+plugins/skill-shaper/update.sh --check                             # the copy against the pin
+plugins/skill-shaper/update.sh --to overment/skills=HEAD           # move to upstream's latest
+```
+
 ## Install from this checkout
 
 Run these commands from the repository root. They register this local checkout
@@ -125,6 +138,7 @@ claude plugin install quota@rickdiculousli-tools
 claude plugin install quota@rickdiculousli-tools
 claude plugin install yt-transcript@rickdiculousli-tools
 claude plugin install method@rickdiculousli-tools
+claude plugin install skill-shaper@rickdiculousli-tools
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
@@ -143,6 +157,7 @@ codex plugin add quota@rickdiculousli-tools
 codex plugin add quota@rickdiculousli-tools
 codex plugin add yt-transcript@rickdiculousli-tools
 codex plugin add method@rickdiculousli-tools
+codex plugin add skill-shaper@rickdiculousli-tools
 codex plugin list --marketplace rickdiculousli-tools --available --json
 ```
 
@@ -160,6 +175,7 @@ claude plugin uninstall quota@rickdiculousli-tools
 claude plugin uninstall quota@rickdiculousli-tools
 claude plugin uninstall yt-transcript@rickdiculousli-tools
 claude plugin uninstall method@rickdiculousli-tools
+claude plugin uninstall skill-shaper@rickdiculousli-tools
 claude plugin marketplace remove rickdiculousli-tools
 
 codex plugin remove visual-audit@rickdiculousli-tools
@@ -169,6 +185,7 @@ codex plugin remove quota@rickdiculousli-tools
 codex plugin remove quota@rickdiculousli-tools
 codex plugin remove yt-transcript@rickdiculousli-tools
 codex plugin remove method@rickdiculousli-tools
+codex plugin remove skill-shaper@rickdiculousli-tools
 codex plugin marketplace remove rickdiculousli-tools
 ```
 
@@ -196,8 +213,8 @@ tests/                               # generator, verifier, and renderer tests
 ```
 
 `visual-audit` ships its renderer, templates, and references inside its skill
-folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way, and `method` its
-`UPSTREAM` pins and `update.sh` at the plugin root. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
+folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way, and `method` and
+`skill-shaper` their `UPSTREAM` pins and `update.sh` at the plugin root. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
 without credentials or external services. Quota uses provider logins/services;
 transcripts download from YouTube and model/package hosts. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.
