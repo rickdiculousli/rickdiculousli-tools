@@ -1,6 +1,6 @@
 {
   "name": "hello-world",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Example plugin with a greeting skill for verifying installation.",
   "author": {
     "name": "Rick Li"

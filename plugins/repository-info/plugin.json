@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "repository-info",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Example plugin explaining the shared personal plugin repository layout.",
   "author": { "name": "Rick Li" },
   "keywords": ["example", "repository"]

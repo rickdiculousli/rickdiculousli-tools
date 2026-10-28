@@ -1,6 +1,6 @@
 {
   "name": "yt-transcript",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Fetch a YouTube video's timestamped transcript: captions first, then auto-captions, then Whisper.",
   "author": {
     "name": "Rick Li"

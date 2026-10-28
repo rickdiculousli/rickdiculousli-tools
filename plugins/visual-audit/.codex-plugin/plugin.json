@@ -1,6 +1,6 @@
 {
   "name": "visual-audit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Renders agent-written session reports into a visual HTML audit page.",
   "author": {
     "name": "Rick Li"

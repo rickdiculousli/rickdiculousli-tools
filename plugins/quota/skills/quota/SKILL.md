@@ -1,6 +1,6 @@
 ---
 name: quota
-description: Use when you need to know how much of the Claude or Codex subscription is used or left, before starting large or background work, when deciding which provider has room, or when the user asks about usage, limits, resets or leftover quota.
+description: Reads how much of the Claude and Codex subscriptions is used and left, with reset times and weekly pace. Use before large or background work, when choosing a provider, or when the user asks about usage or limits.
 ---
 
 # Quota
@@ -17,14 +17,11 @@ uv run --script <skill-dir>/scripts/quota.py --provider codex   # claude | codex
 uv run --script <skill-dir>/scripts/quota.py --json             # for agents
 ```
 
-`<skill-dir>` is the directory containing this SKILL.md. Quote the resolved script
-path when it contains spaces. From another script, accept the script path as a
-configuration value; use the installed skill path or any checkout's
-`plugins/quota/skills/quota/scripts/quota.py`. Do not assume a username, clone
-location, or versioned plugin cache path.
+`<skill-dir>` is the directory containing this SKILL.md. A script that calls this
+one takes its path as a setting (the installed skill or any checkout's
+`plugins/quota/skills/quota/scripts/quota.py`), never a hardcoded clone or plugin-cache path.
 
-The script requires Python 3.10+; `uv` resolves a suitable interpreter. It uses
-your own subscription login. Claude credential selection is, in order:
+It uses your own subscription login. Claude credential selection is, in order:
 `QUOTA_CLAUDE_CREDENTIALS_FILE`, `CLAUDE_CODE_OAUTH_TOKEN`, then the selected
 profile. `CLAUDE_CONFIG_DIR` selects a profile's `.credentials.json`; otherwise
 macOS uses the default Keychain service and falls back to `~/.claude/.credentials.json`.
@@ -35,17 +32,9 @@ server. API-key-only accounts do not provide these subscription readings.
 
 ## Reading it
 
-For each provider:
-
-- **5-hour and weekly windows**: percent used and time to each reset.
-- **Weekly pace**: points per hour across the weekly window so far, and the
-  projected percent at the reset. Windows younger than 12 hours have no pace.
-- **Projected unused at reset**: points that will expire unused at the current pace.
-- **Overflow billed**: whether usage past 100% costs money (extra usage or credits).
-  If it does, treat 100% as a hard stop.
-- **Banked resets** (Codex): reset credits available and when they expire.
-
-The script reports numbers only. It never decides whether to run work; you do,
+The output labels its own fields. Weekly pace and its projections are empty (`?` in
+text, `null` in `--json`) while the weekly window is younger than 12 hours. When overflow is billed (extra usage or credits), treat 100%
+as a hard stop. The script reports numbers only. It never decides whether to run work; you do,
 from the numbers and what the user asked. It exits 2 only when no provider could be
 read. Every reading is appended to
 `${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/quota/usage.jsonl`.

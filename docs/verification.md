@@ -4,6 +4,21 @@
 marketplace; buildermesh replaces them). The rows and hashes below that name them are the record of
 the last verification they were part of, not a current claim; the marketplace now ships five plugins.
 
+2026-10-27: the five owned skills reshaped with skill-shaper: each description now says what the skill
+does before when to use it, and the script skills' bodies drop general know-how (`quota`'s field glossary,
+which its output already labels, and the path-quoting and interpreter notes). Versions: `hello-world`
+0.1.1, `repository-info` 0.1.1, `quota` 0.1.3, `visual-audit` 0.1.1, `yt-transcript` 0.1.3.
+`verify_lifecycle.py` passed on codex-cli 0.163.0 and Claude Code 2.1.311 on the Mac; the unit suite (165
+tests) passed. Skill hashes: `hello` `8eb9eb71a093a3aabf3a342c62cc1e85d8fa94b9b0cb2c23b511d3e6de63bc9f`,
+`about` `ba75f2fae4e237844f6be1e7c0d00442bcda1bd0f1a3f9078fc43d39d5d42315`, `quota`
+`b110264610dbfbcc2dd52c170f9b94b1f3c59f72acebbdcda89d393894bf3845`, `audit-report`
+`b8c2d20b21e03689f1a096155d16dab1fbc20f3a0c09e4489822ceff20d52144`, `yt-transcript`
+`5e0f1982e7dcca16ce93a031d38cf29f591c9ce3c1df2d934bfd37d9555a4fdd`. Routing was compared in two fresh
+agents given only the descriptions and 14 requests (7 that should load a skill, 7 near misses): old and new
+routed alike except "Say hello", which only the old `hello` description claimed (`checked`). `quota.py`'s
+output was read live to confirm it labels its fields (`checked`). No model has run the reshaped skills from
+the installed plugin.
+
 2026-10-27: `skill-shaper` 0.1.0 added (the marketplace ships seven plugins). `verify_lifecycle.py`
 passed on codex-cli 0.163.0 and Claude Code 2.1.311 on the Mac: all seven plugins discovered,
 installed, byte-compared against the source (including `skill-shaper`'s `UPSTREAM` and `update.sh`)

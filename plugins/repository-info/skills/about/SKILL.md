@@ -1,6 +1,6 @@
 ---
 name: about
-description: Use when the user explicitly invokes the repository-info example skill or asks it to explain this personal plugin repository's shared layout.
+description: Explains how the rickdiculousli-tools plugin repository is laid out: plugin metadata, skills and generated marketplaces. Use when the user invokes about or asks how that repository is organised.
 ---
 
 Explain that each plugin keeps its portable metadata in root `plugin.json` and its

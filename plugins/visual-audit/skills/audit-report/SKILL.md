@@ -1,6 +1,6 @@
 ---
 name: audit-report
-description: Use only when the user explicitly asks for an audit report, a visual report of what the agent did in this session, or invokes audit-report. Renders the session's actions as a self-contained HTML page for visual review.
+description: Renders what the agent did this session as a self-contained HTML page for the user to audit. Use only when the user asks for an audit report or a visual report of the session.
 ---
 
 # Audit report

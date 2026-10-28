@@ -1,6 +1,6 @@
 ---
 name: yt-transcript
-description: Use whenever you need to read, summarize, quote or check what is said in a YouTube video. Writes a timestamped transcript from captions, auto-captions or Whisper.
+description: Writes a timestamped transcript of a YouTube video from its captions or Whisper. Use when you need to read, summarize, quote or check what a YouTube video says.
 ---
 
 # YouTube transcript
@@ -12,9 +12,9 @@ it prints the path of:
 uv run --script <skill-dir>/scripts/yt_transcript.py <url> [<url> ...]
 ```
 
-`<skill-dir>` is the directory containing this SKILL.md; quote the resolved script
-path and URLs. No fixed checkout location is required. Python 3.10+ is required;
-`uv` resolves the interpreter and downloads the script's dependencies on first run.
+`<skill-dir>` is the directory containing this SKILL.md. Quote each URL (they
+contain `?` and `&`) and a script path with spaces. `uv` downloads the script's
+dependencies on first run.
 
 It tries human captions first, then YouTube's auto-captions (json3, one retry after
 an HTTP 429), and falls back to transcribing the audio with Whisper when captions are
