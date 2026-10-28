@@ -4,6 +4,13 @@
 marketplace; buildermesh replaces them). The rows and hashes below that name them are the record of
 the last verification they were part of, not a current claim; the marketplace now ships five plugins.
 
+2026-10-27: `skill-shaper` 0.1.0 added (the marketplace ships seven plugins). `verify_lifecycle.py`
+passed on codex-cli 0.163.0 and Claude Code 2.1.311 on the Mac: all seven plugins discovered,
+installed, byte-compared against the source (including `skill-shaper`'s `UPSTREAM` and `update.sh`)
+and uninstalled. The copied files: `SKILL.md` `94250efbea8a202795c97973852e5372b44f7fc1807f9ad4a652addef746037c`,
+`references/placement.md` `c198b4f4f2b8d55f6c0ac5df91c29cdc33cafc695068763fe634d0a047fe8729`. `update.sh --check` exited 0 at the
+pin, overment/skills `8c6ea24` (`checked`). No model has run this skill from the plugin yet.
+
 2026-10-15: `method` 0.1.0 added (the marketplace ships six plugins). `verify_lifecycle.py` passed on
 codex-cli 0.162.1 and Claude Code 2.1.300 on the Linux host: all six plugins discovered, installed,
 byte-compared against the source (including `method`'s `UPSTREAM`, `update.sh` and the skills'
