@@ -17,6 +17,7 @@ the current user. Author and marketplace names are shared package identity.
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
 | `method`, `pocock`, `skill-shaper` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
 | `pick-principles` | Supported host; it reads pstack's principle skills when pstack is installed |
+| `recursive-refinement` | Claude Code, `uv`, `git`; the scheduled job needs macOS launchd (elsewhere run it from cron or by hand) |
 
 Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
 Intel Mac Whisper dependency selection is covered by a metadata regression test;
@@ -41,6 +42,7 @@ See [verification evidence and scope](docs/verification.md).
 | `pocock` | Matt Pocock's engineering and planning skills, copied verbatim from upstream: `grill-me` and `grilling` (a relentless interview to stress-test a plan), `grill-with-docs`, `domain-modeling`, `codebase-design`, `improve-codebase-architecture`, `retro` and `wayfinder` |
 | `pick-principles` | `pick-principles` skill: at a phase change in nontrivial work, picks and reads the principles and skills that fit and writes them into builder briefs |
 | `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, copied verbatim from upstream |
+| `recursive-refinement` | `recursive-refinement` skill: a weekly pass per repo that lands small reversible refinements and writes the rest as specs, under a weekly spend cap |
 
 ## Visual audit reports
 
@@ -147,6 +149,58 @@ plugins/skill-shaper/update.sh --check                             # the copy ag
 plugins/skill-shaper/update.sh --to overment/skills=HEAD           # move to upstream's latest
 ```
 
+## Recursive refinement
+
+`recursive-refinement` keeps the setup behind a repo's jobs lean. Each registered repo carries
+`docs/refinement/`: `jobs.md` (the yardstick, `status: confirmed` or `pending`), `rules.md` (what the
+pass may touch, how bold, what's off limits, and `paused: yes|no`), `notes.md` (one line per landed
+change) and `specs/` (one file per idea, `status: open|approved|rejected|built`). A pass reads the
+week's real conversations by script, lands only what passes its landing line (one revert undoes it,
+nothing in the record lost, at most one noticeable line changes for the user, data stays where it is,
+within budget), and writes everything else as a spec. Until `jobs.md` is confirmed it writes specs only.
+It is explicit-only: `/recursive-refinement:recursive-refinement repo=<path> mode=land` in Claude Code,
+or `mode=dry-run <file>` to land nothing.
+
+The bundled `refine.py` runs passes and keeps the money in check:
+
+```sh
+S=plugins/recursive-refinement/skills/recursive-refinement/scripts/refine.py
+uv run --script "$S" install                 # ~/.local/bin/recursive-refinement and, on macOS, the launchd job (not loaded)
+recursive-refinement run                     # one pass per registered repo, under the weekly cap
+recursive-refinement run --repo my-app       # one repo now, even if it already passed this week
+recursive-refinement run --dry-run <dir>     # land nothing; write <dir>/<repo>.md
+recursive-refinement ledger                  # this week's spend
+recursive-refinement conversations <repo>    # the user's messages and the replies they read, compact
+recursive-refinement surface <repo>          # unseen notes and open specs, for a SessionStart hook
+uv run --script "$S" install --load          # also load the launchd job
+```
+
+Run `install` from the checkout, so the shim and job point at it rather than a versioned plugin cache.
+The registry is user data in `${XDG_CONFIG_HOME:-~/.config}/rickdiculousli-tools/recursive-refinement/repos.json`:
+
+```json
+{
+  "weekly_cap_usd": 100,
+  "pass_cap_usd": 40,
+  "repos": [
+    {"path": "~/src/my-app"},
+    {"path": "~/src/my-lib", "session_paths": ["~/worktrees/my-lib/*"], "surface_in": ["~/src/my-app"]}
+  ]
+}
+```
+
+`session_paths` adds worktree checkouts whose Claude Code sessions count as the repo's; `surface_in`
+shows a repo's notes and specs at another repo's session start. Optional keys: `model` (default
+`opus`), `permission_mode` (`auto`), `schedule` (launchd `StartCalendarInterval` entries; default
+Saturday 04:00 with Sunday and Monday catch-ups) and `agent_prompt_prefixes` (first messages that
+mark a session as an agent's, not the user's). A pass runs with its working directory in
+`${XDG_CACHE_HOME:-~/.cache}/rickdiculousli-tools/recursive-refinement/run/`, so the repo's own hooks
+never see it, and lands through worktrees under `.../worktrees/`. Each pass's cost is appended to
+`${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/recursive-refinement/ledger.jsonl`; a pass
+gets at most what is left of the week's cap, and a cost that can't be read counts as the whole pass
+cap. A repo's SessionStart hook calls `recursive-refinement surface "$PWD"` and fails silently when
+the shim is missing.
+
 ## Install from this checkout
 
 Run these commands from the repository root. They register this local checkout
@@ -166,6 +220,7 @@ claude plugin install method@rickdiculousli-tools
 claude plugin install skill-shaper@rickdiculousli-tools
 claude plugin install pocock@rickdiculousli-tools
 claude plugin install pick-principles@rickdiculousli-tools
+claude plugin install recursive-refinement@rickdiculousli-tools
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
@@ -187,6 +242,7 @@ codex plugin add method@rickdiculousli-tools
 codex plugin add skill-shaper@rickdiculousli-tools
 codex plugin add pocock@rickdiculousli-tools
 codex plugin add pick-principles@rickdiculousli-tools
+codex plugin add recursive-refinement@rickdiculousli-tools
 codex plugin list --marketplace rickdiculousli-tools --available --json
 ```
 
@@ -207,6 +263,7 @@ claude plugin uninstall method@rickdiculousli-tools
 claude plugin uninstall skill-shaper@rickdiculousli-tools
 claude plugin uninstall pocock@rickdiculousli-tools
 claude plugin uninstall pick-principles@rickdiculousli-tools
+claude plugin uninstall recursive-refinement@rickdiculousli-tools
 claude plugin marketplace remove rickdiculousli-tools
 
 codex plugin remove visual-audit@rickdiculousli-tools
@@ -219,6 +276,7 @@ codex plugin remove method@rickdiculousli-tools
 codex plugin remove skill-shaper@rickdiculousli-tools
 codex plugin remove pocock@rickdiculousli-tools
 codex plugin remove pick-principles@rickdiculousli-tools
+codex plugin remove recursive-refinement@rickdiculousli-tools
 codex plugin marketplace remove rickdiculousli-tools
 ```
 
