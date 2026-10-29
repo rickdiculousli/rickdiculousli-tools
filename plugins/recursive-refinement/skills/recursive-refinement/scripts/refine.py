@@ -220,7 +220,8 @@ def conversations(repo: str, days: float, max_user: int, max_reply: int, max_tot
 # ---- the weekly run ------------------------------------------------------------------------
 
 def week(now: dt.datetime | None = None) -> str:
-    return (now or dt.datetime.now()).strftime("%G-W%V")
+    d = (now or dt.datetime.now()).date()   # a week starts on Saturday, so its Sunday and Monday catch-ups fall in it
+    return (d - dt.timedelta(days=(d.weekday() - 5) % 7)).isoformat()
 
 
 def ledger_rows(state: Path) -> list[dict]:

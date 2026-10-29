@@ -1,5 +1,6 @@
 """Tests for the recursive-refinement script: the conversation reader, the weekly cap and the surfacer."""
 
+import datetime as dt
 import importlib.util
 import json
 from pathlib import Path
@@ -107,6 +108,12 @@ class RunTest(Base):
         refine.run(self.conf(a, b, c), "a", None, runner)
         self.assertEqual(calls, [])   # the cap is spent for the week
         self.assertEqual(sum(r["cost_usd"] for r in self.ledger()), 135.0)
+
+    def test_a_week_starts_on_saturday_so_its_catch_ups_fall_in_it(self):
+        days = [dt.datetime(2026, 10, 31, 4), dt.datetime(2026, 11, 1, 9, 30), dt.datetime(2026, 11, 2, 19, 30),
+                dt.datetime(2026, 11, 6, 23, 59)]
+        self.assertEqual({refine.week(d) for d in days}, {"2026-10-31"})
+        self.assertEqual(refine.week(dt.datetime(2026, 11, 7, 4)), "2026-11-07")
 
     def test_skips_paused_repos_and_repos_already_passed_unless_named(self):
         a, p = self.repo("a"), self.repo("p", rules="paused: yes")

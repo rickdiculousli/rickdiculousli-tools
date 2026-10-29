@@ -1,6 +1,6 @@
 {
   "name": "recursive-refinement",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "recursive-refinement skill: a weekly pass per repo that lands small reversible refinements to the setup behind the user's jobs and writes the rest as specs, with a scheduler that keeps a weekly spend cap and a session-start surfacer.",
   "author": {
     "name": "Rick Li"
