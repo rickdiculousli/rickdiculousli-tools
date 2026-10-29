@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "recursive-refinement",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "recursive-refinement skill: a weekly pass per repo that lands small reversible refinements to the setup behind the user's jobs and writes the rest as specs, with a scheduler that keeps a weekly spend cap and a session-start surfacer.",
   "author": { "name": "Rick Li" },
   "keywords": ["refinement", "maintenance", "scheduler"]

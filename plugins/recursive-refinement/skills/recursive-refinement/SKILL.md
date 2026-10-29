@@ -38,6 +38,10 @@ A change lands on its own only if every part holds. Check each and write down ho
 
 It also needs `rules.md` to allow it and `jobs.md` to be confirmed. Settle and record items one at a time (land it, or write its spec or its dry-run entry), so a pass cut off by its budget keeps what it finished. Everything else is a spec. Removing anything the user asked for is always a spec, and so is any change to `rules.md`.
 
+## Writing docs
+
+Docs agents read steer the work. A change to one that says how things are (instructions, rules, principles, a glossary) leaves no dates, history or numbers that go stale, and cuts any it finds; git keeps the history. A decisions log keeps each older decision as its what plus at most one sentence of why (two if it's genuinely tricky), at the level the user chose it rather than in terms of today's code or files, so what's built under it stays free to change. Dated logs (notes, specs, changelogs) keep their dates.
+
 ## Land (mode=land)
 
 One change per branch, in a worktree outside the repo:
