@@ -1,0 +1,8 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "pocock",
+  "version": "0.1.0",
+  "description": "Matt Pocock's engineering and planning skills copied verbatim from upstream (mattpocock/skills): codebase-design, domain-modeling, grill-with-docs, grilling, grill-me, improve-codebase-architecture, retro and wayfinder.",
+  "author": { "name": "Rick Li" },
+  "keywords": ["design", "domain-modeling", "grilling", "architecture"]
+}

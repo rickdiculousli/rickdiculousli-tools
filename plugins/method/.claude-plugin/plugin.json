@@ -1,12 +1,11 @@
 {
   "name": "method",
-  "version": "0.1.0",
-  "description": "Working-method skills copied verbatim from upstream: grill-me and grilling (mattpocock/skills), writing-plans (obra/superpowers).",
+  "version": "0.2.0",
+  "description": "Working-method skills copied verbatim from upstream: writing-plans (obra/superpowers). grill-me and grilling moved to the pocock plugin.",
   "author": {
     "name": "Rick Li"
   },
   "keywords": [
-    "grilling",
     "planning",
     "method"
   ]

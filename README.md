@@ -15,7 +15,8 @@ the current user. Author and marketplace names are shared package identity.
 | `visual-audit` | Supported host and Python 3.10+ |
 | `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
-| `method`, `skill-shaper` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
+| `method`, `pocock`, `skill-shaper` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
+| `pick-principles` | Supported host; it reads pstack's principle skills when pstack is installed |
 
 Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
 Intel Mac Whisper dependency selection is covered by a metadata regression test;
@@ -36,7 +37,9 @@ See [verification evidence and scope](docs/verification.md).
 | `repository-info` | Informational stub describing this layout |
 | `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
-| `method` | `grill-me` and `grilling` (a relentless interview to stress-test a plan) and `writing-plans` (an implementation plan from a spec), copied verbatim from upstream |
+| `method` | `writing-plans` skill: an implementation plan from a spec, copied verbatim from upstream |
+| `pocock` | Matt Pocock's engineering and planning skills, copied verbatim from upstream: `grill-me` and `grilling` (a relentless interview to stress-test a plan), `grill-with-docs`, `domain-modeling`, `codebase-design`, `improve-codebase-architecture`, `retro` and `wayfinder` |
+| `pick-principles` | `pick-principles` skill: at a phase change in nontrivial work, picks and reads the principles and skills that fit and writes them into builder briefs |
 | `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, copied verbatim from upstream |
 
 ## Visual audit reports
@@ -91,11 +94,10 @@ unknown; API-key-only accounts do not supply subscription quota.
 
 ## Method skills
 
-`method` carries three skills unchanged from their upstreams: `grill-me` and `grilling` from
-[mattpocock/skills](https://github.com/mattpocock/skills) and `writing-plans` from
-[obra/superpowers](https://github.com/obra/superpowers). `writing-plans` still names other
-superpowers skills for running a plan; they are not part of this plugin. In Claude Code they are
-`/method:grill-me`, `/method:grilling` and `/method:writing-plans`.
+`method` carries `writing-plans` unchanged from
+[obra/superpowers](https://github.com/obra/superpowers). It still names other superpowers skills
+for running a plan; they are not part of this plugin. In Claude Code it is `/method:writing-plans`.
+Its `grill-me` and `grilling` moved to `pocock` in 0.2.0.
 
 `plugins/method/UPSTREAM` pins the commit each upstream was copied at. `update.sh` fetches each
 upstream shallow into a temp dir, at its pin or at the ref `--to` names, prints the diff per skill,
@@ -107,8 +109,31 @@ branch has moved past the pin.
 ```sh
 plugins/method/update.sh --check                                   # the copy against the pins
 plugins/method/update.sh --check --to obra/superpowers=HEAD        # against upstream's latest
-plugins/method/update.sh --to obra/superpowers=HEAD --to mattpocock/skills=HEAD
+plugins/method/update.sh --to obra/superpowers=HEAD
 ```
+
+## Pocock skills
+
+`pocock` carries eight skills unchanged from [mattpocock/skills](https://github.com/mattpocock/skills):
+`grill-me`, `grilling`, `grill-with-docs`, `domain-modeling`, `codebase-design`,
+`improve-codebase-architecture`, `retro` and `wayfinder`. Some name upstream skills that are not
+part of this plugin (`research`, `prototype`, `writing-for-agents`, `setup-matt-pocock-skills`).
+In Claude Code they are `/pocock:<skill>`. `plugins/pocock/UPSTREAM` pins the commit they were
+copied at, and its `update.sh` works as `method`'s does:
+
+```sh
+plugins/pocock/update.sh --check                                   # the copy against the pin
+plugins/pocock/update.sh --to mattpocock/skills=HEAD               # move to upstream's latest
+```
+
+## Pick principles
+
+`pick-principles` is authored here. At a phase change in nontrivial work (before designing,
+building, debugging, migrating or deleting, reporting a number, or briefing a builder) it picks the
+few installed principles and skills that fit, reads them, applies them and writes them, with their
+paths, into builder briefs. It reads pstack's principle skills by path from the newest installed
+pstack version, and names `pocock` and `method` skills. It is `/pick-principles:pick-principles` in
+Claude Code; a line in the user's global agent instructions makes it fire without being named.
 
 ## Skill shaper
 
@@ -139,12 +164,14 @@ claude plugin install quota@rickdiculousli-tools
 claude plugin install yt-transcript@rickdiculousli-tools
 claude plugin install method@rickdiculousli-tools
 claude plugin install skill-shaper@rickdiculousli-tools
+claude plugin install pocock@rickdiculousli-tools
+claude plugin install pick-principles@rickdiculousli-tools
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
 
 In a new Claude Code session, invoke `/visual-audit:audit-report`,
-`/hello-world:hello`, `/repository-info:about`, or `/method:grill-me`. Restart an existing session after changing plugins.
+`/hello-world:hello`, `/repository-info:about`, or `/pocock:grill-me`. Restart an existing session after changing plugins.
 
 ### Codex
 
@@ -158,6 +185,8 @@ codex plugin add quota@rickdiculousli-tools
 codex plugin add yt-transcript@rickdiculousli-tools
 codex plugin add method@rickdiculousli-tools
 codex plugin add skill-shaper@rickdiculousli-tools
+codex plugin add pocock@rickdiculousli-tools
+codex plugin add pick-principles@rickdiculousli-tools
 codex plugin list --marketplace rickdiculousli-tools --available --json
 ```
 
@@ -176,6 +205,8 @@ claude plugin uninstall quota@rickdiculousli-tools
 claude plugin uninstall yt-transcript@rickdiculousli-tools
 claude plugin uninstall method@rickdiculousli-tools
 claude plugin uninstall skill-shaper@rickdiculousli-tools
+claude plugin uninstall pocock@rickdiculousli-tools
+claude plugin uninstall pick-principles@rickdiculousli-tools
 claude plugin marketplace remove rickdiculousli-tools
 
 codex plugin remove visual-audit@rickdiculousli-tools
@@ -186,6 +217,8 @@ codex plugin remove quota@rickdiculousli-tools
 codex plugin remove yt-transcript@rickdiculousli-tools
 codex plugin remove method@rickdiculousli-tools
 codex plugin remove skill-shaper@rickdiculousli-tools
+codex plugin remove pocock@rickdiculousli-tools
+codex plugin remove pick-principles@rickdiculousli-tools
 codex plugin marketplace remove rickdiculousli-tools
 ```
 
@@ -213,8 +246,8 @@ tests/                               # generator, verifier, and renderer tests
 ```
 
 `visual-audit` ships its renderer, templates, and references inside its skill
-folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way, and `method` and
-`skill-shaper` their `UPSTREAM` pins and `update.sh` at the plugin root. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
+folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way, and `method`,
+`pocock` and `skill-shaper` their `UPSTREAM` pins and `update.sh` at the plugin root. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
 without credentials or external services. Quota uses provider logins/services;
 transcripts download from YouTube and model/package hosts. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.

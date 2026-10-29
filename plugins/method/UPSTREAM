@@ -1,5 +1,4 @@
 # The upstream each skill is copied from, verbatim, and the commit it was copied at.
 # <github owner/repo> <commit> <skill directory in that repo>...
 # update.sh reads and rewrites this file; skills/<basename of each directory> is the copy.
-mattpocock/skills 49dd158d1076134a641b33efb035946536778336 skills/productivity/grill-me skills/productivity/grilling
 obra/superpowers bb92a77741419a4ab5f06e711a283343f1ada0c3 skills/writing-plans

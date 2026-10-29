@@ -76,13 +76,12 @@
     },
     {
       "name": "method",
-      "version": "0.1.0",
-      "description": "Working-method skills copied verbatim from upstream: grill-me and grilling (mattpocock/skills), writing-plans (obra/superpowers).",
+      "version": "0.2.0",
+      "description": "Working-method skills copied verbatim from upstream: writing-plans (obra/superpowers). grill-me and grilling moved to the pocock plugin.",
       "author": {
         "name": "Rick Li"
       },
       "keywords": [
-        "grilling",
         "planning",
         "method"
       ],
@@ -101,6 +100,35 @@
         "triggering"
       ],
       "source": "./plugins/skill-shaper"
+    },
+    {
+      "name": "pocock",
+      "version": "0.1.0",
+      "description": "Matt Pocock's engineering and planning skills copied verbatim from upstream (mattpocock/skills): codebase-design, domain-modeling, grill-with-docs, grilling, grill-me, improve-codebase-architecture, retro and wayfinder.",
+      "author": {
+        "name": "Rick Li"
+      },
+      "keywords": [
+        "design",
+        "domain-modeling",
+        "grilling",
+        "architecture"
+      ],
+      "source": "./plugins/pocock"
+    },
+    {
+      "name": "pick-principles",
+      "version": "0.1.0",
+      "description": "pick-principles skill: at a phase change in nontrivial work, picks and reads the few installed principles and skills that fit, applies them, and writes them into builder briefs.",
+      "author": {
+        "name": "Rick Li"
+      },
+      "keywords": [
+        "principles",
+        "skills",
+        "delegation"
+      ],
+      "source": "./plugins/pick-principles"
     }
   ]
 }

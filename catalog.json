@@ -11,6 +11,8 @@
     "plugins/quota",
     "plugins/yt-transcript",
     "plugins/method",
-    "plugins/skill-shaper"
+    "plugins/skill-shaper",
+    "plugins/pocock",
+    "plugins/pick-principles"
   ]
 }
