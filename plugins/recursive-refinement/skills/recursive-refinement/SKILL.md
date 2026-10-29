@@ -40,7 +40,7 @@ It also needs `rules.md` to allow it and `jobs.md` to be confirmed. Settle and r
 
 ## Writing docs
 
-Docs agents read steer the work. A change to one that says how things are (instructions, rules, principles, a glossary) leaves no dates, history or numbers that go stale, and cuts any it finds; git keeps the history. A decisions log keeps each older decision as its what plus at most one sentence of why (two if it's genuinely tricky), at the level the user chose it rather than in terms of today's code or files, so what's built under it stays free to change. Dated logs (notes, specs, changelogs) keep their dates.
+Cut the dates, history notes and stale numbers you find in docs agents read as instructions, and condense a decisions log's older entries to their what and a sentence of why. Dated logs (notes, specs, changelogs) keep their dates.
 
 ## Land (mode=land)
 
