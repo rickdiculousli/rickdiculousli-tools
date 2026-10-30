@@ -13,7 +13,7 @@ The prompt names `repo=<path>` and `mode=land` or `mode=dry-run <file>`. A dry r
 ## Read first
 
 - `<repo>/docs/refinement/rules.md`: the user's leash. `paused: yes` → stop and write nothing. Its limits override everything below.
-- `<repo>/docs/refinement/jobs.md`: the yardstick. `status: pending` → this pass writes specs only.
+- `<repo>/.engram/jobs.md`: the yardstick. `status: pending` → this pass writes specs only.
 - The repo's `AGENTS.md` (or `CLAUDE.md`): its checks and commit rules apply to every change.
 - `<repo>/docs/refinement/specs/*.md` with `status: approved`: the user said yes. Build these first, through the same landing steps; then set `status: built`.
 - The week's conversations, by script, never a transcript whole:

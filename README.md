@@ -148,8 +148,8 @@ skill, an agent file, `AGENTS.md` or `CLAUDE.md`, rules, role prompts.
 ## Recursive refinement
 
 `recursive-refinement` keeps the setup behind a repo's jobs lean. Each registered repo carries
-`docs/refinement/`: `jobs.md` (the yardstick, `status: confirmed` or `pending`), `rules.md` (what the
-pass may touch, how bold, what's off limits, and `paused: yes|no`), `notes.md` (one line per landed
+its jobs in `.engram/jobs.md` (the yardstick, `status: confirmed` or `pending`) and `docs/refinement/`:
+`rules.md` (what the pass may touch, how bold, what's off limits, and `paused: yes|no`), `notes.md` (one line per landed
 change) and `specs/` (one file per idea, `status: open|approved|rejected|built`). A pass reads the
 week's real conversations by script, lands only what passes its landing line (one revert undoes it,
 nothing in the record lost, at most one noticeable line changes for the user, data stays where it is,
