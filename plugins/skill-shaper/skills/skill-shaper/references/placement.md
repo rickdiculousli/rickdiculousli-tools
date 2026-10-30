@@ -1,6 +1,6 @@
 # Placement and agent differences
 
-Read this when choosing where a skill lives, or before using any frontmatter field outside the Agent Skills spec. These facts come from each vendor's documentation, checked September 2026. Agents change quickly; when a detail matters, confirm it in the linked docs.
+Read this when choosing where a skill lives, or before using any frontmatter field outside the Agent Skills spec. These facts come from each vendor's documentation. Agents change quickly; when a detail matters, confirm it in the linked docs.
 
 ## Contents
 

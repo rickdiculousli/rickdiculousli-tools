@@ -15,8 +15,9 @@ the current user. Author and marketplace names are shared package identity.
 | `visual-audit` | Supported host and Python 3.10+ |
 | `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
-| `method`, `pocock`, `skill-shaper` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
+| `method`, `pocock` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
 | `pick-principles` | Supported host; it reads pstack's principle skills when pstack is installed |
+| `skill-shaper` | Supported host |
 | `recursive-refinement` | Claude Code, `uv`, `git`; the scheduled job needs macOS launchd (elsewhere run it from cron or by hand) |
 
 Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
@@ -41,7 +42,7 @@ See [verification evidence and scope](docs/verification.md).
 | `method` | `writing-plans` skill: an implementation plan from a spec, copied verbatim from upstream |
 | `pocock` | Matt Pocock's engineering and planning skills, copied verbatim from upstream: `grill-me` and `grilling` (a relentless interview to stress-test a plan), `grill-with-docs`, `domain-modeling`, `codebase-design`, `improve-codebase-architecture`, `retro` and `wayfinder` |
 | `pick-principles` | `pick-principles` skill: at a phase change in nontrivial work, picks and reads the principles and skills that fit and writes them into builder briefs |
-| `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, copied verbatim from upstream |
+| `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, adapted from upstream |
 | `recursive-refinement` | `recursive-refinement` skill: a weekly pass per repo that lands small reversible refinements and writes the rest as specs, under a weekly spend cap |
 
 ## Visual audit reports
@@ -139,15 +140,10 @@ Claude Code; a line in the user's global agent instructions makes it fire withou
 
 ## Skill shaper
 
-`skill-shaper` carries the `skill-shaper` skill and its `references/placement.md` unchanged from
-[overment/skills](https://github.com/overment/skills) (MIT). It is `/skill-shaper:skill-shaper` in
-Claude Code. `plugins/skill-shaper/UPSTREAM` pins the commit it was copied at, and its `update.sh`
-works as `method`'s does:
-
-```sh
-plugins/skill-shaper/update.sh --check                             # the copy against the pin
-plugins/skill-shaper/update.sh --to overment/skills=HEAD           # move to upstream's latest
-```
+`skill-shaper` carries the `skill-shaper` skill and its `references/placement.md`, adapted from
+[overment/skills](https://github.com/overment/skills) (MIT) and maintained here. It is
+`/skill-shaper:skill-shaper` in Claude Code. Its rules cover any text that steers an agent: a
+skill, an agent file, `AGENTS.md` or `CLAUDE.md`, rules, role prompts.
 
 ## Recursive refinement
 
@@ -304,8 +300,8 @@ tests/                               # generator, verifier, and renderer tests
 ```
 
 `visual-audit` ships its renderer, templates, and references inside its skill
-folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way, and `method`,
-`pocock` and `skill-shaper` their `UPSTREAM` pins and `update.sh` at the plugin root. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
+folder; `quota` and `yt-transcript` ship their PEP 723 scripts the same way, and `method`
+and `pocock` their `UPSTREAM` pins and `update.sh` at the plugin root. `hello-world` and `repository-info` are stubs. The stubs and audit renderer work
 without credentials or external services. Quota uses provider logins/services;
 transcripts download from YouTube and model/package hosts. The adapters share identity and content, while translating the hosts'
 different marketplace source formats.

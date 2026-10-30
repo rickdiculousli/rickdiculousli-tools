@@ -4,7 +4,6 @@ description: Creates a new agent skill or reshapes one that triggers on the wron
 license: MIT
 metadata:
   author: overment
-  version: "0.7.0"
 ---
 
 # Skill Shaper
@@ -32,6 +31,7 @@ Use the lightest steering that works.
 - **Judgment work** (writing, review, design): one or two precise named concepts ("steelman", "inverted pyramid") and a few questions the agent asks itself. Say how each concept applies. Skip personas and praise.
 - **Fragile work** (deploys, migrations, exact formats): exact steps, commands and scripts.
 - **Every skill:** at most one opening sentence on what goes wrong without it, then the local facts. No section that restates the tool's documentation.
+- **Only what holds now.** Every line steers the agent; anything else distracts it. No dates, change history or "no longer", "used to", "now lives" phrasing: git keeps the history. No numbers that go stale (counts, measurements, versions, how long a run took). A number belongs only as a rule the agent follows.
 
 ## Facts to get right
 
