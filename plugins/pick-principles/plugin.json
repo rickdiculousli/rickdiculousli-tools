@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "pick-principles",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "pick-principles skill: at a phase change in nontrivial work, picks and reads the few installed principles and skills that fit, applies them, and writes them into builder briefs.",
   "author": { "name": "Rick Li" },
   "keywords": ["principles", "skills", "delegation"]

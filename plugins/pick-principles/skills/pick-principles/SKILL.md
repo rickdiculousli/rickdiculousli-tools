@@ -1,6 +1,6 @@
 ---
 name: pick-principles
-description: Picks and reads the few installed principles and skills that fit a phase change in nontrivial work, and writes them into builder briefs. Use before designing, building, debugging, migrating or deleting, reporting a number, or briefing a builder.
+description: Picks and reads the principles and skills that fit a phase change in nontrivial work, and writes them into builder briefs. Use before designing, building, debugging, migrating or deleting, reporting a number, briefing a builder, or editing what steers an agent.
 ---
 
 Without this, an agent crosses from one phase into the next on its own judgment. The lessons in the installed principles and skills never reach the work, or the subagents doing it.
@@ -35,8 +35,10 @@ Skip it for a lookup, a one-step change, or a subagent sent only to find or read
 | Trusting or reporting a number | explain-the-number | benchmark-checklist (read by path, in `<pstack>/skills/`) |
 | Briefing a builder | guard-the-context-window | |
 | Declaring done | prove-it-works | |
+| Writing or editing what steers an agent: a skill, an agent file, `AGENTS.md` or `CLAUDE.md`, rules, role prompts | subtract-before-you-add | skill-shaper:skill-shaper. Its newcomer test, baseline run and description rules hold for any of these, not only skills |
 
 ## Lessons from Rick's work
 
 - **Deleting:** before calling anything unused, say how far back the evidence reaches. Session history, run logs and git history can differ by months. Never delete what the user asked for on usage evidence alone.
+- **Steering text:** cutting history and dead references isn't enough. Run a fresh agent on a real ask without the text, keep what it got wrong and the local facts, and cut the rest.
 - **Measuring:** judge by the user's real use, never by a question set the agents wrote. A gain that disappears on unseen questions was tuning.
