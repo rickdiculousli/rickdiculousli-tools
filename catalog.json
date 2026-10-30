@@ -13,7 +13,6 @@
     "plugins/method",
     "plugins/skill-shaper",
     "plugins/pocock",
-    "plugins/pick-principles",
-    "plugins/recursive-refinement"
+    "plugins/pick-principles"
   ]
 }

@@ -1,5 +1,7 @@
 # Native lifecycle verification
 
+2026-10-30: `recursive-refinement` removed from the marketplace (the marketplace ships nine plugins): the weekly pass moved into the consuming repository it served, so its folder, tests, catalog entry and README section are gone; git keeps them. The rows below that name it record its last verification, not a current claim. `sync_marketplaces.py --check` and the unit suite passed in a scratch clone; `verify_lifecycle.py` was not run.
+
 2026-10-15: `delegation` and `long-horizon` are retired (moved to `retired/`, removed from the
 marketplace; buildermesh replaces them). The rows and hashes below that name them are the record of
 the last verification they were part of, not a current claim; the marketplace now ships five plugins.
