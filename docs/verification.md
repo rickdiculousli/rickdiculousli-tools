@@ -1295,3 +1295,5 @@ Verification on macOS (Darwin 25.5.0):
 
 Not performed: no model session has run the updated resume/checkpoint/migrate
 skills, and the consuming repository's real archive was not edited.
+
+2026-10-29: `pick-principles` 0.1.2: its description narrows it to software work and excludes work on personal records or notes, so record repos' design, delete and build requests no longer load it; steering edits route to skill-shaper from the user's global instructions. A fresh agent given only the descriptions (with the medical and investments repos' own skills) and thirteen requests loaded it for debugging, designing, migrating and deleting code, and for nothing in the record repos; a first wording that said only "code work" still loaded it for three record-repo requests (`checked`). `verify_lifecycle.py` passed on codex-cli 0.163.0 and Claude Code 2.1.311 on the Mac; the unit suite (175 tests) passed. `pick-principles` `SKILL.md` `1f0da65c2264d3ad6e0a728729ee15fe2d92f815479442a13531b0cd750e310e`. No model has run it from the installed plugin yet.

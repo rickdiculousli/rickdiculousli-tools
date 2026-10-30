@@ -41,7 +41,7 @@ See [verification evidence and scope](docs/verification.md).
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
 | `method` | `writing-plans` skill: an implementation plan from a spec, copied verbatim from upstream |
 | `pocock` | Matt Pocock's engineering and planning skills, copied verbatim from upstream: `grill-me` and `grilling` (a relentless interview to stress-test a plan), `grill-with-docs`, `domain-modeling`, `codebase-design`, `improve-codebase-architecture`, `retro` and `wayfinder` |
-| `pick-principles` | `pick-principles` skill: at a phase change in nontrivial work, picks and reads the principles and skills that fit and writes them into builder briefs |
+| `pick-principles` | `pick-principles` skill: at a phase change in nontrivial code work, picks and reads the principles and skills that fit and writes them into builder briefs |
 | `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, adapted from upstream |
 | `recursive-refinement` | `recursive-refinement` skill: a weekly pass per repo that lands small reversible refinements and writes the rest as specs, under a weekly spend cap |
 
@@ -131,12 +131,12 @@ plugins/pocock/update.sh --to mattpocock/skills=HEAD               # move to ups
 
 ## Pick principles
 
-`pick-principles` is authored here. At a phase change in nontrivial work (before designing,
-building, debugging, migrating or deleting, reporting a number, or briefing a builder) it picks the
+`pick-principles` is authored here. At a phase change in nontrivial code work (before designing,
+building, debugging, migrating or deleting code, or briefing a builder) it picks the
 few installed principles and skills that fit, reads them, applies them and writes them, with their
 paths, into builder briefs. It reads pstack's principle skills by path from the newest installed
 pstack version, and names `pocock` and `method` skills. It is `/pick-principles:pick-principles` in
-Claude Code; a line in the user's global agent instructions makes it fire without being named.
+Claude Code; bmesh's `core` rule set makes it fire without being named in repos that have it.
 
 ## Skill shaper
 

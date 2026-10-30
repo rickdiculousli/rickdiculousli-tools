@@ -1,6 +1,6 @@
 ---
 name: pick-principles
-description: Picks and reads the principles and skills that fit a phase change in nontrivial work, and writes them into builder briefs. Use before designing, building, debugging, migrating or deleting, reporting a number, briefing a builder, or editing what steers an agent.
+description: Picks and reads the principles and skills that fit a phase change in nontrivial software work, and writes them into builder briefs. Use before designing, building, debugging, migrating or deleting code, or briefing a builder. Not for work on personal records or notes.
 ---
 
 Without this, an agent crosses from one phase into the next on its own judgment. The lessons in the installed principles and skills never reach the work, or the subagents doing it.
