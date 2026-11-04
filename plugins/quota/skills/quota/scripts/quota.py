@@ -55,7 +55,7 @@ class Unknown(Exception):
 class Reading:
     provider: str
     at: float
-    five_hour: float
+    five_hour: float | None           # None: the plan has no 5-hour window
     five_reset: str | None
     week: float
     week_reset: str | None
@@ -124,11 +124,12 @@ def read_claude() -> Reading:
     except (urllib.error.URLError, TimeoutError, ValueError) as e:
         raise Unknown(f"usage page: {e}") from None
     try:
+        five = d["five_hour"]                                 # null on a plan with no 5-hour window
         return Reading(
             provider="claude",
             at=time.time(),
-            five_hour=float(d["five_hour"]["utilization"]),
-            five_reset=d["five_hour"].get("resets_at"),
+            five_hour=float(five["utilization"]) if five else None,
+            five_reset=five.get("resets_at") if five else None,
             week=float(d["seven_day"]["utilization"]),
             week_reset=d["seven_day"].get("resets_at"),
             week_start=(d.get("seven_day_breakdown") or {}).get("window_started_at"),
@@ -257,7 +258,7 @@ def assess(r: Reading) -> dict:
     pace = r.week / elapsed_h if elapsed_h and elapsed_h >= MIN_ELAPSED_H else None      # points/hour
     projected = min(r.week + pace * hours_left, 100.0) if pace is not None and hours_left is not None else None
     return {
-        "five_hour_unused": 100 - r.five_hour,
+        "five_hour_unused": 100 - r.five_hour if r.five_hour is not None else None,
         "week_unused": 100 - r.week,
         "hours_to_five_hour_reset": max((_ts(r.five_reset) - r.at) / 3600, 0) if r.five_reset else None,
         "hours_to_weekly_reset": hours_left,
@@ -270,10 +271,12 @@ def assess(r: Reading) -> dict:
 def show(r: Reading, a: dict) -> str:
     f = lambda v, fmt: "?" if v is None else format(v, fmt)
     title = r.provider.capitalize() + (f" ({r.plan})" if r.plan else "")
+    five = ("  5-hour window   none on this plan" if r.five_hour is None else
+            f"  5-hour window  {r.five_hour:5.0f}% used   resets {local(r.five_reset)} "
+            f"({f(a['hours_to_five_hour_reset'], '.1f')}h)")
     lines = [
         title,
-        f"  5-hour window  {r.five_hour:5.0f}% used   resets {local(r.five_reset)} "
-        f"({f(a['hours_to_five_hour_reset'], '.1f')}h)",
+        five,
         f"  weekly window  {r.week:5.0f}% used   resets {local(r.week_reset)} "
         f"({f(a['hours_to_weekly_reset'], '.0f')}h)",
         f"  weekly pace    {f(a['weekly_pace_points_per_hour'], '.2f')} points/hour; at that pace "

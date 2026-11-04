@@ -32,7 +32,8 @@ server. API-key-only accounts do not provide these subscription readings.
 
 ## Reading it
 
-The output labels its own fields. Weekly pace and its projections are empty (`?` in
+The output labels its own fields. A plan with no 5-hour window, such as Claude's Ultra
+(its login's tier reads `max_20x`), shows `none` in text and `null` in `--json`. Weekly pace and its projections are empty (`?` in
 text, `null` in `--json`) while the weekly window is younger than 12 hours. When overflow is billed (extra usage or credits), treat 100%
 as a hard stop. The script reports numbers only. It never decides whether to run work; you do,
 from the numbers and what the user asked. It exits 2 only when no provider could be

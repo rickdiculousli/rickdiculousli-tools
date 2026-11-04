@@ -1,5 +1,7 @@
 # Native lifecycle verification
 
+2026-11-04: `quota` 0.1.4: a Claude plan whose usage page sends `five_hour: null` reads as having no 5-hour window (`none` in text, `null` in `--json`) instead of failing the whole Claude reading. `quota.py` was read live on the Mac against an Ultra login, in both text and `--json` (`checked`). A plan that does report the window is covered by a mocked test only; no such login was read. `verify_lifecycle.py` passed on codex-cli 0.163.0 and Claude Code 2.1.318; the unit suite (168 tests) passed. `quota` `SKILL.md` `2f7362ae12086cd1ef1d4851eda183876b6c750d6d0340f4f2b3d4d0950b758d`.
+
 2026-10-30: `recursive-refinement` removed from the marketplace (the marketplace ships nine plugins): the weekly pass moved into the consuming repository it served, so its folder, tests, catalog entry and README section are gone; git keeps them. The rows below that name it record its last verification, not a current claim. `sync_marketplaces.py --check` and the unit suite passed in a scratch clone; `verify_lifecycle.py` was not run.
 
 2026-10-15: `delegation` and `long-horizon` are retired (moved to `retired/`, removed from the

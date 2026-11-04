@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 import importlib.util
+import io
 import json
 from pathlib import Path
 import sys
@@ -151,6 +152,41 @@ class AssessTest(unittest.TestCase):
         self.assertEqual(assessment["hours_to_five_hour_reset"], 2)
         self.assertEqual(assessment["hours_to_weekly_reset"], 68)
         self.assertIn("2.0h", quota.show(reading, assessment))
+
+
+class ClaudeTest(unittest.TestCase):
+    page = {"seven_day": {"utilization": 10.0, "resets_at": "2026-11-11T03:00:01+00:00"},
+            "seven_day_breakdown": {"window_started_at": "2026-11-04T03:00:01+00:00"},
+            "extra_usage": {"is_enabled": False}}
+
+    def read(self, page):
+        body = io.BytesIO(json.dumps(page).encode())
+        with patch.object(quota, "_claude_token", return_value="token"), patch.object(
+            quota.urllib.request, "urlopen", return_value=body
+        ):
+            return quota.read_claude()
+
+    def test_plan_without_a_five_hour_window(self):
+        reading = self.read({**self.page, "five_hour": None})
+        self.assertIsNone(reading.five_hour)
+        self.assertIsNone(reading.five_reset)
+        self.assertEqual(reading.week, 10)
+        assessment = quota.assess(reading)
+        self.assertIsNone(assessment["five_hour_unused"])
+        self.assertIsNone(assessment["hours_to_five_hour_reset"])
+        self.assertEqual(assessment["week_unused"], 90)
+        self.assertIn("5-hour window   none on this plan", quota.show(reading, assessment))
+        json.dumps(quota.asdict(reading))
+
+    def test_plan_with_a_five_hour_window(self):
+        reading = self.read({**self.page, "five_hour": {
+            "utilization": 9.0, "resets_at": "2026-11-04T11:00:00+00:00"}})
+        self.assertEqual(reading.five_hour, 9)
+        self.assertEqual(reading.five_reset, "2026-11-04T11:00:00+00:00")
+
+    def test_missing_five_hour_key_is_a_changed_page(self):
+        with self.assertRaises(quota.Unknown):
+            self.read(self.page)
 
 
 class CodexTest(unittest.TestCase):
