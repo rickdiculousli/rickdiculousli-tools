@@ -14,7 +14,9 @@ Each provider is read the way its own client reads it, and neither read costs to
   stdio), the same call the Codex TUI and desktop app make. Codex handles its own auth.
 
 It reports numbers, not rulings: how much of each window is used, when each resets, the pace
-across the weekly window, and how much is projected to be left at the reset. Whoever reads it
+across the weekly window, and how much is projected to be left at the reset. Claude's scoped
+weekly limits (one model's allowance, say) are shown beside the weekly window, with the one
+that binds marked: it runs out first. Whoever reads it
 decides what to do. Each reading is logged to
 ${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/quota/usage.jsonl.
 
@@ -42,6 +44,7 @@ from pathlib import Path
 PROVIDERS = ("claude", "codex")
 
 MIN_ELAPSED_H = 12.0    # a weekly window younger than this is too short to project a pace from
+SAME_RESET_S = 60.0     # a scoped limit resetting this close to the weekly window shares its start
 
 STATE = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
 LOG = STATE / "rickdiculousli-tools" / "quota" / "usage.jsonl"
@@ -63,6 +66,7 @@ class Reading:
     overflow_billed: bool             # past 100%, work is billed rather than refused
     plan: str | None = None
     reset_credits: list[dict] = field(default_factory=list)   # banked resets (Codex)
+    scoped: list[dict] = field(default_factory=list)  # {name, group, percent, resets_at, binding} (Claude)
 
 
 def _iso(ts: float | None) -> str | None:
@@ -115,6 +119,60 @@ def _claude_token() -> str:
     return token
 
 
+def _safe_iso(v) -> str | None:
+    """An ISO timestamp the rest of the script can parse, or None."""
+    if not isinstance(v, str):
+        return None
+    try:
+        _ts(v)
+    except ValueError:
+        return None
+    return v
+
+
+def _percent(v) -> float | None:
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def _scope_name(scope) -> str | None:
+    if not isinstance(scope, dict):
+        return None
+    for key in ("model", "surface"):
+        v = scope.get(key)
+        if isinstance(v, str) and v:
+            return v
+        if isinstance(v, dict):
+            for k in ("display_name", "name", "id"):
+                if isinstance(v.get(k), str) and v[k]:
+                    return v[k]
+    return None
+
+
+def claude_scoped(d: dict) -> list[dict]:
+    """The usage page's scoped limits (one model's or surface's allowance): every `limits` entry
+    with a named scope, then `seven_day_<model>` windows not already listed. Anything malformed
+    is left out, so a page without them reads as before."""
+    out = []
+    limits = d.get("limits")
+    for e in limits if isinstance(limits, list) else ():
+        if not isinstance(e, dict):
+            continue
+        name, percent = _scope_name(e.get("scope")), _percent(e.get("percent"))
+        if name is None or percent is None:
+            continue
+        group = e.get("group") if isinstance(e.get("group"), str) and e.get("group") else "limit"
+        out.append({"name": name, "group": group, "percent": percent,
+                    "resets_at": _safe_iso(e.get("resets_at")), "binding": e.get("is_active") is True})
+    seen = {s["name"].lower() for s in out}
+    for key, name in (("seven_day_opus", "Opus"), ("seven_day_sonnet", "Sonnet")):
+        w = d.get(key)
+        percent = _percent(w.get("utilization")) if isinstance(w, dict) else None
+        if percent is not None and name.lower() not in seen:
+            out.append({"name": name, "group": "weekly", "percent": percent,
+                        "resets_at": _safe_iso(w.get("resets_at")), "binding": False})
+    return out
+
+
 def read_claude() -> Reading:
     req = urllib.request.Request(CLAUDE_URL, headers={"Authorization": f"Bearer {_claude_token()}",
                                                       "anthropic-beta": "oauth-2025-04-20"})
@@ -134,6 +192,7 @@ def read_claude() -> Reading:
             week_reset=d["seven_day"].get("resets_at"),
             week_start=(d.get("seven_day_breakdown") or {}).get("window_started_at"),
             overflow_billed=bool((d.get("extra_usage") or {}).get("is_enabled")),
+            scoped=claude_scoped(d),
         )
     except (KeyError, TypeError, ValueError):
         raise Unknown("the usage page changed shape") from None
@@ -251,12 +310,19 @@ def local(iso: str | None) -> str:
 def assess(r: Reading) -> dict:
     """Facts derived from a reading: time left, pace across the weekly window, and where it lands."""
     reset, start = _ts(r.week_reset), _ts(r.week_start)
-    hours_left = max((reset - r.at) / 3600, 0) if reset else None
     if start is None and reset is not None:
         start = reset - 7 * 86400
-    elapsed_h = (r.at - start) / 3600 if start else None
-    pace = r.week / elapsed_h if elapsed_h and elapsed_h >= MIN_ELAPSED_H else None      # points/hour
-    projected = min(r.week + pace * hours_left, 100.0) if pace is not None and hours_left is not None else None
+    hours_left, pace, projected = _pace(r.week, r.at, reset, start)
+    scoped = []
+    for s in r.scoped:
+        s_reset = _ts(s["resets_at"])
+        # A scoped window's start is known only when it resets with the weekly window.
+        same = s_reset is not None and reset is not None and abs(s_reset - reset) <= SAME_RESET_S
+        s_left, s_pace, s_proj = _pace(s["percent"], r.at, s_reset, start if same else None)
+        scoped.append({**s, "unused": 100 - s["percent"], "hours_to_reset": s_left,
+                       "window_start_known": same,
+                       "pace_points_per_hour": s_pace, "projected_at_reset": s_proj,
+                       "projected_unused_at_reset": 100 - s_proj if s_proj is not None else None})
     return {
         "five_hour_unused": 100 - r.five_hour if r.five_hour is not None else None,
         "week_unused": 100 - r.week,
@@ -265,7 +331,17 @@ def assess(r: Reading) -> dict:
         "weekly_pace_points_per_hour": pace,
         "projected_week_at_reset": projected,
         "projected_unused_at_reset": 100 - projected if projected is not None else None,
+        "scoped": scoped,
     }
+
+
+def _pace(used: float, at: float, reset: float | None, start: float | None):
+    """Hours to the reset, points/hour so far, and the projected use at the reset."""
+    hours_left = max((reset - at) / 3600, 0) if reset else None
+    elapsed_h = (at - start) / 3600 if start else None
+    pace = used / elapsed_h if elapsed_h and elapsed_h >= MIN_ELAPSED_H else None
+    projected = min(used + pace * hours_left, 100.0) if pace is not None and hours_left is not None else None
+    return hours_left, pace, projected
 
 
 def show(r: Reading, a: dict) -> str:
@@ -282,6 +358,16 @@ def show(r: Reading, a: dict) -> str:
         f"  weekly pace    {f(a['weekly_pace_points_per_hour'], '.2f')} points/hour; at that pace "
         f"{f(a['projected_week_at_reset'], '.0f')}% used by the reset, "
         f"{f(a['projected_unused_at_reset'], '.0f')} points unused",
+    ]
+    for s in a.get("scoped", ()):
+        label = f"{s['name']} {s['group']}"
+        lines.append(f"  {label:<15}{s['percent']:5.0f}% used   resets {local(s['resets_at'])} "
+                     f"({f(s['hours_to_reset'], '.0f')}h)" + ("  \u2190 binding" if s["binding"] else ""))
+        if s["window_start_known"]:
+            lines.append(f"  {s['name'] + ' pace':<15}{f(s['pace_points_per_hour'], '.2f')} points/hour; at that pace "
+                         f"{f(s['projected_at_reset'], '.0f')}% used by the reset, "
+                         f"{f(s['projected_unused_at_reset'], '.0f')} points unused")
+    lines += [
         f"  overflow       {'billed past 100%' if r.overflow_billed else 'refused past 100% (no billing)'}",
     ]
     if r.reset_credits:

@@ -207,3 +207,88 @@ class CodexTest(unittest.TestCase):
         self.assertEqual(result.reset_credits[0]["title"], "banked")
         self.assertEqual(datetime.fromisoformat(result.week_start), datetime(2026, 10, 5, 12, tzinfo=timezone.utc))
         self.assertFalse(result.overflow_billed)
+
+
+class ClaudeScopedTest(unittest.TestCase):
+    page = {"five_hour": None,
+            "seven_day": {"utilization": 76.0, "resets_at": "2026-11-11T03:00:00.177821+00:00"},
+            "seven_day_breakdown": {"window_started_at": "2026-11-04T03:00:00.177821+00:00"},
+            "seven_day_opus": None, "seven_day_sonnet": None,
+            "extra_usage": {"is_enabled": False}}
+    limits = [
+        {"kind": "weekly_all", "group": "weekly", "percent": 76, "severity": "warning",
+         "resets_at": "2026-11-11T03:00:00.177821+00:00", "scope": None, "is_active": False},
+        {"kind": "weekly_scoped", "group": "weekly", "percent": 89, "severity": "warning",
+         "resets_at": "2026-11-11T03:00:00.178047+00:00",
+         "scope": {"model": {"id": None, "display_name": "Fable"}, "surface": None}, "is_active": True},
+    ]
+    at = datetime(2026, 11, 10, 20, tzinfo=timezone.utc).timestamp()
+
+    def read(self, page):
+        body = io.BytesIO(json.dumps(page).encode())
+        with patch.object(quota, "_claude_token", return_value="token"), patch.object(
+            quota.urllib.request, "urlopen", return_value=body
+        ), patch.object(quota.time, "time", return_value=self.at):
+            return quota.read_claude()
+
+    def test_scoped_weekly_limit_is_read_and_marked_binding(self):
+        reading = self.read({**self.page, "limits": self.limits,
+                             "weekly_scoped_shares": [{"limit_index": 1, "used_percent_of_weekly": 45,
+                                                       "allowance_percent_of_weekly": 50}]})
+        self.assertEqual(reading.week, 76)
+        self.assertEqual(reading.scoped, [{"name": "Fable", "group": "weekly", "percent": 89,
+                                           "resets_at": "2026-11-11T03:00:00.178047+00:00",
+                                           "binding": True}])
+        assessment = quota.assess(reading)
+        (fable,) = assessment["scoped"]
+        self.assertTrue(fable["window_start_known"])
+        self.assertAlmostEqual(fable["hours_to_reset"], 7, places=2)
+        self.assertAlmostEqual(fable["pace_points_per_hour"], 89 / 161, places=4)
+        self.assertAlmostEqual(fable["projected_at_reset"], 89 + 89 / 161 * 7, places=3)
+        text = quota.show(reading, assessment)
+        self.assertRegex(text, r"\n  Fable weekly      89% used   resets .* \(7h\)  ← binding\n")
+        self.assertIn("\n  Fable pace     0.55 points/hour", text)
+        json.dumps({"reading": quota.asdict(reading), **assessment})
+
+    def test_scoped_limit_with_another_reset_has_no_pace(self):
+        limit = {**self.limits[1], "resets_at": "2026-11-12T03:00:00+00:00"}
+        reading = self.read({**self.page, "limits": [limit]})
+        (scoped,) = quota.assess(reading)["scoped"]
+        self.assertFalse(scoped["window_start_known"])
+        self.assertIsNone(scoped["pace_points_per_hour"])
+        self.assertIsNone(scoped["projected_at_reset"])
+        self.assertNotIn("Fable pace", quota.show(reading, quota.assess(reading)))
+
+    def test_model_windows_are_read_when_present(self):
+        reading = self.read({**self.page, "limits": self.limits,
+                             "seven_day_opus": {"utilization": 40.0, "resets_at": "2026-11-11T03:00:00+00:00"}})
+        self.assertEqual([s["name"] for s in reading.scoped], ["Fable", "Opus"])
+        self.assertFalse(reading.scoped[1]["binding"])
+
+    def test_no_limits_reads_as_before(self):
+        reading = self.read(self.page)
+        self.assertEqual(reading.scoped, [])
+        assessment = quota.assess(reading)
+        self.assertEqual(assessment["scoped"], [])
+        self.assertEqual(quota.show(reading, assessment).count("\n"), 4)
+
+    def test_malformed_limits_are_ignored(self):
+        for limits in ("nope", {"kind": "weekly_scoped"}, None, 5):
+            self.assertEqual(self.read({**self.page, "limits": limits}).scoped, [])
+        bad = [
+            "nope", None, 7,
+            {"kind": "weekly_scoped", "percent": "89", "scope": {"model": {"display_name": "Fable"}}},
+            {"kind": "weekly_scoped", "percent": True, "scope": {"model": {"display_name": "Fable"}}},
+            {"kind": "weekly_scoped", "percent": 89, "scope": {"model": {"display_name": None}}},
+            {"kind": "weekly_scoped", "percent": 89, "scope": "Fable"},
+            {"kind": "weekly_scoped", "percent": 89},
+        ]
+        reading = self.read({**self.page, "limits": bad + [
+            {"kind": "weekly_scoped", "percent": 50, "resets_at": "not a date", "is_active": "yes",
+             "scope": {"model": None, "surface": "web"}}]})
+        self.assertEqual(reading.scoped, [{"name": "web", "group": "limit", "percent": 50,
+                                           "resets_at": None, "binding": False}])
+        assessment = quota.assess(reading)
+        self.assertIsNone(assessment["scoped"][0]["hours_to_reset"])
+        self.assertIn("web limit         50% used   resets unknown (?h)\n", quota.show(reading, assessment))
+        self.assertEqual(self.read({**self.page, "seven_day_opus": {"utilization": None}}).scoped, [])

@@ -36,7 +36,7 @@ See [verification evidence and scope](docs/verification.md).
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
 | `repository-info` | Informational stub describing this layout |
-| `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, resets, weekly pace, projected unused); numbers only |
+| `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, Claude's per-model weekly limits, resets, weekly pace, projected unused); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
 | `method` | `writing-plans` skill: an implementation plan from a spec, copied verbatim from upstream |
 | `pocock` | Matt Pocock's engineering and planning skills, copied verbatim from upstream: `grill-me` and `grilling` (a relentless interview to stress-test a plan), `grill-with-docs`, `domain-modeling`, `codebase-design`, `improve-codebase-architecture`, `retro` and `wayfinder` |

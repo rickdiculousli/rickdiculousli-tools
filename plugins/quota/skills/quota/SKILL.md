@@ -34,7 +34,17 @@ server. API-key-only accounts do not provide these subscription readings.
 
 The output labels its own fields. A plan with no 5-hour window, such as Claude's Ultra
 (its login's tier reads `max_20x`), shows `none` in text and `null` in `--json`. Weekly pace and its projections are empty (`?` in
-text, `null` in `--json`) while the weekly window is younger than 12 hours. When overflow is billed (extra usage or credits), treat 100%
+text, `null` in `--json`) while the weekly window is younger than 12 hours.
+
+Claude can also have scoped weekly limits: one model's own allowance (such as Opus,
+Sonnet or another named model) inside the weekly window, which can run out while the
+weekly window still has room. Each shows as its own line under Claude, named for its
+model or surface, and in `--json` under `scoped` (`name`, `percent`, `resets_at`,
+`binding`, pace and projection). The one marked `← binding` (`"binding": true`) is the
+limit that runs out first: read work for that model against it, not against the weekly
+window. A scoped limit gets a pace only when it resets with the weekly window.
+
+When overflow is billed (extra usage or credits), treat 100%
 as a hard stop. The script reports numbers only. It never decides whether to run work; you do,
 from the numbers and what the user asked. It exits 2 only when no provider could be
 read. Every reading is appended to
