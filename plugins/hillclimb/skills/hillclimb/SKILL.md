@@ -11,15 +11,15 @@ Take the work and its goal from the conversation: what is being improved (a file
 
 ## 2. Let the user pick aspects and targets
 
-Suggest the aspects that matter for this task, numbered, each with one line on what a 10 looks like and a suggested target. Put closely related aspects on one line as a pair when one reading judges both; the pair gets one judge. Offer any invariants already settled in the conversation (see step 3). Then ask, for example:
+You write the proposal; the user only edits it. Suggest the aspects that matter for this task, numbered. Give each the principles a judge measures it by (named concepts like "inverted pyramid" or "one idea per paragraph", not a checklist of exact fixes) and a suggested target: the score where more polish stops paying off for this task, which is rarely 10. Put closely related aspects on one line as a pair when one reading judges both; the pair gets one judge. Offer any invariants already settled in the conversation (see step 3). Then ask, for example:
 
 ```text
-1. Correctness: every claim and command is true for the code as it stands. Target 9.5
-2. Clarity + structure: a newcomer finds and follows the steps in order. Target 9.5
-3. Concision: no line the reader doesn't need. Target 9
-4. Tone: plain, no hype. Target 9
+1. Correctness: says only what is true of what it describes; gaps are marked, not filled. Suggested 9.5
+2. Clarity + structure: inverted pyramid; one idea per paragraph; a newcomer can act on it. Suggested 9
+3. Concision: every line earns its place. Suggested 9
+4. Tone: plain words over hype. Suggested 8.5
 
-Reply with numbers to keep and their targets ("1 9.5, 2 9, drop 4"), add your own ("+ accessibility 9"), and any invariants.
+Keep, retarget or drop by number ("1, 2 9.5, drop 4"), add your own ("+ accessibility 9"), and name any invariants.
 ```
 
 Spawn no judge until the user has replied. Their reply is the go-ahead for the whole climb.
@@ -37,7 +37,7 @@ Each round, spawn one fresh read-only subagent per aspect or pair, all at once, 
 Give each judge:
 
 - the work itself (its path, or the text) and its goal and audience
-- its aspect or pair, with what a 10 looks like
+- its aspect or pair and the principles it is measured by, to apply with judgment rather than as a checklist
 - the invariants, as "already decided; do not deduct for or suggest changing these"
 - what to return: a score out of 10 to one decimal for each aspect, then each deduction with where it is, why it costs points and the change that would remove it
 
