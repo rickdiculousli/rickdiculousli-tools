@@ -18,6 +18,7 @@ the current user. Author and marketplace names are shared package identity.
 | `method`, `pocock` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
 | `pick-principles` | Supported host; it reads pstack's principle skills when pstack is installed |
 | `skill-shaper` | Supported host |
+| `hillclimb` | Supported host that can spawn subagents |
 
 Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
 Intel Mac Whisper dependency selection is covered by a metadata regression test;
@@ -42,6 +43,7 @@ See [verification evidence and scope](docs/verification.md).
 | `pocock` | Matt Pocock's engineering and planning skills, copied verbatim from upstream: `grill-me` and `grilling` (a relentless interview to stress-test a plan), `grill-with-docs`, `domain-modeling`, `codebase-design`, `improve-codebase-architecture`, `retro` and `wayfinder` |
 | `pick-principles` | `pick-principles` skill: at a phase change in nontrivial code work, picks and reads the principles and skills that fit and writes them into builder briefs |
 | `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, adapted from upstream |
+| `hillclimb` | `hillclimb` skill: improves a piece of work round by round until fresh LLM judges, one per aspect, score each chosen aspect at its target out of 10 |
 
 ## Visual audit reports
 
@@ -143,6 +145,14 @@ Claude Code; bmesh's `core` rule set makes it fire without being named in repos 
 `/skill-shaper:skill-shaper` in Claude Code. Its rules cover any text that steers an agent: a
 skill, an agent file, `AGENTS.md` or `CLAUDE.md`, rules, role prompts.
 
+## Hillclimb
+
+`hillclimb` is authored here. It pins the task, suggests numbered aspects with targets out of 10
+for the user to keep, retarget, drop or add to, then revises the work round by round. Each round,
+one fresh subagent judges each aspect (or a pair of closely related ones) without seeing the
+target or earlier scores, and the points the user has ruled on go to every judge as invariants so
+settled choices stop costing points. It is `/hillclimb:hillclimb` in Claude Code.
+
 ## Install from this checkout
 
 Run these commands from the repository root. They register this local checkout
@@ -162,6 +172,7 @@ claude plugin install method@rickdiculousli-tools
 claude plugin install skill-shaper@rickdiculousli-tools
 claude plugin install pocock@rickdiculousli-tools
 claude plugin install pick-principles@rickdiculousli-tools
+claude plugin install hillclimb@rickdiculousli-tools
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
@@ -183,6 +194,7 @@ codex plugin add method@rickdiculousli-tools
 codex plugin add skill-shaper@rickdiculousli-tools
 codex plugin add pocock@rickdiculousli-tools
 codex plugin add pick-principles@rickdiculousli-tools
+codex plugin add hillclimb@rickdiculousli-tools
 codex plugin list --marketplace rickdiculousli-tools --available --json
 ```
 
@@ -203,6 +215,7 @@ claude plugin uninstall method@rickdiculousli-tools
 claude plugin uninstall skill-shaper@rickdiculousli-tools
 claude plugin uninstall pocock@rickdiculousli-tools
 claude plugin uninstall pick-principles@rickdiculousli-tools
+claude plugin uninstall hillclimb@rickdiculousli-tools
 claude plugin marketplace remove rickdiculousli-tools
 
 codex plugin remove visual-audit@rickdiculousli-tools
@@ -215,6 +228,7 @@ codex plugin remove method@rickdiculousli-tools
 codex plugin remove skill-shaper@rickdiculousli-tools
 codex plugin remove pocock@rickdiculousli-tools
 codex plugin remove pick-principles@rickdiculousli-tools
+codex plugin remove hillclimb@rickdiculousli-tools
 codex plugin marketplace remove rickdiculousli-tools
 ```
 
