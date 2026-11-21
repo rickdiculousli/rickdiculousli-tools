@@ -1,6 +1,6 @@
 {
   "name": "hillclimb",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "hillclimb skill: improves a piece of work round by round until fresh LLM judges, one per aspect, score each chosen aspect at its target out of 10.",
   "author": {
     "name": "Rick Li"

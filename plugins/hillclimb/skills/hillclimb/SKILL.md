@@ -7,11 +7,11 @@ Without this, the judging drifts: one reviewer scores everything, judges see the
 
 ## 1. Pin the task
 
-Take the work and its goal from the conversation: what is being improved (a file, a diff, a plan, a prompt), who it is for, and what it must do. If either is unclear, ask in one message before anything else.
+Take the work and its goal from the conversation: what is being improved (a file, a diff, a plan, a prompt), who it is for, and what it must do. If you can't tell what the work is, ask before anything else. Otherwise state your reading of its goal and audience at the top of the proposal in step 2, for the user to correct.
 
 ## 2. Let the user pick aspects and targets
 
-You write the proposal; the user only edits it. Suggest the aspects that matter for this task, numbered. Give each the principles a judge measures it by, not a checklist of exact fixes. Where a well-known concept, methodology or standard fits the aspect (Diátaxis, Nielsen's heuristics, SOLID, WCAG), name it: the name alone brings its whole body of practice to the judge. Then give a suggested target: the score where more polish stops paying off for this task, which is rarely 10. Put closely related aspects on one line as a pair when one reading judges both; the pair gets one judge. Offer any invariants already settled in the conversation (see step 3). Then ask, for example:
+You write the proposal; the user only edits it. Suggest the aspects that matter for this task, numbered. Give each the principles a judge measures it by, not a checklist of exact fixes. Where a well-known concept, methodology or standard fits the aspect (Diátaxis, Nielsen's heuristics, SOLID, WCAG), name it: the name alone brings its whole body of practice to the judge. Then give a suggested target: the score where more polish stops paying off for this task, which is rarely 10. A score the user already named sets the level; suggest each aspect's target around it. Put closely related aspects on one line as a pair when one reading judges both; the pair gets one judge, and each aspect keeps its own score, target and scoreboard row. Offer any invariants already settled in the conversation (see step 3), and propose as candidates the choices you expect judges to fight, such as a section one aspect needs and another would cut. Then ask, for example:
 
 ```text
 1. Correctness: says only what is true of what it describes; gaps are marked, not filled. Suggested 9.5
@@ -32,7 +32,7 @@ When a judge's deduction contradicts an invariant, discard it. When a judge dedu
 
 ## 4. Judge with fresh subagents
 
-Each round, spawn one fresh read-only subagent per aspect or pair, all at once, in parallel. Never resume or reuse a judge from an earlier round; a fresh one is the point. Use the session's model unless the user names another.
+Each round, spawn one fresh subagent per aspect or pair, all at once, in parallel: a general-purpose type told not to edit, not a search-only type that reads excerpts. Never resume or reuse a judge from an earlier round; a fresh one is the point. Use the session's model unless the user names another.
 
 Give each judge:
 
@@ -41,7 +41,7 @@ Give each judge:
 - the invariants, as "already decided; do not deduct for or suggest changing these"
 - what to return: a score out of 10 to one decimal for each aspect, then each deduction with where it is, why it costs points and the change that would remove it
 
-Never tell a judge the target, an earlier score, what changed, or that the work has been revised. Each one anchors the score.
+Never tell a judge the target, an earlier score, what changed, or that the work has been revised. Each one anchors the score. Keep the work at one neutral path that judges see every round and revise it in place: a path like `draft-v2` or `baseline/` tells them a revision happened.
 
 ## 5. Climb
 
