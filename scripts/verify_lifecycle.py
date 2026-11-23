@@ -111,7 +111,101 @@ def verify_installed_state(root, installed, name, profile, env):
     return None
 
 
+def verify_antigravity(root: Path, profile: Path) -> dict:
+    """Verify Antigravity native validation, install, file parity, and uninstall in an isolated HOME."""
+    result = {"host": "antigravity", "passed": False, "stages": [], "commands": [], "cleanup_errors": []}
+    installed_names: list[str] = []
+
+    def command(stage: str, *args: str) -> str:
+        argv = [executable, *args]
+        event = {"stage": stage, "command": ["agy", *args]}
+        result["commands"].append(event)
+        try:
+            completed = run_command(argv, env, work)
+        except subprocess.CalledProcessError as error:
+            event.update(returncode=error.returncode, stdout=error.stdout, stderr=error.stderr)
+            raise RuntimeError(f"agy {' '.join(args)} failed ({error.returncode}): {error.stderr or error.stdout}") from error
+        except Exception as error:
+            event["error"] = str(error)
+            raise
+        event.update(returncode=completed.returncode, stdout=completed.stdout, stderr=completed.stderr)
+        return completed.stdout
+
+    def list_plugins(stage: str) -> list[dict]:
+        data = json.loads(command(stage, "plugin", "list", "--json"))
+        require(isinstance(data, list), "agy returned unsupported plugin list output")
+        return data
+
+    try:
+        executable = shutil.which("agy")
+        require(bool(executable), "Required executable is missing: agy")
+        root, profile = root.resolve(), profile.resolve()
+        require(profile.is_dir() and not any(profile.iterdir()), "Verification profile must exist and be empty")
+        require(profile not in {Path.home(), Path.home() / ".gemini", Path.home() / ".gemini" / "config"},
+                "Refusing a normal user configuration directory")
+        _, entries = load_catalog(root)
+        env = os.environ.copy()
+        env["HOME"] = str(profile)
+        work = profile / "work"
+        work.mkdir()
+        result["version"] = command("version", "--version").strip()
+
+        require(sync(root, check=True), "Generated marketplace metadata has drifted")
+        for path, _ in entries:
+            command("validation", "plugin", "validate", str(root / path))
+        result["stages"].append("validation")
+
+        require(not list_plugins("isolation"), "antigravity isolation failed: profile already has installed plugins")
+        result["stages"].append("empty_profile")
+
+        inspections = []
+        for path, manifest in entries:
+            name = manifest["name"]
+            command("install", "plugin", "install", str(root / path))
+            installed_names.append(name)
+            state = list_plugins("installed_state")
+            matches = [item for item in state if item.get("name") == name]
+            require(len(matches) == 1 and matches[0].get("enabled") is True,
+                    f"Plugin {name} is not installed and enabled in antigravity")
+            install_path = matches[0].get("path")
+            require(bool(install_path), f"No installed path for {name}")
+            cached = Path(install_path).resolve()
+            require(cached.is_relative_to(profile), f"Installed {name} outside isolated profile: {cached}")
+            problems = compare_tree(tracked_files(root, path), root / path, cached)
+            require(not problems, f"Installed files differ from source for {name}: {', '.join(problems)}")
+            skills = [{"name": source.parent.name, "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}
+                      for source in sorted((root / path / "skills").glob("*/SKILL.md"))]
+            listed_skills = set(matches[0].get("skills") or [])
+            missing_skills = [s["name"] for s in skills if s["name"] not in listed_skills]
+            require(not missing_skills, f"Antigravity inventory missing skills for {name}: {', '.join(missing_skills)}")
+            inspections.append({"pluginId": name, "skills": skills, "installedPath": str(cached)})
+        result["plugins"] = inspections
+        result["stages"].extend(["all_plugins_installed_and_enabled", "installed_files_verified"])
+
+        for name in list(installed_names):
+            command("uninstall", "plugin", "uninstall", name)
+            installed_names.remove(name)
+            state = list_plugins("uninstalled_state")
+            require(name not in {item.get("name") for item in state},
+                    f"Plugin {name} remains installed in antigravity")
+        result["stages"].append("all_plugins_uninstalled")
+        result["passed"] = True
+    except Exception as error:
+        result["error"] = str(error)
+    finally:
+        for name in list(installed_names):
+            try:
+                command("cleanup_plugin", "plugin", "uninstall", name)
+            except Exception as error:
+                result["cleanup_errors"].append(str(error))
+        if result["cleanup_errors"]:
+            result["passed"] = False
+    return result
+
+
 def verify_host(host: str, root: Path, profile: Path) -> dict:
+    if host == "antigravity":
+        return verify_antigravity(root, profile)
     result = {"host": host, "passed": False, "stages": [], "commands": [], "cleanup_errors": []}
     registered = False
     expected_ids = set()
@@ -271,7 +365,11 @@ def main() -> int:
     parser.add_argument("--report", type=Path, help="Write JSON evidence, including any failures")
     parser.add_argument("--scratch", type=Path,
                         help="Directory for the disposable profiles (default: the XDG cache, never /tmp)")
-    parser.add_argument('--hosts', nargs='+', choices=('codex', 'claude'), default=['codex', 'claude'], help='Hosts to verify (default: both)')
+    default_hosts = ['codex', 'claude']
+    if shutil.which('agy'):
+        default_hosts.append('antigravity')
+    parser.add_argument('--hosts', nargs='+', choices=('codex', 'claude', 'antigravity'), default=default_hosts,
+                        help='Hosts to verify (default: codex, claude, plus antigravity when agy is on PATH)')
     args = parser.parse_args()
     report = {"verifiedAt": datetime.now(timezone.utc).isoformat(), "repository": str(ROOT), "hosts": []}
     root = args.scratch or scratch_root(dict(os.environ), Path.home())

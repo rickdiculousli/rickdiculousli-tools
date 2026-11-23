@@ -202,6 +202,28 @@ In a new Codex session, ask it to use the `audit-report` skill from
 `visual-audit`, the `hello` skill from `hello-world`, or the `about` skill from
 `repository-info`.
 
+### Antigravity
+
+Point `~/.gemini/config/plugins.json` directly at `plugins/` so every `git pull` / `bmesh sync` levels your skills live:
+
+```json
+{
+  "entries": [
+    {
+      "path": "~/repos/rickdiculousli-tools/plugins",
+      "include_only": ["quota", "yt-transcript", "method", "skill-shaper", "pocock", "pick-principles"]
+    }
+  ]
+}
+```
+
+Or install individual snapshot copies via the CLI:
+
+```sh
+agy plugin install "$PWD/plugins/quota"
+agy plugin list --json
+```
+
 ### Uninstall
 
 ```sh

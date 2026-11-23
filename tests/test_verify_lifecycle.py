@@ -104,6 +104,21 @@ class LifecycleTests(unittest.TestCase):
         self.assertIn("empty", result["error"])
         command.assert_not_called()
 
+    def test_antigravity_missing_executable_fails(self):
+        with patch("scripts.verify_lifecycle.shutil.which", return_value=None):
+            result = verify_host("antigravity", ROOT, self.profile)
+        self.assertFalse(result["passed"])
+        self.assertIn("agy", result["error"])
+
+    def test_antigravity_existing_profile_refused(self):
+        (self.profile / "marker").write_text("x")
+        with patch("scripts.verify_lifecycle.shutil.which", return_value="/usr/bin/agy"), \
+                patch("scripts.verify_lifecycle.run_command") as command:
+            result = verify_host("antigravity", ROOT, self.profile)
+        self.assertFalse(result["passed"])
+        self.assertIn("empty", result["error"])
+        command.assert_not_called()
+
 
 class InventoryTests(unittest.TestCase):
     DETAILS = """delegation 0.1.0
