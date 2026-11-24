@@ -63,21 +63,41 @@ Propose one line for `AGENTS.md` naming the skills and their order of precedence
 
 Every entry still needs the full read above, at the commit you clone.
 
+### Design skills
+
 | Skill | Source | Fits | Watch for |
 |---|---|---|---|
-| Impeccable | `pbakaus/impeccable` | Any stack. It has native references (Android, iOS) and an app-and-tool mode. Its critique scores Nielsen's heuristics and ranks findings P0–P3. | Its plugin form runs a downloaded engine binary from hooks on every edit. Its direction cards call its API. Vendor the skill folder only; never log in. |
-| material-3 | `hamen/material-3-skill` | Compose, Flutter, web Material 3, including M3 Expressive. Its audit scores ten categories. | Most of its code samples are web, though its rules are framed for Compose. |
-| apple-design | `emilkowalski/skills`, `skills/apple-design` | Feel for touch and gesture UI on any stack: response on touch-down, 1:1 tracking, springs, interruptible motion, haptics. | Its materials section (translucent blur) conflicts with Material 3's tonal elevation. Invoked with no question, it only greets. |
-| review-animations | `emilkowalski/skills`, `skills/review-animations` | Motion review that ends in Block or Approve. | `disable-model-invocation: true`, so name it by path when you want it. |
-| emil-design-eng | `emilkowalski/skills`, `skills/emil-design-eng` | Web motion and interaction detail. | Mostly CSS. |
-| platform-design-skills | `ehmo/platform-design-skills`, `skills/<platform>` | A rulebook per platform: iOS, iPadOS, macOS, watchOS, tvOS, visionOS, Android and web. Its Android skill has Kotlin samples and is the alternative to material-3. | Its Android skill has no M3 Expressive coverage. |
-| compose-animations | `chrisbanes/skills` | Choosing the right Compose animation API. | Engineering, not visual design. |
-| Android skills | `android/skills` | Official engineering skills such as edge-to-edge and adaptive layouts. | Not visual design. |
-| frontend-design | `anthropics/skills`, `skills/frontend-design` | Web, with a distinctive direction and no generic AI defaults. | Its "avoid Roboto" advice conflicts with Material 3. |
-| make-interfaces-feel-better | `jakubkrehel/make-interfaces-feel-better` | Web detail rules: concentric radii, optical alignment, hit areas. | About half is CSS-only. |
-| web-design-guidelines | `vercel-labs/agent-skills`, `skills/web-design-guidelines` | Web accessibility and interface rules. | Check the license before vendoring. |
-| Hallmark | `Nutlope/hallmark` | New web pages, with a browser lint. | Needs Node and a browser. |
-| Taste Skill | `Leonxlnx/taste-skill` | Marketing sites. | Its frontmatter installs a Stop hook that runs Node. |
-| UI UX Pro Max | `nextlevelbuilder/ui-ux-pro-max-skill` | A searchable style and palette database. | Runs local Python, and adds little guidance per token. |
-| Anti UI Slop | `uizze/uizze` | Web and iOS; a fork of Impeccable. | Partly an upsell for a paid MCP. |
-| Stageshow | `benjitaylor/skills`, `stageshow` | Product illustrations for marketing pages, in React. | Nothing else. |
+| Impeccable | `pbakaus/impeccable`, `.agents/skills/impeccable` | Any stack, with native iOS and Android references and an app-and-tool mode. Its critique scores Nielsen's heuristics and ranks findings P0–P3. | Its plugin form runs a downloaded engine binary from hooks on every edit, and its `SKILL.md` invokes `scripts/impeccable` for context and viewport checks. Vendor `SKILL.md` and `reference/` only; leave out `scripts/` and hooks, and never log in. |
+| interface-design | `dammyjay93/interface-design`, `.claude/skills/interface-design` | Web product UI: dashboards, SaaS apps, tools, settings and dense data interfaces, with a craft review and design-system memory. | Web/CSS framing; not for marketing pages. Optionally writes `.interface-design/system.md` into the project. |
+| ui-skills | `ibelick/ui-skills`, `skills/<name>` | Modular web product UI skills: `improve-ui` (read-only audit of an existing surface against its own design system, emitting implementation plans), `baseline-ui`, `fixing-accessibility` and `fixing-motion-performance`. | `improve-ui` writes plans under `design-plans/`; `create-design-md` invokes `npx` on live URLs. |
+| jakubkrehel/skills | `jakubkrehel/skills`, `skills/<name>` | Modular web craft and critique: `better-interface` (ranked cross-discipline review), `interface-review` (diff-scoped review), `better-accessibility` (WCAG 2.2), `better-typography`, `better-motion`, `better-ui`, `better-colors`, `better-layout` and `better-writing`. | `better-interface` and `interface-review` delegate to sibling `better-*` skills, so vendor the siblings they route to. `interface-review` sets `disable-model-invocation: true`. |
+| userinterface-wiki | `raphaelsalaja/userinterface-wiki`, `skills` | Web UI and UX code-review checklist across animation, CSS, typography, icons and interaction, outputting terse `file:line` findings. | Web and React/Motion framing. |
+| frontend-design | `anthropics/skills`, `skills/frontend-design` | Web, with a distinctive aesthetic direction instead of templated defaults. | Oriented toward fresh web surfaces rather than strict adherence to an existing platform design system. License is in the skill folder (`LICENSE.txt`), not the repo root. |
+| emilkowalski/skills | `emilkowalski/skills`, `skills/<name>` | Motion and feel across stacks: `apple-design` (touch-down response, 1:1 tracking, springs, interruptible motion, haptics), `gestures` (drag/swipe/sheet tracking), `review-animations` (Block or Approve), `choreograph`, `break-ui` (worst-case data stress test), `emil-design-eng` (web detail) and `animate-expo` (React Native/Expo). | Invoked without a question, these skills only greet. `apple-design`'s translucent materials section conflicts with Material 3's tonal elevation. `review-animations` sets `disable-model-invocation: true`. `emil-design-eng` is mostly CSS. |
+| material-3 | `hamen/material-3-skill`, `skills/material-3` | Compose, Flutter and web Material 3, including M3 Expressive. Its audit scores ten categories. | Most of its code samples are web, though its rules are framed for Compose. |
+| platform-design-skills | `ehmo/platform-design-skills`, `skills/<platform>` | A rulebook per platform: iOS, iPadOS, macOS, watchOS, tvOS, visionOS, Android and web. Its Android skill has Kotlin samples and is the alternative to `material-3`. | Its Android skill has no M3 Expressive coverage, and its Apple skills have no iOS 26+ Liquid Glass coverage. |
+| apple-hig | `justinwetch/HIGAgentSkills` | Apple Human Interface Guidelines across iOS, iPadOS, macOS, tvOS, visionOS and watchOS, including Liquid Glass and adaptive layouts. | Large reference tree; leave out its optional Python routing script (`scripts/hig_route.py`, not needed for ordinary guidance) and slash-command copy step. Copy `NOTICE` alongside `LICENSE`. |
+| swiftui-liquid-glass | `FloWritesCode/fwc-swiftui-skills`, `skills/swiftui-liquid-glass` | SwiftUI visual design and pitfall review for Liquid Glass on Apple platforms. | Targets iOS/macOS 26+ APIs only; skip for projects targeting earlier OS releases. |
+| swiftui-design-skill | `Wholiver/swiftui-design-skill` | SwiftUI visual taste, anti-slop rules and five-dimensional design review for iOS and macOS. | Aesthetic direction rather than an exhaustive HIG rulebook; pair with `apple-hig` or `platform-design-skills`. |
+| swift-accessibility-skill | `PasqualeVittoriosi/swift-accessibility-skill`, `swift-accessibility-skill` | Apple platform accessibility across SwiftUI, UIKit and AppKit (VoiceOver, Dynamic Type, WCAG 2.2 and App Store Accessibility Nutrition Labels). | Broad trigger wording loads it on every UI edit; verify scope before vendoring. |
+| expo/skills | `expo/skills`, `plugins/expo/skills/<name>` | Official React Native / Expo UI skills: `expo-native-ui` (HIG, Material and native controls), `expo-design-system` (tokens and hardcoded-value audit) and `expo-animation` (Reanimated, Gesture Handler and haptics). | Cross-links sibling skills (`expo-ui`, `expo-router`, `expo-project-structure`) and references `npx expo` commands. |
+| tui-design | `pageton/tui-design-skill`, `skills/tui-design` | Terminal UI design and review across Bubble Tea, Textual, Ratatui and Ink (layout, keybindings, contrast, Unicode and wide-character handling). | Small community repo; inspect the full file carefully at clone time. |
+
+### Popular skills with major caveats
+
+Search results surface these often; know their flags before spending a candidate slot on them.
+
+| Skill | Source | Fits | Watch for |
+|---|---|---|---|
+| web-design-guidelines | `vercel-labs/agent-skills`, `skills/web-design-guidelines` | Web accessibility and interface review, bundling rules from `vercel-labs/web-interface-guidelines`. | The skill repo has no license (do not vendor as-is); its upstream rules repo (`vercel-labs/web-interface-guidelines`) is MIT. |
+| Hallmark | `Nutlope/hallmark`, `skills/hallmark` | New web marketing pages, with theme dealing and a browser lint. | Core workflow depends on Node scripts (`theme.mjs`, `sloplint.mjs`) and a headless browser. |
+| Taste Skill | `Leonxlnx/taste-skill`, `skills/taste-skill` | Marketing sites. | Frontmatter installs a `Stop` hook that runs Node (`gate.mjs`) and requires Node and Chromium. |
+| UI UX Pro Max | `nextlevelbuilder/ui-ux-pro-max-skill` | Searchable style, palette and font database. | Relies on local Python scripts for its main job and adds little design judgment per token. |
+
+### Common engineering-only repos (do not pick; list for later)
+
+- **Android:** `android/skills` (edge-to-edge, adaptive layouts), `chrisbanes/skills` (`compose-animations`, Compose APIs).
+- **Apple:** `twostraws/SwiftUI-Agent-Skill`, `AvdLee/SwiftUI-Agent-Skill`.
+- **Flutter:** `flutter/agent-plugins`.
+- **React Native:** `callstackincubator/agent-skills`.
+- **Web:** `shadcn-ui/ui` (`skills/shadcn`).
