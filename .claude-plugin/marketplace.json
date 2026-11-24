@@ -143,6 +143,22 @@
         "llm-judge"
       ],
       "source": "./plugins/hillclimb"
+    },
+    {
+      "name": "ui-onboarding",
+      "version": "0.1.0",
+      "description": "ui-onboarding skill: sets a project up for UI and UX work by exploring it and the available design skills, evaluating each against it, and installing the best two or three as project skills.",
+      "author": {
+        "name": "Rick Li"
+      },
+      "keywords": [
+        "ui",
+        "ux",
+        "design",
+        "skills",
+        "onboarding"
+      ],
+      "source": "./plugins/ui-onboarding"
     }
   ]
 }

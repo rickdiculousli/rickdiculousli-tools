@@ -19,6 +19,7 @@ the current user. Author and marketplace names are shared package identity.
 | `pick-principles` | Supported host; it reads pstack's principle skills when pstack is installed |
 | `skill-shaper` | Supported host |
 | `hillclimb` | Supported host that can spawn subagents |
+| `ui-onboarding` | Supported host, `git`, and internet access to read candidate skills |
 
 Recorded live quota/transcript checks cover Apple Silicon macOS and Ubuntu x86_64.
 Intel Mac Whisper dependency selection is covered by a metadata regression test;
@@ -44,6 +45,7 @@ See [verification evidence and scope](docs/verification.md).
 | `pick-principles` | `pick-principles` skill: at a phase change in nontrivial code work, picks and reads the principles and skills that fit and writes them into builder briefs |
 | `skill-shaper` | `skill-shaper` skill: creates a new agent skill or reshapes one that triggers on the wrong requests, adapted from upstream |
 | `hillclimb` | `hillclimb` skill: improves a piece of work round by round until fresh LLM judges, one per aspect, score each chosen aspect at its target out of 10 |
+| `ui-onboarding` | `ui-onboarding` skill: explores a project and the available design skills, evaluates each against it, and installs the best two or three as project skills |
 
 ## Visual audit reports
 
@@ -153,6 +155,14 @@ one fresh subagent judges each aspect (or a pair of closely related ones) withou
 target or earlier scores, and the points the user has ruled on go to every judge as invariants so
 settled choices stop costing points. It is `/hillclimb:hillclimb` in Claude Code.
 
+## UI onboarding
+
+`ui-onboarding` is authored here. It profiles a project's UI (stack, design system, kind of UI,
+how UI is checked, skills already present), reads candidate design skills in full from a seed list
+and a fresh search without running anything from them, and installs the best two or three as
+vendored folders in `.agents/skills/`, linked into `.claude/skills/`, never as plugins. Picks,
+rejections and flags are recorded in the project. It is `/ui-onboarding:ui-onboarding` in Claude Code.
+
 ## Install from this checkout
 
 Run these commands from the repository root. They register this local checkout
@@ -173,6 +183,7 @@ claude plugin install skill-shaper@rickdiculousli-tools
 claude plugin install pocock@rickdiculousli-tools
 claude plugin install pick-principles@rickdiculousli-tools
 claude plugin install hillclimb@rickdiculousli-tools
+claude plugin install ui-onboarding@rickdiculousli-tools
 claude plugin list --available --json
 claude plugin details visual-audit
 ```
@@ -195,6 +206,7 @@ codex plugin add skill-shaper@rickdiculousli-tools
 codex plugin add pocock@rickdiculousli-tools
 codex plugin add pick-principles@rickdiculousli-tools
 codex plugin add hillclimb@rickdiculousli-tools
+codex plugin add ui-onboarding@rickdiculousli-tools
 codex plugin list --marketplace rickdiculousli-tools --available --json
 ```
 
@@ -238,6 +250,7 @@ claude plugin uninstall skill-shaper@rickdiculousli-tools
 claude plugin uninstall pocock@rickdiculousli-tools
 claude plugin uninstall pick-principles@rickdiculousli-tools
 claude plugin uninstall hillclimb@rickdiculousli-tools
+claude plugin uninstall ui-onboarding@rickdiculousli-tools
 claude plugin marketplace remove rickdiculousli-tools
 
 codex plugin remove visual-audit@rickdiculousli-tools
@@ -251,6 +264,7 @@ codex plugin remove skill-shaper@rickdiculousli-tools
 codex plugin remove pocock@rickdiculousli-tools
 codex plugin remove pick-principles@rickdiculousli-tools
 codex plugin remove hillclimb@rickdiculousli-tools
+codex plugin remove ui-onboarding@rickdiculousli-tools
 codex plugin marketplace remove rickdiculousli-tools
 ```
 
