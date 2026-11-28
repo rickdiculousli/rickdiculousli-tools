@@ -13,7 +13,7 @@ the current user. Author and marketplace names are shared package identity.
 | --- | --- |
 | `hello-world`, `repository-info` | Claude Code or Codex with plugin support |
 | `visual-audit` | Supported host and Python 3.10+ |
-| `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex subscription login; Codex readings also need its CLI on PATH |
+| `quota` | `uv`, Python 3.10+ (resolved by `uv`), network access, and your own Claude/Codex/Antigravity subscription login; Codex and Antigravity readings also need their CLIs (`codex`, `agy`) on PATH |
 | `yt-transcript` | `uv`, Python 3.10+ (resolved by `uv`), `ffmpeg` on PATH, and internet access for videos, dependencies, and models |
 | `method`, `pocock` | Supported host; `update.sh` needs `bash`, `git`, `diff` and access to GitHub |
 | `pick-principles` | Supported host; it reads pstack's principle skills when pstack is installed |
@@ -38,7 +38,7 @@ See [verification evidence and scope](docs/verification.md).
 | `visual-audit` | `audit-report` skill: renders what the agent did in a session as one self-contained HTML page for visual auditing |
 | `hello-world` | Greeting stub for testing installation |
 | `repository-info` | Informational stub describing this layout |
-| `quota` | `quota` skill: reads Claude and Codex subscription usage (windows, Claude's per-model weekly limits, resets, weekly pace, projected unused); numbers only |
+| `quota` | `quota` skill: reads Claude, Codex, and Antigravity (Gemini) subscription usage (windows, per-model/group limits, resets, weekly pace, projected unused, AI credits); numbers only |
 | `yt-transcript` | `yt-transcript` skill: timestamped YouTube transcript from captions, auto-captions or Whisper (MLX on Apple Silicon, faster-whisper elsewhere) |
 | `method` | `writing-plans` skill: an implementation plan from a spec, copied verbatim from upstream |
 | `pocock` | Matt Pocock's engineering and planning skills, copied verbatim from upstream: `grill-me` and `grilling` (a relentless interview to stress-test a plan), `grill-with-docs`, `domain-modeling`, `codebase-design`, `improve-codebase-architecture`, `retro` and `wayfinder` |
@@ -94,6 +94,8 @@ Quota reads the current user's login, never the author's. Claude supports
 `CLAUDE_CODE_OAUTH_TOKEN`. On macOS the default profile uses Keychain; a custom
 Keychain entry can be selected with `QUOTA_CLAUDE_KEYCHAIN_SERVICE`. Custom profiles
 do not fall back to the default account. Codex's app server inherits `CODEX_HOME`.
+Antigravity runs `agy --print /usage --output-format json` and `/credits` using
+`agy`'s signed-in profile.
 These subscription interfaces are undocumented and may report a provider as
 unknown; API-key-only accounts do not supply subscription quota.
 

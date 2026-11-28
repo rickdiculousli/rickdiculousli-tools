@@ -1,4 +1,4 @@
-"""Tests for the quota plugin script; both providers are mocked at their boundaries."""
+"""Tests for the quota plugin script; providers are mocked at their boundaries."""
 
 from datetime import datetime, timedelta, timezone
 import importlib.util
@@ -292,3 +292,215 @@ class ClaudeScopedTest(unittest.TestCase):
         self.assertIsNone(assessment["scoped"][0]["hours_to_reset"])
         self.assertIn("web limit         50% used   resets unknown (?h)\n", quota.show(reading, assessment))
         self.assertEqual(self.read({**self.page, "seven_day_opus": {"utilization": None}}).scoped, [])
+
+
+class AntigravityTest(unittest.TestCase):
+    at = datetime(2026, 11, 28, 6, 0, tzinfo=timezone.utc).timestamp()
+
+    usage_data = {
+        "groups": [
+            {
+                "name": "Gemini Models",
+                "buckets": [
+                    {
+                        "id": "gemini-weekly",
+                        "window": "weekly",
+                        "remaining_fraction": 0.84,
+                        "reset_time": "2026-12-03T06:00:00Z",
+                    },
+                    {
+                        "id": "gemini-5h",
+                        "window": "5h",
+                        "remaining_fraction": 0.34,
+                        "reset_time": "2026-11-28T07:54:00Z",
+                    },
+                ],
+            },
+            {
+                "name": "Claude and GPT models",
+                "buckets": [
+                    {
+                        "id": "3p-weekly",
+                        "window": "weekly",
+                        "remaining_fraction": 1,
+                        "reset_time": "1970-01-01T00:00:00Z",
+                    },
+                    {
+                        "id": "3p-5h",
+                        "window": "5h",
+                        "remaining_fraction": 1,
+                        "reset_time": "1970-01-01T00:00:00Z",
+                    },
+                ],
+            },
+        ]
+    }
+
+    def read(self, usage=None, credits=None, settings=None):
+        usage = self.usage_data if usage is None else usage
+
+        def fake_cmd(cmd):
+            if cmd == "/usage":
+                return usage
+            if cmd == "/credits":
+                if isinstance(credits, Exception):
+                    raise credits
+                return {"remaining_credits": 0} if credits is None else credits
+            raise AssertionError(f"unexpected command {cmd}")
+
+        with patch.object(quota, "_agy_command", side_effect=fake_cmd), \
+             patch.object(quota, "_agy_use_g1_credits_setting", return_value=settings), \
+             patch.object(quota.time, "time", return_value=self.at):
+            return quota.read_antigravity()
+
+    def test_reads_gemini_primary_and_unused_3p_group(self):
+        reading = self.read()
+        self.assertEqual(reading.provider, "antigravity")
+        self.assertEqual(reading.scope, "Gemini Models")
+        self.assertEqual(reading.five_hour, 66.0)
+        self.assertEqual(reading.five_reset, "2026-11-28T07:54:00Z")
+        self.assertEqual(reading.week, 16.0)
+        self.assertEqual(reading.week_reset, "2026-12-03T06:00:00Z")
+        self.assertEqual(datetime.fromisoformat(reading.week_start), datetime(2026, 11, 26, 6, 0, tzinfo=timezone.utc))
+        self.assertEqual(reading.credits, 0.0)
+        self.assertFalse(reading.overflow_billed)
+        self.assertEqual(
+            reading.scoped,
+            [
+                {"name": "Claude and GPT models", "group": "5h", "percent": 0.0, "resets_at": None, "binding": False},
+                {"name": "Claude and GPT models", "group": "weekly", "percent": 0.0, "resets_at": None, "binding": False},
+            ],
+        )
+        assessment = quota.assess(reading)
+        self.assertAlmostEqual(assessment["hours_to_five_hour_reset"], 1.9, places=2)
+        self.assertAlmostEqual(assessment["hours_to_weekly_reset"], 120.0, places=2)
+        self.assertAlmostEqual(assessment["weekly_pace_points_per_hour"], 16.0 / 48.0, places=4)
+        self.assertFalse(assessment["scoped"][0]["window_start_known"])
+        self.assertFalse(assessment["scoped"][1]["window_start_known"])
+        text = quota.show(reading, assessment)
+        self.assertIn("Antigravity (Gemini Models)", text)
+        self.assertIn("5-hour window     66% used", text)
+        self.assertIn("weekly window     16% used", text)
+        self.assertIn("Claude and GPT models 5h    0% used   window not started", text)
+        self.assertIn("Claude and GPT models weekly    0% used   window not started", text)
+        self.assertIn("credits        0 remaining", text)
+        json.dumps({"reading": quota.asdict(reading), **assessment})
+
+    def test_active_3p_group_gets_independent_weekly_pace(self):
+        usage = {
+            "groups": [
+                self.usage_data["groups"][0],
+                {
+                    "name": "Claude and GPT models",
+                    "buckets": [
+                        {
+                            "id": "3p-weekly",
+                            "window": "weekly",
+                            "remaining_fraction": 0.6,
+                            "reset_time": "2026-12-04T06:00:00Z",
+                        },
+                        {
+                            "id": "3p-5h",
+                            "window": "5h",
+                            "remaining_fraction": 0.5,
+                            "reset_time": "2026-11-28T09:00:00Z",
+                        },
+                    ],
+                },
+            ]
+        }
+        reading = self.read(usage=usage)
+        assessment = quota.assess(reading)
+        five_3p, week_3p = assessment["scoped"]
+        self.assertEqual(five_3p["percent"], 50.0)
+        self.assertAlmostEqual(five_3p["hours_to_reset"], 3.0, places=2)
+        self.assertFalse(five_3p["window_start_known"])
+        self.assertEqual(week_3p["percent"], 40.0)
+        self.assertTrue(week_3p["window_start_known"])
+        self.assertAlmostEqual(week_3p["hours_to_reset"], 144.0, places=2)
+        self.assertAlmostEqual(week_3p["pace_points_per_hour"], 40.0 / 24.0, places=4)
+        text = quota.show(reading, assessment)
+        self.assertIn("(3.0h)", text)
+        self.assertIn("Claude and GPT models pace", text)
+
+    def test_omitted_remaining_fraction_with_active_reset_reads_as_100_used(self):
+        usage = {
+            "groups": [
+                {
+                    "name": "Gemini Models",
+                    "buckets": [
+                        {"id": "gemini-weekly", "window": "weekly", "reset_time": "2026-12-03T06:00:00Z"},
+                        {"id": "gemini-5h", "window": "5h", "reset_time": "2026-11-28T07:54:00Z"},
+                    ],
+                }
+            ]
+        }
+        reading = self.read(usage=usage)
+        self.assertEqual(reading.five_hour, 100.0)
+        self.assertEqual(reading.week, 100.0)
+
+    def test_plan_without_five_hour_bucket(self):
+        usage = {
+            "groups": [
+                {
+                    "name": "Gemini Models",
+                    "buckets": [
+                        {"id": "gemini-weekly", "window": "weekly", "remaining_fraction": 0.75,
+                         "reset_time": "2026-12-03T06:00:00Z"},
+                    ],
+                }
+            ]
+        }
+        reading = self.read(usage=usage)
+        self.assertIsNone(reading.five_hour)
+        self.assertIsNone(reading.five_reset)
+        self.assertEqual(reading.week, 25.0)
+        self.assertIn("5-hour window   none on this plan", quota.show(reading, quota.assess(reading)))
+
+    def test_credits_and_overflow_billing(self):
+        reading = self.read(credits={"remaining_credits": 250})
+        self.assertEqual(reading.credits, 250.0)
+        self.assertTrue(reading.overflow_billed)
+        self.assertIn("credits        250 remaining", quota.show(reading, quota.assess(reading)))
+
+        disabled = self.read(credits={"remaining_credits": 250}, settings=False)
+        self.assertFalse(disabled.overflow_billed)
+
+        failed = self.read(credits=quota.Unknown("credits failed"))
+        self.assertIsNone(failed.credits)
+        self.assertFalse(failed.overflow_billed)
+        self.assertNotIn("credits", quota.show(failed, quota.assess(failed)))
+
+    def test_missing_groups_or_weekly_bucket_reports_unknown(self):
+        for bad in ({}, {"groups": []}, {"groups": [{"name": "Gemini Models", "buckets": []}]}):
+            with self.assertRaises(quota.Unknown):
+                self.read(usage=bad)
+
+    def test_agy_command_missing_cli_and_auth_prompt_fail_fast(self):
+        with patch.object(quota.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(quota.Unknown, "isn't installed"):
+                quota._agy_command("/usage")
+
+        class FakeProc:
+            def __init__(self):
+                self.stdout = io.StringIO("")
+                self.stderr = io.StringIO("Authentication required. Please visit the URL to log in:\n")
+                self.returncode = -9
+                self.killed = False
+
+            def kill(self):
+                self.killed = True
+
+            def wait(self, timeout=None):
+                return self.returncode
+
+        proc = FakeProc()
+        with patch.object(quota.shutil, "which", return_value="/usr/local/bin/agy"), \
+             patch.object(quota.subprocess, "Popen", return_value=proc):
+            with self.assertRaisesRegex(quota.Unknown, "isn't signed in"):
+                quota._agy_command("/usage")
+        self.assertTrue(proc.killed)
+
+    def test_agy_json_tolerates_leading_log_lines(self):
+        payload = 'I1127 warning line\n{"status":"SUCCESS","command":{"name":"usage","data":{"groups":[]}}}\n'
+        self.assertEqual(quota._agy_json(payload)["status"], "SUCCESS")

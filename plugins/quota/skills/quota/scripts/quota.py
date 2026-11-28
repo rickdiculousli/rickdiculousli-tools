@@ -3,26 +3,28 @@
 # requires-python = ">=3.10"
 # dependencies = []
 # ///
-"""How much of the Claude and Codex subscriptions is left, and how much will go unused at the reset.
+"""How much of the Claude, Codex, and Antigravity subscriptions is left, and how much will go unused at the reset.
 
-Each provider is read the way its own client reads it, and neither read costs tokens:
+Each provider is read the way its own client reads it, and none of the reads cost tokens:
 
 - Claude: the page Claude Code's `/usage` screen reads (`/api/oauth/usage`), with the login
   Claude Code already keeps (macOS keychain, or ~/.claude/.credentials.json on Linux). The page
   is undocumented.
 - Codex: `account/rateLimits/read` on Codex's own app server (`codex app-server`, JSON-RPC over
   stdio), the same call the Codex TUI and desktop app make. Codex handles its own auth.
+- Antigravity: `agy --print /usage --output-format json` (and `/credits` for G1 AI credits),
+  using the login the `agy` CLI already keeps.
 
 It reports numbers, not rulings: how much of each window is used, when each resets, the pace
 across the weekly window, and how much is projected to be left at the reset. Claude's scoped
-weekly limits (one model's allowance, say) are shown beside the weekly window, with the one
-that binds marked: it runs out first. Whoever reads it
+weekly limits (one model's allowance, say) and Antigravity's separate model-group pools are shown
+beside the primary windows, with any binding limit marked. Whoever reads it
 decides what to do. Each reading is logged to
 ${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/quota/usage.jsonl.
 
-    uv run --script quota.py                    # both providers, human-readable
-    uv run --script quota.py --provider codex   # one provider
-    uv run --script quota.py --json             # the same as JSON, for agents
+    uv run --script quota.py                        # all providers, human-readable
+    uv run --script quota.py --provider antigravity # one provider
+    uv run --script quota.py --json                 # the same as JSON, for agents
 """
 from __future__ import annotations
 
@@ -41,7 +43,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-PROVIDERS = ("claude", "codex")
+PROVIDERS = ("claude", "codex", "antigravity")
 
 MIN_ELAPSED_H = 12.0    # a weekly window younger than this is too short to project a pace from
 SAME_RESET_S = 60.0     # a scoped limit resetting this close to the weekly window shares its start
@@ -66,7 +68,9 @@ class Reading:
     overflow_billed: bool             # past 100%, work is billed rather than refused
     plan: str | None = None
     reset_credits: list[dict] = field(default_factory=list)   # banked resets (Codex)
-    scoped: list[dict] = field(default_factory=list)  # {name, group, percent, resets_at, binding} (Claude)
+    scoped: list[dict] = field(default_factory=list)  # {name, group, percent, resets_at, binding} (Claude, Antigravity)
+    scope: str | None = None          # primary model group when windows cover one pool (Antigravity)
+    credits: float | None = None      # remaining AI/G1 credits (Antigravity)
 
 
 def _iso(ts: float | None) -> str | None:
@@ -285,7 +289,257 @@ def read_codex() -> Reading:
     )
 
 
-READERS = {"claude": read_claude, "codex": read_codex}
+# ---- Antigravity --------------------------------------------------------------------------
+
+AGY_TIMEOUT = 30
+
+
+def _agy_json(text: str) -> dict | None:
+    """Parse an `agy --output-format json` envelope, tolerating leading log/error lines."""
+    try:
+        obj = json.loads(text)
+        if isinstance(obj, dict):
+            return obj
+    except ValueError:
+        pass
+    for line in reversed(text.splitlines()):
+        s = line.strip()
+        if s.startswith("{"):
+            try:
+                obj = json.loads(s)
+                if isinstance(obj, dict):
+                    return obj
+            except ValueError:
+                continue
+    return None
+
+
+def _agy_command(command: str) -> dict:
+    """Run one zero-token `agy --print /<cmd> --output-format json` call.
+
+    When `agy` is not signed in, it prints an authentication prompt to stderr and waits
+    60 seconds for an OAuth callback even with stdin closed; watching stderr lets us
+    abort immediately instead of hanging until timeout.
+    """
+    exe = shutil.which("agy")
+    if exe is None:
+        raise Unknown("the agy CLI isn't installed")
+    try:
+        p = subprocess.Popen(
+            [exe, "--print", command, "--output-format", "json"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as e:
+        raise Unknown(f"could not start agy: {e}") from None
+
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+    auth_required = threading.Event()
+
+    def read_stdout() -> None:
+        assert p.stdout is not None
+        stdout_chunks.append(p.stdout.read())
+
+    def read_stderr() -> None:
+        assert p.stderr is not None
+        for line in p.stderr:
+            stderr_chunks.append(line)
+            if "authentication required" in line.lower() or "please sign in" in line.lower():
+                auth_required.set()
+                try:
+                    p.kill()
+                except OSError:
+                    pass
+
+    t_out = threading.Thread(target=read_stdout, daemon=True)
+    t_err = threading.Thread(target=read_stderr, daemon=True)
+    t_out.start()
+    t_err.start()
+    try:
+        p.wait(timeout=AGY_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        p.kill()
+        p.wait()
+        t_out.join(timeout=2)
+        t_err.join(timeout=2)
+        raise Unknown(f"agy {command} didn't answer within {AGY_TIMEOUT}s") from None
+    t_out.join(timeout=2)
+    t_err.join(timeout=2)
+
+    if auth_required.is_set():
+        raise Unknown("Antigravity isn't signed in; run `agy` to log in")
+
+    out = "".join(stdout_chunks)
+    err = "".join(stderr_chunks).strip()
+    env = _agy_json(out)
+    if env is None:
+        detail = err.splitlines()[-1] if err else f"exit code {p.returncode}"
+        raise Unknown(f"agy {command}: {detail}")
+    if env.get("status") != "SUCCESS":
+        msg = env.get("error") or (err.splitlines()[-1] if err else f"status {env.get('status')}")
+        raise Unknown(f"agy {command}: {msg}")
+    data = (env.get("command") or {}).get("data")
+    if not isinstance(data, dict):
+        raise Unknown(f"agy {command} returned an unexpected shape")
+    return data
+
+
+def _agy_reset(v) -> str | None:
+    """An active ISO reset timestamp, or None for missing/invalid/epoch sentinels."""
+    iso = _safe_iso(v)
+    if iso is None:
+        return None
+    ts = _ts(iso)
+    return iso if ts is not None and ts > 0 else None
+
+
+def _agy_used_percent(bucket: dict, reset: str | None) -> float | None:
+    """Convert Antigravity's remaining_fraction (0..1) to percent used (0..100).
+
+    Proto3 JSON serialization omits remaining_fraction when it is 0.0; when reset_time
+    is active and remaining_fraction is omitted, the bucket is exhausted (100% used).
+    """
+    frac = _percent(bucket.get("remaining_fraction"))
+    if frac is None:
+        if "remaining_fraction" not in bucket and reset is not None:
+            return 100.0
+        return None
+    clamped = max(0.0, min(1.0, frac))
+    return round((1.0 - clamped) * 100.0, 2)
+
+
+def _agy_window_kind(bucket: dict) -> str:
+    w = bucket.get("window")
+    if isinstance(w, str) and w:
+        wl = w.lower()
+        if wl in ("5h", "five_hour"):
+            return "5h"
+        if wl in ("weekly", "7d", "seven_day"):
+            return "weekly"
+        return w
+    bid = bucket.get("id")
+    if isinstance(bid, str) and bid:
+        bl = bid.lower()
+        if bl.endswith("-5h"):
+            return "5h"
+        if bl.endswith("-weekly"):
+            return "weekly"
+        return bid
+    return "limit"
+
+
+def _agy_use_g1_credits_setting() -> bool | None:
+    """Read explicit useG1Credits preference from ~/.gemini/antigravity-cli/settings.json, if set."""
+    path = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return None
+    if isinstance(data, dict) and isinstance(data.get("useG1Credits"), bool):
+        return data["useG1Credits"]
+    return None
+
+
+def _parse_agy_group(group: dict) -> dict | None:
+    if not isinstance(group, dict):
+        return None
+    name = group.get("name")
+    if not isinstance(name, str) or not name:
+        return None
+    buckets_raw = group.get("buckets")
+    if not isinstance(buckets_raw, list):
+        return None
+    buckets = []
+    ids = []
+    for b in buckets_raw:
+        if not isinstance(b, dict):
+            continue
+        reset = _agy_reset(b.get("reset_time"))
+        used = _agy_used_percent(b, reset)
+        if used is None:
+            continue
+        kind = _agy_window_kind(b)
+        bid = b.get("id") if isinstance(b.get("id"), str) else ""
+        ids.append(bid)
+        buckets.append({"kind": kind, "percent": used, "resets_at": reset})
+    if not buckets:
+        return None
+    return {"name": name, "ids": ids, "buckets": buckets}
+
+
+def read_antigravity() -> Reading:
+    data = _agy_command("/usage")
+    groups_raw = data.get("groups")
+    if not isinstance(groups_raw, list) or not groups_raw:
+        raise Unknown("agy /usage reported no quota groups")
+    groups = [g for raw in groups_raw if (g := _parse_agy_group(raw)) is not None]
+    with_weekly = [g for g in groups if any(b["kind"] == "weekly" for b in g["buckets"])]
+    if not with_weekly:
+        raise Unknown("agy /usage reported no weekly quota bucket")
+
+    # Prefer the Gemini group as the primary windows; other model pools appear under scoped.
+    primary = next(
+        (g for g in with_weekly
+         if "gemini" in g["name"].lower() or any(i.lower().startswith("gemini-") for i in g["ids"])),
+        with_weekly[0],
+    )
+    five = next((b for b in primary["buckets"] if b["kind"] == "5h"), None)
+    week = next(b for b in primary["buckets"] if b["kind"] == "weekly")
+    week_reset = week["resets_at"]
+    week_ts = _ts(week_reset)
+
+    scoped = []
+    order = {"5h": 0, "weekly": 1}
+    for g in groups:
+        if g is primary:
+            extra = [b for b in g["buckets"] if b is not five and b is not week]
+        else:
+            extra = sorted(g["buckets"], key=lambda b: order.get(b["kind"], 2))
+        for b in extra:
+            entry = {
+                "name": g["name"],
+                "group": b["kind"],
+                "percent": b["percent"],
+                "resets_at": b["resets_at"],
+                "binding": False,
+            }
+            if b["kind"] == "weekly" and b["resets_at"] is not None:
+                b_ts = _ts(b["resets_at"])
+                if b_ts is not None:
+                    entry["window_start"] = _iso(b_ts - 7 * 86400)
+            scoped.append(entry)
+
+    credits = None
+    try:
+        cdata = _agy_command("/credits")
+        cval = _percent(cdata.get("remaining_credits"))
+        if cval is not None:
+            credits = cval
+    except Unknown:
+        pass
+
+    use_g1 = _agy_use_g1_credits_setting()
+    overflow_billed = bool(credits is not None and credits > 0 and use_g1 is not False)
+
+    return Reading(
+        provider="antigravity",
+        at=time.time(),
+        five_hour=five["percent"] if five is not None else None,
+        five_reset=five["resets_at"] if five is not None else None,
+        week=week["percent"],
+        week_reset=week_reset,
+        week_start=_iso(week_ts - 7 * 86400) if week_ts is not None else None,
+        overflow_billed=overflow_billed,
+        scoped=scoped,
+        scope=primary["name"],
+        credits=credits,
+    )
+
+
+READERS = {"claude": read_claude, "codex": read_codex, "antigravity": read_antigravity}
 
 
 # ---- assessment ---------------------------------------------------------------------------
@@ -316,11 +570,15 @@ def assess(r: Reading) -> dict:
     scoped = []
     for s in r.scoped:
         s_reset = _ts(s["resets_at"])
-        # A scoped window's start is known only when it resets with the weekly window.
+        # A scoped window's start is known when carried explicitly (e.g. an independent weekly pool)
+        # or when it resets with the primary weekly window.
+        s_start = _ts(s.get("window_start"))
         same = s_reset is not None and reset is not None and abs(s_reset - reset) <= SAME_RESET_S
-        s_left, s_pace, s_proj = _pace(s["percent"], r.at, s_reset, start if same else None)
+        if s_start is None and same:
+            s_start = start
+        s_left, s_pace, s_proj = _pace(s["percent"], r.at, s_reset, s_start)
         scoped.append({**s, "unused": 100 - s["percent"], "hours_to_reset": s_left,
-                       "window_start_known": same,
+                       "window_start_known": s_start is not None,
                        "pace_points_per_hour": s_pace, "projected_at_reset": s_proj,
                        "projected_unused_at_reset": 100 - s_proj if s_proj is not None else None})
     return {
@@ -346,23 +604,31 @@ def _pace(used: float, at: float, reset: float | None, start: float | None):
 
 def show(r: Reading, a: dict) -> str:
     f = lambda v, fmt: "?" if v is None else format(v, fmt)
-    title = r.provider.capitalize() + (f" ({r.plan})" if r.plan else "")
+    def reset_text(used: float, resets_at: str | None, hours: float | None, fmt: str) -> str:
+        if resets_at is None and used == 0:
+            return "window not started"
+        return f"resets {local(resets_at)} ({f(hours, fmt)}h)"
+
+    qual = ", ".join(q for q in (r.plan, r.scope) if q)
+    title = r.provider.capitalize() + (f" ({qual})" if qual else "")
     five = ("  5-hour window   none on this plan" if r.five_hour is None else
-            f"  5-hour window  {r.five_hour:5.0f}% used   resets {local(r.five_reset)} "
-            f"({f(a['hours_to_five_hour_reset'], '.1f')}h)")
+            f"  5-hour window  {r.five_hour:5.0f}% used   "
+            f"{reset_text(r.five_hour, r.five_reset, a['hours_to_five_hour_reset'], '.1f')}")
     lines = [
         title,
         five,
-        f"  weekly window  {r.week:5.0f}% used   resets {local(r.week_reset)} "
-        f"({f(a['hours_to_weekly_reset'], '.0f')}h)",
+        f"  weekly window  {r.week:5.0f}% used   "
+        f"{reset_text(r.week, r.week_reset, a['hours_to_weekly_reset'], '.0f')}",
         f"  weekly pace    {f(a['weekly_pace_points_per_hour'], '.2f')} points/hour; at that pace "
         f"{f(a['projected_week_at_reset'], '.0f')}% used by the reset, "
         f"{f(a['projected_unused_at_reset'], '.0f')} points unused",
     ]
     for s in a.get("scoped", ()):
         label = f"{s['name']} {s['group']}"
-        lines.append(f"  {label:<15}{s['percent']:5.0f}% used   resets {local(s['resets_at'])} "
-                     f"({f(s['hours_to_reset'], '.0f')}h)" + ("  \u2190 binding" if s["binding"] else ""))
+        hours_fmt = ".1f" if s["group"] == "5h" else ".0f"
+        lines.append(f"  {label:<15}{s['percent']:5.0f}% used   "
+                     f"{reset_text(s['percent'], s['resets_at'], s['hours_to_reset'], hours_fmt)}"
+                     + ("  \u2190 binding" if s["binding"] else ""))
         if s["window_start_known"]:
             lines.append(f"  {s['name'] + ' pace':<15}{f(s['pace_points_per_hour'], '.2f')} points/hour; at that pace "
                          f"{f(s['projected_at_reset'], '.0f')}% used by the reset, "
@@ -370,6 +636,9 @@ def show(r: Reading, a: dict) -> str:
     lines += [
         f"  overflow       {'billed past 100%' if r.overflow_billed else 'refused past 100% (no billing)'}",
     ]
+    if r.credits is not None:
+        credits_text = str(int(r.credits)) if float(r.credits).is_integer() else f"{r.credits:g}"
+        lines.append(f"  credits        {credits_text} remaining")
     if r.reset_credits:
         soonest = min((c["expires"] for c in r.reset_credits if c["expires"]), default=None)
         lines.append(f"  banked resets  {len(r.reset_credits)} available"

@@ -47,8 +47,8 @@
     },
     {
       "name": "quota",
-      "version": "0.1.5",
-      "description": "Read Claude and Codex subscription usage: windows, resets, weekly pace and projected unused quota.",
+      "version": "0.2.0",
+      "description": "Read Claude, Codex, and Antigravity subscription usage: windows, resets, weekly pace, and projected unused quota.",
       "author": {
         "name": "Rick Li"
       },
@@ -56,7 +56,9 @@
         "quota",
         "usage",
         "claude",
-        "codex"
+        "codex",
+        "antigravity",
+        "gemini"
       ],
       "source": "./plugins/quota"
     },
