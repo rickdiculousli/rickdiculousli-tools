@@ -44,12 +44,11 @@ weekly window still has room. Each shows as its own line under Claude, named for
 model or surface, and in `--json` under `scoped` (`name`, `group`, `percent`, `resets_at`,
 `binding`, pace and projection). The one marked `← binding` (`"binding": true`) is the
 limit that runs out first: read work for that model against it, not against the weekly
-window. A scoped limit gets a pace only when its window start is known.
+window. A scoped limit gets a pace only when it resets with the weekly window.
 
-Antigravity splits quotas by model group: `Gemini Models` appears as the primary 5-hour
-and weekly windows (`scope` in `--json`), and separate model pools such as
-`Claude and GPT models` appear under `scoped` with their own 5-hour and weekly buckets.
-Remaining Google One AI credits appear as `credits` (`reading.credits` in `--json`).
+Antigravity reads the `Gemini Models` 5-hour and weekly windows (`scope` in `--json`)
+and ignores the pooled third-party model group. Remaining Google One AI credits appear
+as `credits` (`reading.credits` in `--json`).
 
 When overflow is billed (extra usage or credits), treat 100%
 as a hard stop. The script reports numbers only. It never decides whether to run work; you do,

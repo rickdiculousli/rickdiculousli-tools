@@ -17,8 +17,9 @@ Each provider is read the way its own client reads it, and none of the reads cos
 
 It reports numbers, not rulings: how much of each window is used, when each resets, the pace
 across the weekly window, and how much is projected to be left at the reset. Claude's scoped
-weekly limits (one model's allowance, say) and Antigravity's separate model-group pools are shown
-beside the primary windows, with any binding limit marked. Whoever reads it
+weekly limits (one model's allowance, say) are shown beside the weekly window, with the one
+that binds marked: it runs out first. Antigravity reads the Gemini Models group and ignores
+the pooled third-party group. Whoever reads it
 decides what to do. Each reading is logged to
 ${XDG_STATE_HOME:-~/.local/state}/rickdiculousli-tools/quota/usage.jsonl.
 
@@ -68,7 +69,7 @@ class Reading:
     overflow_billed: bool             # past 100%, work is billed rather than refused
     plan: str | None = None
     reset_credits: list[dict] = field(default_factory=list)   # banked resets (Codex)
-    scoped: list[dict] = field(default_factory=list)  # {name, group, percent, resets_at, binding} (Claude, Antigravity)
+    scoped: list[dict] = field(default_factory=list)  # {name, group, percent, resets_at, binding} (Claude)
     scope: str | None = None          # primary model group when windows cover one pool (Antigravity)
     credits: float | None = None      # remaining AI/G1 credits (Antigravity)
 
@@ -480,7 +481,7 @@ def read_antigravity() -> Reading:
     if not with_weekly:
         raise Unknown("agy /usage reported no weekly quota bucket")
 
-    # Prefer the Gemini group as the primary windows; other model pools appear under scoped.
+    # Read only the Gemini group; ignore pooled third-party model groups.
     primary = next(
         (g for g in with_weekly
          if "gemini" in g["name"].lower() or any(i.lower().startswith("gemini-") for i in g["ids"])),
@@ -490,27 +491,6 @@ def read_antigravity() -> Reading:
     week = next(b for b in primary["buckets"] if b["kind"] == "weekly")
     week_reset = week["resets_at"]
     week_ts = _ts(week_reset)
-
-    scoped = []
-    order = {"5h": 0, "weekly": 1}
-    for g in groups:
-        if g is primary:
-            extra = [b for b in g["buckets"] if b is not five and b is not week]
-        else:
-            extra = sorted(g["buckets"], key=lambda b: order.get(b["kind"], 2))
-        for b in extra:
-            entry = {
-                "name": g["name"],
-                "group": b["kind"],
-                "percent": b["percent"],
-                "resets_at": b["resets_at"],
-                "binding": False,
-            }
-            if b["kind"] == "weekly" and b["resets_at"] is not None:
-                b_ts = _ts(b["resets_at"])
-                if b_ts is not None:
-                    entry["window_start"] = _iso(b_ts - 7 * 86400)
-            scoped.append(entry)
 
     credits = None
     try:
@@ -533,7 +513,6 @@ def read_antigravity() -> Reading:
         week_reset=week_reset,
         week_start=_iso(week_ts - 7 * 86400) if week_ts is not None else None,
         overflow_billed=overflow_billed,
-        scoped=scoped,
         scope=primary["name"],
         credits=credits,
     )
@@ -570,15 +549,11 @@ def assess(r: Reading) -> dict:
     scoped = []
     for s in r.scoped:
         s_reset = _ts(s["resets_at"])
-        # A scoped window's start is known when carried explicitly (e.g. an independent weekly pool)
-        # or when it resets with the primary weekly window.
-        s_start = _ts(s.get("window_start"))
+        # A scoped window's start is known only when it resets with the weekly window.
         same = s_reset is not None and reset is not None and abs(s_reset - reset) <= SAME_RESET_S
-        if s_start is None and same:
-            s_start = start
-        s_left, s_pace, s_proj = _pace(s["percent"], r.at, s_reset, s_start)
+        s_left, s_pace, s_proj = _pace(s["percent"], r.at, s_reset, start if same else None)
         scoped.append({**s, "unused": 100 - s["percent"], "hours_to_reset": s_left,
-                       "window_start_known": s_start is not None,
+                       "window_start_known": same,
                        "pace_points_per_hour": s_pace, "projected_at_reset": s_proj,
                        "projected_unused_at_reset": 100 - s_proj if s_proj is not None else None})
     return {
@@ -625,9 +600,8 @@ def show(r: Reading, a: dict) -> str:
     ]
     for s in a.get("scoped", ()):
         label = f"{s['name']} {s['group']}"
-        hours_fmt = ".1f" if s["group"] == "5h" else ".0f"
         lines.append(f"  {label:<15}{s['percent']:5.0f}% used   "
-                     f"{reset_text(s['percent'], s['resets_at'], s['hours_to_reset'], hours_fmt)}"
+                     f"{reset_text(s['percent'], s['resets_at'], s['hours_to_reset'], '.0f')}"
                      + ("  \u2190 binding" if s["binding"] else ""))
         if s["window_start_known"]:
             lines.append(f"  {s['name'] + ' pace':<15}{f(s['pace_points_per_hour'], '.2f')} points/hour; at that pace "

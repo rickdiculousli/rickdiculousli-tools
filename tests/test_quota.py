@@ -353,7 +353,7 @@ class AntigravityTest(unittest.TestCase):
              patch.object(quota.time, "time", return_value=self.at):
             return quota.read_antigravity()
 
-    def test_reads_gemini_primary_and_unused_3p_group(self):
+    def test_reads_gemini_group_and_ignores_pooled_3p_group(self):
         reading = self.read()
         self.assertEqual(reading.provider, "antigravity")
         self.assertEqual(reading.scope, "Gemini Models")
@@ -364,64 +364,56 @@ class AntigravityTest(unittest.TestCase):
         self.assertEqual(datetime.fromisoformat(reading.week_start), datetime(2026, 11, 26, 6, 0, tzinfo=timezone.utc))
         self.assertEqual(reading.credits, 0.0)
         self.assertFalse(reading.overflow_billed)
-        self.assertEqual(
-            reading.scoped,
-            [
-                {"name": "Claude and GPT models", "group": "5h", "percent": 0.0, "resets_at": None, "binding": False},
-                {"name": "Claude and GPT models", "group": "weekly", "percent": 0.0, "resets_at": None, "binding": False},
-            ],
-        )
+        self.assertEqual(reading.scoped, [])
         assessment = quota.assess(reading)
         self.assertAlmostEqual(assessment["hours_to_five_hour_reset"], 1.9, places=2)
         self.assertAlmostEqual(assessment["hours_to_weekly_reset"], 120.0, places=2)
         self.assertAlmostEqual(assessment["weekly_pace_points_per_hour"], 16.0 / 48.0, places=4)
-        self.assertFalse(assessment["scoped"][0]["window_start_known"])
-        self.assertFalse(assessment["scoped"][1]["window_start_known"])
+        self.assertEqual(assessment["scoped"], [])
         text = quota.show(reading, assessment)
         self.assertIn("Antigravity (Gemini Models)", text)
         self.assertIn("5-hour window     66% used", text)
         self.assertIn("weekly window     16% used", text)
-        self.assertIn("Claude and GPT models 5h    0% used   window not started", text)
-        self.assertIn("Claude and GPT models weekly    0% used   window not started", text)
+        self.assertNotIn("Claude and GPT models", text)
         self.assertIn("credits        0 remaining", text)
         json.dumps({"reading": quota.asdict(reading), **assessment})
 
-    def test_active_3p_group_gets_independent_weekly_pace(self):
+    def test_active_pooled_3p_group_is_also_ignored_and_epoch_gemini_reads_not_started(self):
         usage = {
             "groups": [
-                self.usage_data["groups"][0],
+                {
+                    "name": "Gemini Models",
+                    "buckets": [
+                        {"id": "gemini-weekly", "window": "weekly", "remaining_fraction": 1,
+                         "reset_time": "1970-01-01T00:00:00Z"},
+                        {"id": "gemini-5h", "window": "5h", "remaining_fraction": 1,
+                         "reset_time": "1970-01-01T00:00:00Z"},
+                    ],
+                },
                 {
                     "name": "Claude and GPT models",
                     "buckets": [
-                        {
-                            "id": "3p-weekly",
-                            "window": "weekly",
-                            "remaining_fraction": 0.6,
-                            "reset_time": "2026-12-04T06:00:00Z",
-                        },
-                        {
-                            "id": "3p-5h",
-                            "window": "5h",
-                            "remaining_fraction": 0.5,
-                            "reset_time": "2026-11-28T09:00:00Z",
-                        },
+                        {"id": "3p-weekly", "window": "weekly", "remaining_fraction": 0.6,
+                         "reset_time": "2026-12-04T06:00:00Z"},
+                        {"id": "3p-5h", "window": "5h", "remaining_fraction": 0.5,
+                         "reset_time": "2026-11-28T09:00:00Z"},
                     ],
                 },
             ]
         }
         reading = self.read(usage=usage)
+        self.assertEqual(reading.five_hour, 0.0)
+        self.assertIsNone(reading.five_reset)
+        self.assertEqual(reading.week, 0.0)
+        self.assertIsNone(reading.week_reset)
+        self.assertIsNone(reading.week_start)
+        self.assertEqual(reading.scoped, [])
         assessment = quota.assess(reading)
-        five_3p, week_3p = assessment["scoped"]
-        self.assertEqual(five_3p["percent"], 50.0)
-        self.assertAlmostEqual(five_3p["hours_to_reset"], 3.0, places=2)
-        self.assertFalse(five_3p["window_start_known"])
-        self.assertEqual(week_3p["percent"], 40.0)
-        self.assertTrue(week_3p["window_start_known"])
-        self.assertAlmostEqual(week_3p["hours_to_reset"], 144.0, places=2)
-        self.assertAlmostEqual(week_3p["pace_points_per_hour"], 40.0 / 24.0, places=4)
+        self.assertIsNone(assessment["weekly_pace_points_per_hour"])
         text = quota.show(reading, assessment)
-        self.assertIn("(3.0h)", text)
-        self.assertIn("Claude and GPT models pace", text)
+        self.assertIn("5-hour window      0% used   window not started", text)
+        self.assertIn("weekly window      0% used   window not started", text)
+        self.assertNotIn("Claude and GPT models", text)
 
     def test_omitted_remaining_fraction_with_active_reset_reads_as_100_used(self):
         usage = {
